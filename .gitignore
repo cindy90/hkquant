@@ -1,0 +1,38 @@
+# --- 凭证 ---
+.env
+.env.*
+!.env.example
+
+# --- Python 字节码 / 工具缓存 ---
+__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# --- IDE / 编辑器 ---
+.vscode/
+.idea/
+*.swp
+
+# --- OS 噪音 ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- 运行产物（可由 run_v7_backtest.py 重生成）---
+outputs/
+
+# --- 每日抓数产物 (fetch_hk_market_data.py) ---
+daily/
+
+# --- 数据库 (可重建) ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- 临时数据 ---
+*.tmp
+*.bak

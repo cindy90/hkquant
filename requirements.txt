@@ -1,0 +1,6 @@
+pandas>=2.0
+numpy>=1.24
+openpyxl>=3.1
+
+# iFinDPy（同花顺 QuantAPI）不在 PyPI——由 iFinD 客户端的注册工具
+# 写入 site-packages 的 .pth 文件提供。安装步骤见 src/data_sources/ifind/README.md。
