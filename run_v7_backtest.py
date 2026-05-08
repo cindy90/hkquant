@@ -19,6 +19,14 @@ from datetime import date
 from pathlib import Path
 from collections import Counter
 
+# Windows 控制台 UTF-8 (避免 emoji 触发 GBK 编码错误)
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # 让 src/ 进入 import path
 ROOT = Path(__file__).parent.resolve()
 sys.path.insert(0, str(ROOT / 'src'))
@@ -32,7 +40,7 @@ from nacs_model import (
     ProfitableFundamentals, BiotechFundamentals, TechC18Fundamentals,
     CornerstoneInvestor, CornerstoneType, compute_regime_score,
 )
-from data.dao import compute_cornerstone_perf_asof
+from data.dao import compute_cornerstone_perf_asof, fetch_market_env_at, _FALLBACK_MARKET_ENV
 
 
 def db_connect(path):
@@ -149,8 +157,13 @@ def derive_profitable(fin):
     )
 
 
-def build_offering(conn, ipo_id, regime_score):
-    """从 DB 数据构造 IPOOffering (含 v7 字段)"""
+def build_offering(conn, ipo_id, regime_score, *, use_static_env: bool = False):
+    """从 DB 数据构造 IPOOffering (含 v7 字段)
+
+    Args:
+        use_static_env: True -> 用旧硬编码 fallback (基线 A);
+                        False -> 调 fetch_market_env_at 走 iFinD/JSON/cache (实时 B)
+    """
     row = conn.execute("SELECT * FROM ipo_master WHERE ipo_id=?", (ipo_id,)).fetchone()
     if not row:
         return None
@@ -167,12 +180,10 @@ def build_offering(conn, ipo_id, regime_score):
     else:
         ctype = CompanyType.PROFITABLE
 
-    market = MarketEnvironment(
-        hsi_60d_return=0.03, hsi_60d_vol_annualized=0.20,
-        hsi_60d_vol_pct_rank=0.5, hsi_valuation_pct=0.5,
-        hk_ipo_30d_avg_d30=0.05, hk_ipo_30d_breakage_rate=0.50,
-        southbound_30d_net_normalized=0.0, sector_60d_vol_annualized=0.30,
-    )
+    if use_static_env:
+        market = MarketEnvironment(**_FALLBACK_MARKET_ENV)
+    else:
+        market = fetch_market_env_at(conn, asof, allow_ifind=True)
     lockup = LockupContext(
         lockup_months=row["lockup_months"] or 6, overhang_ratio=1.0,
         fundamental_risk_score=0.30, peer_lockup_avg_drawdown=0.10, pe_vs_history_pct=0.50,
@@ -247,6 +258,8 @@ def main():
                         help='SQLite DB 路径 (默认: data/nacs_real.db)')
     parser.add_argument('--out', default=str(ROOT / 'outputs'),
                         help='输出目录 (默认: outputs/)')
+    parser.add_argument('--use-static-env', action='store_true',
+                        help='使用旧的硬编码 MarketEnvironment 默认值 (baseline 对照组)')
     args = parser.parse_args()
 
     db_path = Path(args.db)
@@ -296,7 +309,8 @@ def main():
             asof = pd_val if isinstance(pd_val, date) else date.fromisoformat(str(pd_val)[:10])
             regime = compute_regime_score(history, asof)
 
-            offering = build_offering(conn, row["ipo_id"], regime)
+            offering = build_offering(conn, row["ipo_id"], regime,
+                                      use_static_env=args.use_static_env)
             if not offering:
                 continue
 
@@ -387,6 +401,34 @@ def main():
     # v8 改动验证: 不应有任何 IPO 被分到 RELATIONSHIP 实际仓位 (position_pct=0)
     rel_decisions = mb[mb['decision'] == 'RELATIONSHIP']
     print(f"\n[v8 RELATIONSHIP 决策标签] n={len(rel_decisions)} (仓位=0, 仅诊断用途)")
+
+    # ===== 输出 IC 摘要 JSON (供 ablation 脚本读取) =====
+    def _ic_dict(df_sub):
+        result = {}
+        for col, key in [('r5d', '5d'), ('r30d', '30d'), ('r60d', '60d'), ('r180d', '180d')]:
+            iv, n = ic(df_sub['NACS'], df_sub[col])
+            ls = long_short(df_sub['NACS'].values, df_sub[col].values)
+            result[key] = {
+                'ic': None if pd.isna(iv) else float(iv),
+                'n': int(n),
+                'ls_spread': float(ls['spread']) if ls else None,
+                'ls_t_stat': float(ls['t_stat']) if ls else None,
+            }
+        return result
+
+    summary = {
+        'mode': 'static' if args.use_static_env else 'realtime',
+        'n_total': len(records),
+        'main_board': _ic_dict(mb),
+    }
+    if len(df_passed) > 20:
+        summary['regime_pass'] = _ic_dict(df_passed)
+
+    suffix = 'static' if args.use_static_env else 'realtime'
+    ic_json_path = out_dir / f'backtest_ic_{suffix}.json'
+    ic_json_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2),
+                            encoding='utf-8')
+    print(f"\n✓ IC 摘要: {ic_json_path}")
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ import sqlite3
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Iterator
 
 import sys
@@ -28,6 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from nacs_model import (
     CornerstoneInvestor, CornerstoneType,
     CHINESE_TYPES, LONGTERM_TYPES,
+    MarketEnvironment,
 )
 
 
@@ -488,3 +490,226 @@ def compute_ipo_returns(conn: sqlite3.Connection, ipo_id: str) -> Optional[Dict]
           out["return_unlock_d30"], out["return_unlock_d90"],
           out["max_drawdown_m6"], out["avg_daily_volume_hkd"]))
     return out
+
+
+# =============================================================================
+# 7. MarketEnvironment 实时化 (按月聚合 cache, iFinD + DB 派生 + fallback)
+# =============================================================================
+
+# 旧硬编码默认值 (run_v7_backtest.py:170-175 原值), fallback 使用
+_FALLBACK_MARKET_ENV: Dict[str, float] = dict(
+    hsi_60d_return=0.03,
+    hsi_60d_vol_annualized=0.20,
+    hsi_60d_vol_pct_rank=0.5,
+    hsi_valuation_pct=0.5,
+    hk_ipo_30d_avg_d30=0.05,
+    hk_ipo_30d_breakage_rate=0.50,
+    southbound_30d_net_normalized=0.0,
+    sector_60d_vol_annualized=0.30,
+)
+
+
+def _ensure_market_env_cache_table(conn: sqlite3.Connection) -> None:
+    """idempotent 建表 (脱离 SCHEMA_SQL 也能用)"""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS market_environment_cache (
+            asof_month                      DATE PRIMARY KEY,
+            hsi_60d_return                  REAL,
+            hsi_60d_vol_annualized          REAL,
+            hsi_60d_vol_pct_rank            REAL,
+            hsi_valuation_pct               REAL,
+            hk_ipo_30d_avg_d30              REAL,
+            hk_ipo_30d_breakage_rate        REAL,
+            southbound_30d_net_normalized   REAL,
+            sector_60d_vol_annualized       REAL,
+            source                          TEXT,
+            created_at                      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
+def _normalize_asof_to_month(asof: date) -> date:
+    """date(2024,3,15) -> date(2024,3,1)"""
+    if not isinstance(asof, date):
+        asof = date.fromisoformat(str(asof)[:10])
+    return date(asof.year, asof.month, 1)
+
+
+def _month_end(month_first: date) -> date:
+    """date(2024,3,1) -> date(2024,3,31). 简易实现, 用日历月最后一天."""
+    if month_first.month == 12:
+        next_month = date(month_first.year + 1, 1, 1)
+    else:
+        next_month = date(month_first.year, month_first.month + 1, 1)
+    return next_month - timedelta(days=1)
+
+
+def _compute_ipo_30d_stats_from_db(conn: sqlite3.Connection,
+                                   asof: date) -> Tuple[float, float]:
+    """
+    严格防 look-ahead: 使用 listing_date 在 [asof-60, asof-30] 区间且
+    return_d30 已可知的 IPO 计算 (avg_d30, breakage_rate).
+    缺数据 -> 用 fallback 默认值.
+    """
+    asof_str = asof.isoformat() if isinstance(asof, date) else str(asof)
+    window_start_str = (asof - timedelta(days=60)).isoformat()
+
+    # listing_date + 30d <= asof  且  listing_date >= asof - 60d
+    sql = """
+        SELECT r.return_d30
+        FROM ipo_master m
+        JOIN ipo_returns r ON r.ipo_id = m.ipo_id
+        WHERE date(m.listing_date, '+30 days') <= ?
+          AND m.listing_date >= ?
+          AND r.return_d30 IS NOT NULL
+    """
+    rows = conn.execute(sql, (asof_str, window_start_str)).fetchall()
+    if not rows or len(rows) < 3:
+        return (_FALLBACK_MARKET_ENV["hk_ipo_30d_avg_d30"],
+                _FALLBACK_MARKET_ENV["hk_ipo_30d_breakage_rate"])
+    rets = [float(r["return_d30"]) for r in rows]
+    avg = sum(rets) / len(rets)
+    breakage = sum(1 for r in rets if r < 0) / len(rets)
+    return float(avg), float(breakage)
+
+
+def _try_load_market_env_from_json(asof_month: date) -> Optional[Dict]:
+    """
+    优先扫描 daily/{YYYY-MM-*}/market_data.json (该月任意一天的快照).
+    返回 dict (含 4 个 ifind 字段) 或 None.
+    """
+    project_root = Path(__file__).resolve().parents[2]
+    daily_root = project_root / "daily"
+    if not daily_root.exists():
+        return None
+    prefix = asof_month.strftime("%Y-%m-")
+    candidates = sorted(d for d in daily_root.iterdir()
+                        if d.is_dir() and d.name.startswith(prefix))
+    if not candidates:
+        return None
+    # 取月内最新的一天 (尽量贴近月末)
+    latest = candidates[-1]
+    json_path = latest / "market_data.json"
+    if not json_path.exists():
+        return None
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    # JSON 字段映射: hsi_60d_vol_annual -> hsi_60d_vol_annualized
+    out = {}
+    if "hsi_60d_return" in data:
+        out["hsi_60d_return"] = float(data["hsi_60d_return"])
+    if "hsi_60d_vol_annual" in data:
+        out["hsi_60d_vol_annualized"] = float(data["hsi_60d_vol_annual"])
+        out["sector_60d_vol_annualized"] = float(data["hsi_60d_vol_annual"])
+    if "hsi_60d_vol_pct_rank" in data:
+        out["hsi_60d_vol_pct_rank"] = float(data["hsi_60d_vol_pct_rank"])
+    # JSON 没有 hsi_valuation_pct / southbound_30d_net_normalized,
+    # 这 2 字段返回 None 触发 caller 使用 iFinD or fallback
+    if len(out) >= 3:
+        return out
+    return None
+
+
+def fetch_market_env_at(conn: sqlite3.Connection,
+                        asof: date,
+                        *,
+                        allow_ifind: bool = True) -> "MarketEnvironment":
+    """
+    返回填好 8 字段的 MarketEnvironment.
+
+    流程:
+        1. 建表 (idempotent)
+        2. month_key = 月初(asof)
+        3. 查 cache; 命中且 source != 'fallback' -> 返回
+        4. miss / 重试: 优先 daily/JSON, 否则 iFinD
+        5. 任一失败 -> _FALLBACK_MARKET_ENV, source='fallback'
+        6. hk_ipo_30d_* 始终从 DB 算 (即便走 fallback, 也尝试用真数据)
+        7. 写 cache 后返回
+    """
+    _ensure_market_env_cache_table(conn)
+
+    month_key = _normalize_asof_to_month(asof)
+    month_key_str = month_key.isoformat()
+
+    # 1) 查 cache
+    cached = conn.execute("""
+        SELECT * FROM market_environment_cache WHERE asof_month = ?
+    """, (month_key_str,)).fetchone()
+    if cached and cached["source"] != "fallback":
+        return MarketEnvironment(
+            hsi_60d_return=cached["hsi_60d_return"],
+            hsi_60d_vol_annualized=cached["hsi_60d_vol_annualized"],
+            hsi_60d_vol_pct_rank=cached["hsi_60d_vol_pct_rank"],
+            hsi_valuation_pct=cached["hsi_valuation_pct"],
+            hk_ipo_30d_avg_d30=cached["hk_ipo_30d_avg_d30"],
+            hk_ipo_30d_breakage_rate=cached["hk_ipo_30d_breakage_rate"],
+            southbound_30d_net_normalized=cached["southbound_30d_net_normalized"],
+            sector_60d_vol_annualized=cached["sector_60d_vol_annualized"],
+        )
+
+    # 2) hk_ipo_30d_* 从 DB 算 (无论 ifind 成功与否)
+    ipo_avg_d30, ipo_breakage = _compute_ipo_30d_stats_from_db(conn, asof)
+
+    # 3) 优先 JSON (零成本), 但 JSON 不含 PE / 南向 — 还需 iFinD 补
+    fields = dict(_FALLBACK_MARKET_ENV)
+    source = "fallback"
+
+    json_data = _try_load_market_env_from_json(month_key)
+    if json_data and len(json_data) >= 5:  # JSON 已包含 hsi 三件套和 sector
+        fields.update(json_data)
+        source = "json"
+
+    # 4) 调 iFinD 补全 (PE / southbound), 且若 JSON 没成功也补 HSI 三件套
+    if allow_ifind:
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+            from data_sources.ifind.market_env_fetcher import fetch_market_env_dict
+            month_end_date = _month_end(month_key)
+            ifind_data = fetch_market_env_dict(month_end_date)
+            fields.update(ifind_data)
+            source = "ifind"
+        except Exception as e:
+            sys.stderr.write(
+                f"[market_env] iFinD fetch 失败 month={month_key_str} "
+                f"err={type(e).__name__}: {e}; 走 fallback/json\n"
+            )
+            # source 保持原值 (fallback or json)
+
+    # 5) 拼装 + DB 派生
+    fields["hk_ipo_30d_avg_d30"] = ipo_avg_d30
+    fields["hk_ipo_30d_breakage_rate"] = ipo_breakage
+
+    # 6) 写 cache
+    conn.execute("""
+        INSERT OR REPLACE INTO market_environment_cache (
+            asof_month, hsi_60d_return, hsi_60d_vol_annualized, hsi_60d_vol_pct_rank,
+            hsi_valuation_pct, hk_ipo_30d_avg_d30, hk_ipo_30d_breakage_rate,
+            southbound_30d_net_normalized, sector_60d_vol_annualized, source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        month_key_str,
+        fields["hsi_60d_return"],
+        fields["hsi_60d_vol_annualized"],
+        fields["hsi_60d_vol_pct_rank"],
+        fields["hsi_valuation_pct"],
+        fields["hk_ipo_30d_avg_d30"],
+        fields["hk_ipo_30d_breakage_rate"],
+        fields["southbound_30d_net_normalized"],
+        fields["sector_60d_vol_annualized"],
+        source,
+    ))
+    conn.commit()
+
+    return MarketEnvironment(
+        hsi_60d_return=fields["hsi_60d_return"],
+        hsi_60d_vol_annualized=fields["hsi_60d_vol_annualized"],
+        hsi_60d_vol_pct_rank=fields["hsi_60d_vol_pct_rank"],
+        hsi_valuation_pct=fields["hsi_valuation_pct"],
+        hk_ipo_30d_avg_d30=fields["hk_ipo_30d_avg_d30"],
+        hk_ipo_30d_breakage_rate=fields["hk_ipo_30d_breakage_rate"],
+        southbound_30d_net_normalized=fields["southbound_30d_net_normalized"],
+        sector_60d_vol_annualized=fields["sector_60d_vol_annualized"],
+    )

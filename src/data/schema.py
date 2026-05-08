@@ -203,6 +203,23 @@ CREATE TABLE IF NOT EXISTS db_metadata (
     value               TEXT,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- =============================================================================
+-- 10. 市场环境快照缓存 (按月聚合, 用于 MarketEnvironment 实时化)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS market_environment_cache (
+    asof_month                      DATE PRIMARY KEY,    -- 月初, e.g. 2024-03-01
+    hsi_60d_return                  REAL,
+    hsi_60d_vol_annualized          REAL,
+    hsi_60d_vol_pct_rank            REAL,
+    hsi_valuation_pct               REAL,
+    hk_ipo_30d_avg_d30              REAL,
+    hk_ipo_30d_breakage_rate        REAL,
+    southbound_30d_net_normalized   REAL,
+    sector_60d_vol_annualized       REAL,
+    source                          TEXT,                -- 'ifind' / 'json' / 'fallback'
+    created_at                      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
