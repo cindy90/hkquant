@@ -1,4 +1,4 @@
-"""探针 v5: p04275 港股通个股资金流向"""
+"""探针 v8: iwencai data 结构 + domain 支持范围"""
 import sys, os
 from pathlib import Path
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -12,49 +12,41 @@ for raw in env.read_text(encoding="utf-8").splitlines():
         k, _, v = line.partition("=")
         os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
-from iFinDPy import THS_iFinDLogin, THS_iFinDLogout, THS_DR
+import iFinDPy
+from iFinDPy import THS_iFinDLogin, THS_iFinDLogout, THS_iwencai, THS_WC
 print("login:", THS_iFinDLogin(os.environ["IFIND_USERNAME"], os.environ["IFIND_PASSWORD"]))
 
-# === p04275 港股通个股资金流向 ===
-# type=1 沪市港股通  type=2 深市港股通  type=? 合并?
-print("\n=== p04275 type=2 单日 ===")
-r = THS_DR(
-    'p04275',
-    'type=2;sdate=2026-05-07;edate=2026-05-07',
-    ','.join([f'p04275_f{i:03d}:Y' for i in range(1, 13)]),
-    'format:dataframe'
-)
-print(f"  ec={getattr(r,'errorcode','?')} msg={getattr(r,'errmsg','')[:80]}")
-if hasattr(r, "data") and r.data is not None:
-    df = r.data
-    print(f"  cols={list(df.columns)}  rows={len(df)}")
-    print(df.head(8).to_string())
-    print("...")
-    print(df.tail(3).to_string())
+# 试不同 domain
+for domain in ["news", "report", "abstract", "stock", "researchreport", "announcement", "公告"]:
+    print(f"\n=== iwencai domain={domain!r} ===")
+    try:
+        r = THS_iwencai("港股 2026-05-08", domain)
+        print(f"  type={type(r).__name__}")
+        if isinstance(r, dict):
+            print(f"  keys={list(r.keys())}  ec={r.get('errorcode')} msg={r.get('errmsg','')[:80]}")
+            if r.get("tables"):
+                t0 = r["tables"][0]
+                print(f"  tables[0].keys={list(t0.keys()) if isinstance(t0,dict) else t0}")
+        else:
+            print(f"  ec={getattr(r,'errorcode','?')} msg={getattr(r,'errmsg','')[:80]}")
+            if hasattr(r, "data") and r.data is not None:
+                print(f"  cols={list(r.data.columns)[:10]}  rows={len(r.data)}")
+                if len(r.data):
+                    print(r.data.head(2).to_string()[:600])
+    except Exception as e:
+        print(f"  EXC {type(e).__name__}: {e}")
 
-# 试 type=1
-print("\n=== p04275 type=1 单日 ===")
-r2 = THS_DR(
-    'p04275',
-    'type=1;sdate=2026-05-07;edate=2026-05-07',
-    ','.join([f'p04275_f{i:03d}:Y' for i in range(1, 13)]),
-    'format:dataframe'
-)
-print(f"  ec={getattr(r2,'errorcode','?')} msg={getattr(r2,'errmsg','')[:80]}")
-if hasattr(r2, "data") and r2.data is not None:
-    print(f"  rows={len(r2.data)}")
-    print(r2.data.head(3).to_string())
-
-# 试 30 日范围 — 一次拿过去 30 天
-print("\n=== p04275 type=2 30 日 ===")
-r3 = THS_DR(
-    'p04275',
-    'type=2;sdate=2026-04-08;edate=2026-05-08',
-    ','.join([f'p04275_f{i:03d}:Y' for i in range(1, 13)]),
-    'format:dataframe'
-)
-print(f"  ec={getattr(r3,'errorcode','?')} msg={getattr(r3,'errmsg','')[:80]}")
-if hasattr(r3, "data") and r3.data is not None:
-    print(f"  rows={len(r3.data)}")
+# 试 THS_WC (可能更稳)
+print("\n=== THS_WC ===")
+for domain in ["news", "report"]:
+    try:
+        r = THS_WC("港股新闻", domain)
+        print(f"  WC domain={domain} type={type(r).__name__} ec={getattr(r,'errorcode','?')}")
+        if hasattr(r, "data") and r.data is not None:
+            print(f"    cols={list(r.data.columns)[:10]}  rows={len(r.data)}")
+            if len(r.data):
+                print(r.data.head(2).to_string()[:500])
+    except Exception as e:
+        print(f"  WC domain={domain} EXC {e}")
 
 THS_iFinDLogout()

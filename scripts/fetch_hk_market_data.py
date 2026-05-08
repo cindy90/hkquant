@@ -77,6 +77,10 @@ class RunRecorder:
         self.results[field] = {"status": "ok", "detail": detail}
         print(f"  ✓ {field}  {detail}")
 
+    def skip(self, field: str, reason: str) -> None:
+        self.results[field] = {"status": "skipped", "reason": reason}
+        print(f"  ~ {field}  SKIP: {reason}")
+
     def fail(self, field: str, err: str) -> None:
         self.results[field] = {"status": "fail", "error": err}
         line = f"[{datetime.now().isoformat()}] {field}: {err}"
@@ -94,6 +98,7 @@ class RunRecorder:
                 "generated_at": datetime.now().isoformat(),
                 "fields": self.results,
                 "n_ok": sum(1 for r in self.results.values() if r["status"] == "ok"),
+                "n_skipped": sum(1 for r in self.results.values() if r["status"] == "skipped"),
                 "n_fail": sum(1 for r in self.results.values() if r["status"] == "fail"),
             }, ensure_ascii=False, indent=2),
             encoding="utf-8"
@@ -376,37 +381,37 @@ def fetch_market_data(rec: RunRecorder, today: date) -> dict[str, Any]:
 # ============================================================================
 def fetch_news(rec: RunRecorder, today: date) -> list[dict[str, Any]]:
     """
-    TODO: 需要确认 iFinD 的新闻接口函数名.
-    候选:
-      1) THS_News(condition, fields, date_range)  — 通用新闻
-      2) THS_NewsHK / THS_HKNews  — 港股专用 (不一定存在)
-      3) THS_DR('p_news_report', ...)  — 报表型
+    iFinD 没有可直接拉取新闻全文的 API. 探针确认:
+      - THS_iEvent / THS_iResearch: account type is not supported (-5100)
+      - THS_iwencai(query, 'news'): ec=0 但 tables[0]['table'] 实际无内容
+      - THS_WC(query, 'news'): 返回 1 行 "查看明细" 占位 (链接, 非全文)
+    用户已确认: "iFinD 未提及独立的资讯 API 端点".
 
-    若新闻接口权限不够, 退路: 用 THS_DR + 公司公告报表 (p_announcements 类)
+    建议的替代源 (后续接入):
+      - FT 中文网 / 财新 RSS
+      - Bloomberg API (付费)
+      - akshare ak.stock_news_em()
+      - 港交所披露易官网爬虫 (公司公告)
     """
-    try:
-        # 占位: 直接 raise 让 RunRecorder 记录, 你跑完告诉我哪个函数能用
-        raise NotImplementedError(
-            "新闻接口待确认 — 请在 iFinD 客户端「同花顺数据接口→帮助」搜「新闻」, "
-            "或在 PyCharm 里 `from iFinDPy import *; help()` 看可用函数"
-        )
-    except Exception as e:
-        rec.fail("news", str(e))
-        return []
+    rec.skip("news", "iFinD 无独立新闻 API; 见函数 docstring 里的替代源建议")
+    return []
 
 
 # ============================================================================
 # (c) themes.json — 主题板块表现
 # ============================================================================
-# 主题 → 同花顺板块/概念代码
-#   TODO: 全部待你提供. 流程: iFinD 客户端「板块」→ 搜对应主题 → 右键复制代码
-#   下面是占位 (884xxx 是 A 股概念惯例, 港股可能不同)
+# 主题 → 港股相关指数代码
+#   ⚠ 港股没有同花顺概念板块编码体系 (确认自用户), 只能用:
+#     - 中证港股通指数 (.CSI 后缀): 930967.CSI 港股通信息技术综合 / 931573.CSI 港股通科技 / 931574.CSI 港股通TMT
+#     - 恒生行业指数 (.HK 后缀): HSTECH.HK 恒生科技 / HSCI.HK 恒生综合 / HSCIIT.HK 恒生综合-资讯科技
+#   5 个 AI 主题在港股都没有专属指数, 全部用 HSTECH.HK 作粗代理.
+#   TODO 升级: 改成「主题代表股票组合」(每个主题挑 3-5 只代表股, 算等权 close 序列), 精度更高
 DEFAULT_THEMES = {
-    "ai_server":        {"label": "AI 服务器",     "ths_code": None},  # TODO
-    "llm":              {"label": "大模型",        "ths_code": None},  # TODO
-    "humanoid_robot":   {"label": "人形机器人",    "ths_code": None},  # TODO
-    "semi_localization":{"label": "半导体国产替代","ths_code": None},  # TODO
-    "ai_driving":       {"label": "AI 智能驾驶",   "ths_code": None},  # TODO
+    "ai_server":        {"label": "AI 服务器",     "ths_code": "HSTECH.HK",  "proxy_note": "粗代理: 用恒生科技指数"},
+    "llm":              {"label": "大模型",        "ths_code": "HSTECH.HK",  "proxy_note": "粗代理: 用恒生科技指数"},
+    "humanoid_robot":   {"label": "人形机器人",    "ths_code": "HSTECH.HK",  "proxy_note": "粗代理: 港股无对应指数"},
+    "semi_localization":{"label": "半导体国产替代","ths_code": "930967.CSI", "proxy_note": "中证港股通信息技术综合"},
+    "ai_driving":       {"label": "AI 智能驾驶",   "ths_code": "HSTECH.HK",  "proxy_note": "粗代理: 港股新势力车 / 科技股"},
 }
 
 def load_watchlist() -> dict[str, dict]:
@@ -452,12 +457,17 @@ def fetch_themes(rec: RunRecorder, today: date) -> dict[str, Any]:
             out[key] = {
                 "label": meta.get("label"),
                 "ths_code": code,
+                "proxy_note": meta.get("proxy_note"),
                 "ret_1d":  ret(1),
                 "ret_5d":  ret(5),
                 "ret_20d": ret(20),
                 "ret_60d": ret(60),
             }
-            rec.ok(f"theme.{key}", f"1d={out[key]['ret_1d']}")
+            r1 = out[key]["ret_1d"]
+            r60 = out[key]["ret_60d"]
+            rec.ok(f"theme.{key}",
+                   f"1d={r1*100:.2f}% 60d={r60*100:.2f}%" if r1 is not None and r60 is not None
+                   else f"1d={r1} 60d={r60}")
         except Exception as e:
             rec.fail(f"theme.{key}", f"{type(e).__name__}: {e}")
             out[key] = {"label": meta.get("label"), "error": str(e)}
