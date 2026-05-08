@@ -356,20 +356,40 @@ def fetch_market_data(rec: RunRecorder, today: date) -> dict[str, Any]:
     except Exception as e:
         rec.fail("ah_premium", f"{type(e).__name__}: {e}")
 
-    # ---- regime_score (依赖 ipo_recent.json 的历史 IPO 30d 收益) ----
-    # 注意: regime_score 用的是 [t-120, t-30] 的港股 IPO 30 日收益,
-    # 这里需要更长的回溯, 不能只用本次 ipo_recent (那是过去 30 天).
-    # TODO: 从历史数据库 / data/raw/ifind/ipo_d30_returns.csv 读历史 IPO 30d 收益
+    # ---- regime_score (依赖历史 IPO 30d 收益缓存) ----
+    # regime_score 用 [today-120, today-30] 窗口的港股 IPO 30 日收益中位数,
+    # 缓存由 scripts/build_ipo_returns_cache.py 生成,
+    # 文件: data/derived/ipo_d30_returns.csv
     try:
         from src.nacs_model import compute_regime_score
-        # 占位: 需要 List[Tuple[listing_date, return_d30]]
-        historical_ipos: list[tuple[date, float]] = []  # TODO: 接入真实历史数据
-        score = compute_regime_score(historical_ipos, today)
-        if score is None:
-            rec.fail("regime_score", "样本不足 / 历史数据未接入")
+        ipo_cache = PROJECT_ROOT / "data" / "derived" / "ipo_d30_returns.csv"
+        if not ipo_cache.exists():
+            rec.fail("regime_score", f"IPO 收益缓存缺失: {ipo_cache} (跑 scripts/build_ipo_returns_cache.py)")
         else:
-            out["regime_score"] = score
-            rec.ok("regime_score", f"{score:.2%}")
+            df_cache = pd.read_csv(ipo_cache, encoding="utf-8-sig")
+            historical_ipos: list[tuple[date, float]] = []
+            for _, r in df_cache.iterrows():
+                ret = r.get("return_d30")
+                ld_raw = r.get("listing_date")
+                if pd.isna(ret) or pd.isna(ld_raw):
+                    continue
+                try:
+                    ld = datetime.strptime(str(ld_raw)[:10], "%Y-%m-%d").date()
+                except Exception:
+                    continue
+                historical_ipos.append((ld, float(ret)))
+            score = compute_regime_score(historical_ipos, today)
+            if score is None:
+                rec.fail("regime_score", f"样本不足 (cache n={len(historical_ipos)}, 窗口 [t-120,t-30])")
+            else:
+                out["regime_score"] = score
+                # 顺带写一些诊断信息
+                window_start = today - timedelta(days=120)
+                window_end = today - timedelta(days=30)
+                in_window = [r for d, r in historical_ipos if window_start <= d <= window_end]
+                out["regime_score_n"] = len(in_window)
+                out["regime_score_window"] = [window_start.isoformat(), window_end.isoformat()]
+                rec.ok("regime_score", f"{score:.2%} (n={len(in_window)})")
     except Exception as e:
         rec.fail("regime_score", f"{type(e).__name__}: {e}")
 
