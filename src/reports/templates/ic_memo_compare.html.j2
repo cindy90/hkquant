@@ -1,0 +1,201 @@
+{% extends "_base.html.j2" %}
+
+{# 把每只 deal 的 mid/final 选出来当主行 #}
+{% macro pick_main(records) %}
+  {%- set mid = records | selectattr("scenario", "in", ["mid", "final"]) | list -%}
+  {%- if mid %}{{ mid[0].scenario }}{% else %}{{ records[0].scenario }}{% endif -%}
+{% endmacro %}
+
+{% block content %}
+
+<header class="memo-header">
+  <h1>{{ title }}</h1>
+  <p class="subtitle">
+    多 deal 横向对比 · {{ deals | length }} candidates · 同 panel 上下文
+  </p>
+  <div class="meta">
+    {% if snap.snapshot_id %}
+      <span>panel: <code>{{ snap.snapshot_id }}</code></span>
+      <span>asof: <strong>{{ snap.asof_date | fmt_date }}</strong></span>
+      <span>n_panel: <strong>{{ snap.n_ipos_in_universe }}</strong></span>
+      {% if snap.regime_score is not none %}<span>regime: <strong>{{ snap.regime_score | num(3) }}</strong></span>{% endif %}
+    {% endif %}
+  </div>
+</header>
+
+{# ====== 主对比表 ====== #}
+<article class="card">
+  <h3>横向对比 (mid scenario)</h3>
+  <table class="numeric compact compare-table" style="overflow-x: auto;">
+    <thead>
+      <tr>
+        <th>metric</th>
+        {% for code in deals.keys() %}<th class="num">{{ code }}</th>{% endfor %}
+        <th class="num">Panel mid</th>
+      </tr>
+    </thead>
+    <tbody>
+      {# Helper: 对每只 deal 取主行 #}
+      {% set mains = {} %}
+      {% for code, recs in deals.items() %}
+        {% set mid = recs | selectattr("scenario", "in", ["mid", "final"]) | list %}
+        {% if mid %}
+          {% set _ = mains.update({code: mid[0]}) %}
+        {% else %}
+          {% set _ = mains.update({code: recs[0]}) %}
+        {% endif %}
+      {% endfor %}
+
+      <tr>
+        <td>status</td>
+        {% for code in deals.keys() %}
+        <td class="num"><span class="badge badge-{{ mains[code].status or 'listed' }}">{{ mains[code].status or '?' }}</span></td>
+        {% endfor %}
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>chapter</td>
+        {% for code in deals.keys() %}<td class="num"><small>{{ mains[code].listing_chapter or '' }}</small></td>{% endfor %}
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>price</td>
+        {% for code in deals.keys() %}<td class="num">{{ mains[code].price | num(2) }}</td>{% endfor %}
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>decision</td>
+        {% for code in deals.keys() %}
+        <td class="num"><span class="badge badge-{{ mains[code].decision }}">{{ mains[code].decision }}</span></td>
+        {% endfor %}
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>position_pct</td>
+        {% for code in deals.keys() %}<td class="num">{{ "%.0f%%"|format(mains[code].position_pct * 100) }}</td>{% endfor %}
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td><strong>NACS_adj</strong></td>
+        {% for code in deals.keys() %}
+        <td class="num"><strong>{{ mains[code].nacs_adjusted | num(4) }}</strong></td>
+        {% endfor %}
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>Q_company</td>
+        {% for code in deals.keys() %}<td class="num">{{ mains[code].Q_company | num(3) }}</td>{% endfor %}
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>Q_ecosystem</td>
+        {% for code in deals.keys() %}<td class="num">{{ mains[code].Q_ecosystem | num(3) }}</td>{% endfor %}
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>R_lockup</td>
+        {% for code in deals.keys() %}<td class="num">{{ mains[code].R_lockup | num(3) }}</td>{% endfor %}
+        <td class="num">—</td>
+      </tr>
+      <tr>
+        <td>cluster_count</td>
+        {% for code in deals.keys() %}<td class="num">{{ mains[code].cluster_count }}</td>{% endfor %}
+        <td class="num">—</td>
+      </tr>
+      {% if snap.aggregates and snap.aggregates.overall %}
+      <tr>
+        <td>pe_at_offer
+          <small style="color:var(--text-muted)">(panel p25/p50/p75)</small></td>
+        {% for code in deals.keys() %}<td class="num">—</td>{% endfor %}
+        <td class="num">
+          <small>{{ snap.aggregates.overall.pe_at_offer_p25 | num(1) }} /
+          <strong>{{ snap.aggregates.overall.pe_at_offer_p50 | num(1) }}</strong> /
+          {{ snap.aggregates.overall.pe_at_offer_p75 | num(1) }}</small>
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</article>
+
+{# ====== 各 deal 的同伴比对 ====== #}
+{% if similar_per_deal %}
+<article class="card">
+  <h3>各 deal 的同伴比对 (top listed peers)</h3>
+  {% for code, sims in similar_per_deal.items() %}
+  <h4 style="margin-top: 1.25rem; margin-bottom: 0.5rem;
+             font-size: 0.875rem; color: var(--text);">
+    <code>{{ code }}</code>
+    {% if sims and not sims | first or not sims %}
+      <span style="color: var(--text-muted); font-weight: 400;">— no similar peers found</span>
+    {% endif %}
+  </h4>
+  {% if sims %}
+  <table class="numeric compact" style="margin-bottom: 0.5rem;">
+    <thead>
+      <tr>
+        <th>stock</th>
+        <th>name</th>
+        <th>listing</th>
+        <th>match</th>
+        <th class="num">d30</th>
+        <th class="num">m6</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for s in sims %}
+      <tr>
+        <td><code>{{ s.stock_code }}</code></td>
+        <td>{{ s.name or '' }}</td>
+        <td>{{ s.listing_date | fmt_date }}</td>
+        <td><small style="color: var(--text-muted);">{{ s.match_dims | join('+') }}</small></td>
+        <td class="num {{ s.actual_d30 | ret_class }}">{{ s.actual_d30 | pct }}</td>
+        <td class="num {{ s.actual_m6 | ret_class }}">{{ s.actual_m6 | pct }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% endfor %}
+</article>
+{% endif %}
+
+{# ====== 各 deal 的 price-scan 子表 (只有 records>1 才出) ====== #}
+{% set has_scan = namespace(value=false) %}
+{% for code, recs in deals.items() %}
+  {% if recs | length > 1 %}{% set has_scan.value = true %}{% endif %}
+{% endfor %}
+
+{% if has_scan.value %}
+<article class="card">
+  <h3>各 deal 价格区间扫描 (price-scan)</h3>
+  {% for code, recs in deals.items() %}
+    {% if recs | length > 1 %}
+    <h4 style="margin-top: 1.25rem; font-size: 0.875rem; color: var(--text);">
+      <code>{{ code }}</code>
+    </h4>
+    <table class="numeric compact">
+      <thead>
+        <tr><th>scenario</th><th class="num">price</th><th>decision</th>
+            <th class="num">NACS</th><th class="num">Q_c</th><th class="num">Q_e</th><th class="num">R_l</th></tr>
+      </thead>
+      <tbody>
+      {% for r in recs %}
+        <tr>
+          <td>{{ r.scenario }}</td>
+          <td class="num">{{ r.price | num(2) }}</td>
+          <td><span class="badge badge-{{ r.decision }}">{{ r.decision }}</span></td>
+          <td class="num">{{ r.nacs_adjusted | num(4) }}</td>
+          <td class="num">{{ r.Q_company | num(3) }}</td>
+          <td class="num">{{ r.Q_ecosystem | num(3) }}</td>
+          <td class="num">{{ r.R_lockup | num(3) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  {% endfor %}
+</article>
+{% endif %}
+
+{% endblock %}

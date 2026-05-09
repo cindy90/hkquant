@@ -1,0 +1,218 @@
+{% extends "_base.html.j2" %}
+
+{# Defaults: rec_main 是 mid/final 那条记录, 用于决策大字 #}
+{% set rec_main = records | selectattr("scenario", "in", ["mid", "final"]) | list %}
+{% if rec_main %}
+  {% set rec_main = rec_main[0] %}
+{% else %}
+  {% set rec_main = records[0] %}
+{% endif %}
+
+{% block content %}
+
+<header class="memo-header">
+  <h1>{{ rec_main.stock_code }}
+      {% if rec_main.name %}<span style="font-weight: 400; color: var(--text-muted);">{{ rec_main.name }}</span>{% endif %}</h1>
+  <p class="subtitle">
+    <span class="badge badge-{{ rec_main.status or 'listed' }}">{{ rec_main.status or '?' }}</span>
+    {% if rec_main.listing_chapter %}
+      · chapter: <code>{{ rec_main.listing_chapter }}</code>
+    {% endif %}
+    {% if rec_main.gics_l2 %}
+      · GICS: {{ rec_main.gics_l2 }}
+    {% endif %}
+  </p>
+  <div class="meta">
+    <span>asof: <strong>{{ asof | fmt_date }}</strong></span>
+    {% if rec_main.listing_date %}
+      <span>listing: <strong>{{ rec_main.listing_date | fmt_date }}</strong></span>
+    {% endif %}
+    {% if rec_main.expected_listing_date %}
+      <span>expected: <strong>{{ rec_main.expected_listing_date | fmt_date }}</strong></span>
+    {% endif %}
+    {% if snap.snapshot_id %}
+      <span>panel: <code>{{ snap.snapshot_id }}</code> (n={{ snap.n_ipos_in_universe }}{% if snap.regime_score is not none %}, regime={{ snap.regime_score | num(3) }}{% endif %})</span>
+    {% endif %}
+  </div>
+</header>
+
+{# ====== Verdict (仅当只有一个 scenario 时显示大字; 多 scenario 用表格) ====== #}
+{% if records | length == 1 %}
+<div class="verdict">
+  <span class="badge badge-{{ rec_main.decision }}">{{ rec_main.decision }}</span>
+  <span class="position">{{ "%.0f%%"|format(rec_main.position_pct * 100) }}</span>
+  <span class="nacs-value">
+    NACS_adj <strong>{{ rec_main.nacs_adjusted | num(4) }}</strong>
+    &nbsp;·&nbsp; raw {{ rec_main.nacs_raw | num(4) }}
+  </span>
+</div>
+
+{# 三因子分解 #}
+<article class="card">
+  <h3>三因子分解</h3>
+  <table class="numeric">
+    <tr>
+      <td style="width: 25%;">Q_company</td>
+      <td style="width: 15%;">{{ rec_main.Q_company | num(4) }}</td>
+      <td><div class="bar"><span style="width: {{ rec_main.Q_company | bar_pct }}%;"></span></div></td>
+    </tr>
+    <tr>
+      <td>Q_ecosystem</td>
+      <td>{{ rec_main.Q_ecosystem | num(4) }}</td>
+      <td><div class="bar"><span style="width: {{ rec_main.Q_ecosystem | bar_pct }}%;"></span></div></td>
+    </tr>
+    <tr>
+      <td>R_lockup <small style="color: var(--text-muted)">(风险, 越高越糟)</small></td>
+      <td>{{ rec_main.R_lockup | num(4) }}</td>
+      <td><div class="bar bar-risk"><span style="width: {{ rec_main.R_lockup | bar_pct }}%;"></span></div></td>
+    </tr>
+  </table>
+</article>
+
+{% else %}
+{# 多 scenario 表格 (price-scan) #}
+<article class="card">
+  <h3>定价区间敏感度 (Price scenarios)</h3>
+  <table class="numeric compact">
+    <thead>
+      <tr>
+        <th>scenario</th>
+        <th class="num">price</th>
+        <th>decision</th>
+        <th class="num">position</th>
+        <th class="num">NACS_adj</th>
+        <th class="num">Q_c</th>
+        <th class="num">Q_e</th>
+        <th class="num">R_l</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+      <tr>
+        <td>{{ r.scenario }}</td>
+        <td class="num">{{ r.price | num(2) }}</td>
+        <td><span class="badge badge-{{ r.decision }}">{{ r.decision }}</span></td>
+        <td class="num">{{ "%.0f%%"|format(r.position_pct * 100) }}</td>
+        <td class="num">{{ r.nacs_adjusted | num(4) }}</td>
+        <td class="num">{{ r.Q_company | num(3) }}</td>
+        <td class="num">{{ r.Q_ecosystem | num(3) }}</td>
+        <td class="num">{{ r.R_lockup | num(3) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% set decision_set = records | map(attribute="decision") | unique | list %}
+  {% if decision_set | length > 1 %}
+  <div class="warnings" style="margin-top: 1rem;">
+    <h4>⚠ 跨决策边界</h4>
+    定价 scenario 间决策不一致: {{ decision_set | join(' / ') }}.
+    建议关注定价区间到边时的仓位约束.
+  </div>
+  {% endif %}
+</article>
+{% endif %}
+
+{# ====== Adjustments / Warnings ====== #}
+{% if rec_main.adjustments_applied %}
+<article class="card">
+  <h3>v7 调整 (Adjustments)</h3>
+  <ul style="margin: 0; padding-left: 1.25rem;">
+    {% for adj in rec_main.adjustments_applied %}
+    <li>{{ adj }}</li>
+    {% endfor %}
+  </ul>
+</article>
+{% endif %}
+
+{% if rec_main.warnings %}
+<div class="warnings">
+  <h4>⚠ Warnings / Vetoes</h4>
+  <ul>
+    {% for w in rec_main.warnings %}
+    <li>{{ w }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{# ====== L1 / L2 / L3 子项 (折叠) ====== #}
+<details>
+  <summary>L1 子项: 公司基本面 (raw {{ rec_main.layer1.raw_score | num(2) }} / 100)</summary>
+  <table class="numeric compact">
+    <tbody>
+      {% for k, v in rec_main.layer1.components.items() %}
+      <tr>
+        <td>{{ k }}</td>
+        <td class="num">{{ v | num(2) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+
+<details>
+  <summary>L2 子项: 基石生态 (raw {{ rec_main.layer2.raw_score | num(2) }} / 100, cluster_count={{ rec_main.cluster_count }})</summary>
+  <table class="numeric compact">
+    <tbody>
+      {% for k, v in rec_main.layer2.components.items() %}
+      <tr>
+        <td>{{ k }}</td>
+        <td class="num">{% if v is number %}{{ v | num(4) }}{% else %}{{ v }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+
+<details>
+  <summary>L3 子项: 锁定期风险 (R_lockup = {{ rec_main.R_lockup | num(4) }})</summary>
+  <table class="numeric compact">
+    <tbody>
+      {% for k, v in rec_main.layer3.components.items() %}
+      <tr>
+        <td>{{ k }}</td>
+        <td class="num">{% if v is number %}{{ v | num(4) }}{% else %}{{ v }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+
+{# ====== Similar listed IPOs ====== #}
+{% if similar_cases %}
+<article class="card">
+  <h3>同伴比对 (Similar listed IPOs · top {{ similar_cases | length }})</h3>
+  <table class="numeric compact">
+    <thead>
+      <tr>
+        <th>stock_code</th>
+        <th>name</th>
+        <th>listing_date</th>
+        <th>match</th>
+        <th class="num">d30</th>
+        <th class="num">m6</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in similar_cases %}
+      <tr>
+        <td><code>{{ s.stock_code }}</code></td>
+        <td>{{ s.name or '' }}</td>
+        <td>{{ s.listing_date | fmt_date }}</td>
+        <td><small style="color: var(--text-muted);">{{ s.match_dims | join('+') }}</small></td>
+        <td class="num {{ s.actual_d30 | ret_class }}">{{ s.actual_d30 | pct }}</td>
+        <td class="num {{ s.actual_m6 | ret_class }}">{{ s.actual_m6 | pct }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+
+{# ====== Inputs snapshot (audit) ====== #}
+<details>
+  <summary>Inputs snapshot (audit · 当时模型看到的全部输入)</summary>
+  <pre>{{ rec_main.offering_inputs | json_dump }}</pre>
+</details>
+
+{% endblock %}

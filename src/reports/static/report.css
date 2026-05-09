@@ -1,0 +1,317 @@
+/*
+ * NACS IC memo CSS — 自包含 (单文件) 渲染样式
+ *
+ * 目标视觉: Stripe / Notion 风, 银行/财报感, 偏 dense 信息密度.
+ * 受 Pico.css 启发但完全自写, ~300 行, 无外部依赖.
+ *
+ * 颜色编码:
+ *   FULL          green    决策最强
+ *   LARGE         blue     主仓
+ *   TRIAL         orange   试探
+ *   RELATIONSHIP  amber    关系仓
+ *   SKIP          red      不做
+ */
+
+* { box-sizing: border-box; }
+
+:root {
+  --bg: #ffffff;
+  --bg-card: #fafafa;
+  --bg-subtle: #f4f4f5;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --text: #18181b;
+  --text-muted: #71717a;
+  --text-faint: #a1a1aa;
+  --accent: #2563eb;
+  --bar-bg: #e5e7eb;
+  --bar-fg: #2563eb;
+  --bar-risk: #dc2626;
+  --positive: #15803d;
+  --negative: #b91c1c;
+  --warn-bg: #fef3c7;
+  --warn-border: #fcd34d;
+  --warn-text: #78350f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c0c0d;
+    --bg-card: #18181b;
+    --bg-subtle: #27272a;
+    --border: #27272a;
+    --border-strong: #3f3f46;
+    --text: #fafafa;
+    --text-muted: #a1a1aa;
+    --text-faint: #71717a;
+    --accent: #3b82f6;
+    --bar-bg: #27272a;
+    --bar-fg: #3b82f6;
+    --bar-risk: #ef4444;
+    --positive: #22c55e;
+    --negative: #ef4444;
+    --warn-bg: #422006;
+    --warn-border: #a16207;
+    --warn-text: #fde68a;
+  }
+}
+
+html { font-size: 14px; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  font-feature-settings: "tnum" 1;  /* tabular numerals */
+}
+
+main.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+header.memo-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+}
+header.memo-header h1 {
+  font-size: 1.75rem;
+  margin: 0 0 0.25rem 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+header.memo-header .subtitle {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin: 0;
+}
+header.memo-header .meta {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+header.memo-header .meta strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+article.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+  margin: 1rem 0;
+}
+article.card > h2,
+article.card > h3 {
+  margin-top: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+th, td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+table.compact th, table.compact td { padding: 0.4rem 0.6rem; }
+table.numeric td { font-variant-numeric: tabular-nums; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ===== Decision badges ===== */
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.badge-FULL          { background: #16a34a; color: white; }
+.badge-LARGE         { background: #2563eb; color: white; }
+.badge-TRIAL         { background: #ea580c; color: white; }
+.badge-RELATIONSHIP  { background: #ca8a04; color: white; }
+.badge-SKIP          { background: #dc2626; color: white; }
+.badge-prospectus    { background: #6366f1; color: white; }
+.badge-pricing       { background: #d97706; color: white; }
+.badge-listed        { background: #475569; color: white; }
+.badge-delisted      { background: #71717a; color: white; }
+.badge-status        { background: var(--bg-subtle); color: var(--text); border: 1px solid var(--border-strong); }
+
+/* ===== Bars (Q_company, Q_eco, R_lockup) ===== */
+.bar {
+  display: inline-block;
+  width: 200px;
+  height: 8px;
+  background: var(--bar-bg);
+  border-radius: 4px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--bar-fg);
+  border-radius: 4px;
+  transition: none;
+}
+.bar.bar-risk > span { background: var(--bar-risk); }
+
+/* ===== Decision row (the verdict section) ===== */
+.verdict {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 1rem 0;
+}
+.verdict .badge {
+  font-size: 1rem;
+  padding: 0.35rem 0.9rem;
+}
+.verdict .position {
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.verdict .nacs-value {
+  margin-left: auto;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+.verdict .nacs-value strong {
+  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== Detail/summary collapsibles ===== */
+details {
+  margin: 0.75rem 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+details > summary {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--text);
+  user-select: none;
+  list-style: none;
+}
+details > summary::before {
+  content: "▶ ";
+  display: inline-block;
+  margin-right: 0.5rem;
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+details[open] > summary::before { content: "▼ "; }
+details > summary::-webkit-details-marker { display: none; }
+details[open] > summary { border-bottom: 1px solid var(--border); }
+details > div, details > table { padding: 0.75rem 1rem; }
+
+/* ===== Returns coloring ===== */
+.ret-pos { color: var(--positive); font-variant-numeric: tabular-nums; }
+.ret-neg { color: var(--negative); font-variant-numeric: tabular-nums; }
+.ret-neutral { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ret-pending { color: var(--text-faint); font-style: italic; }
+
+/* ===== Warnings panel ===== */
+.warnings {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn-text);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+}
+.warnings h4 { margin: 0 0 0.5rem 0; font-size: 0.8125rem; }
+.warnings ul { margin: 0; padding-left: 1.25rem; }
+
+/* ===== Code/JSON pre ===== */
+pre {
+  background: var(--bg-subtle);
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  margin: 0;
+}
+
+/* ===== Footer ===== */
+footer.memo-footer {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* ===== Compare table specific ===== */
+table.compare-table th:first-child,
+table.compare-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--bg-card);
+  font-weight: 500;
+  color: var(--text-muted);
+}
+table.compare-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* ===== Print (committee handouts) ===== */
+@media print {
+  :root {
+    --bg: white;
+    --bg-card: white;
+    --bg-subtle: #f4f4f5;
+    --border: #d4d4d8;
+  }
+  body { font-size: 10pt; }
+  main.container { max-width: none; padding: 1cm 1.5cm; }
+  details { page-break-inside: avoid; }
+  details:not([open]) > summary { display: none; }   /* 打印时不显示折叠的 */
+  details > summary { font-weight: 600; }
+  article.card { break-inside: avoid; }
+  .badge { border: 1px solid currentColor; }   /* 防止彩色背景吃墨 */
+}

@@ -1,0 +1,233 @@
+{% extends "_base.html.j2" %}
+
+{% block content %}
+
+<header class="memo-header">
+  <h1>{{ report.stock_code }}
+      {% if report.company_name_zh %}<span style="font-weight: 400; color: var(--text-muted);">{{ report.company_name_zh }}</span>{% endif %}
+      <small style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">· Case Review</small></h1>
+  <p class="subtitle">
+    {% if report.current_status %}
+      <span class="badge badge-{{ report.current_status }}">{{ report.current_status }}</span>
+    {% endif %}
+    {% if report.listing_date %}
+      · listing: <strong>{{ report.listing_date | fmt_date }}</strong>
+    {% endif %}
+    · <strong>{{ report.n_predictions or 0 }}</strong> predictions on record
+  </p>
+</header>
+
+{% if report.error %}
+<div class="warnings"><h4>⚠ {{ report.error }}</h4></div>
+{% else %}
+
+{# ====== 锁定预测 vs 实际 (头条) ====== #}
+{% if report.locked_prediction %}
+<div class="verdict">
+  <span class="badge badge-{{ report.locked_prediction.decision }}">{{ report.locked_prediction.decision }}</span>
+  <span style="margin-left: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">
+    locked at <code>{{ report.locked_prediction.asof_date }}</code>
+  </span>
+  <span class="nacs-value">
+    NACS_adj <strong>{{ report.locked_prediction.nacs_adjusted | num(4) }}</strong>
+  </span>
+</div>
+{% endif %}
+
+{# ====== 实际表现 ====== #}
+<article class="card">
+  <h3>实际表现 (受 is_*_due 过滤)</h3>
+  <table class="numeric compact">
+    <thead>
+      <tr>
+        <th>horizon</th>
+        <th class="num">return</th>
+        <th>status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>d30 (上市后 30 日)</td>
+        <td class="num {{ report.actuals.return_d30 | ret_class }}">
+          {% if report.actuals.is_d30_due == 1 %}
+            {{ report.actuals.return_d30 | pct }}
+          {% else %}
+            <span class="ret-pending">not yet due</span>
+          {% endif %}
+        </td>
+        <td><small>is_d30_due={{ report.actuals.is_d30_due }}</small></td>
+      </tr>
+      <tr>
+        <td>m6 (解禁日附近)</td>
+        <td class="num {{ report.actuals.return_m6 | ret_class }}">
+          {% if report.actuals.is_m6_due == 1 %}
+            {{ report.actuals.return_m6 | pct }}
+          {% else %}
+            <span class="ret-pending">not yet due</span>
+          {% endif %}
+        </td>
+        <td><small>is_m6_due={{ report.actuals.is_m6_due }}</small></td>
+      </tr>
+      <tr>
+        <td>m12</td>
+        <td class="num {{ report.actuals.return_m12 | ret_class }}">
+          {% if report.actuals.is_m12_due == 1 %}
+            {{ report.actuals.return_m12 | pct }}
+          {% else %}
+            <span class="ret-pending">not yet due</span>
+          {% endif %}
+        </td>
+        <td><small>is_m12_due={{ report.actuals.is_m12_due }}</small></td>
+      </tr>
+      {% if report.actuals.max_drawdown_m6 is not none %}
+      <tr>
+        <td>max drawdown m6</td>
+        <td class="num ret-neg">{{ report.actuals.max_drawdown_m6 | pct }}</td>
+        <td></td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</article>
+
+{# ====== 预测历史 ====== #}
+{% if report.predictions %}
+<article class="card">
+  <h3>Prediction history ({{ report.predictions | length }} runs)</h3>
+  <table class="numeric compact">
+    <thead>
+      <tr>
+        <th>asof</th>
+        <th>analysis status</th>
+        <th>scenario</th>
+        <th class="num">price</th>
+        <th class="num">NACS</th>
+        <th>decision</th>
+        <th class="num">Q_c</th>
+        <th class="num">Q_e</th>
+        <th class="num">R_l</th>
+        <th>panel</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in report.predictions %}
+      <tr>
+        <td><strong>{{ p.asof_date }}</strong></td>
+        <td><span class="badge badge-{{ p.deal_status_at_analysis or 'listed' }}">{{ p.deal_status_at_analysis or '?' }}</span></td>
+        <td>{{ p.price_scenario }}</td>
+        <td class="num">{{ p.offer_price_used | num(2) }}</td>
+        <td class="num">{{ p.nacs_adjusted | num(4) }}</td>
+        <td><span class="badge badge-{{ p.decision }}">{{ p.decision }}</span></td>
+        <td class="num">{{ p.Q_company | num(3) }}</td>
+        <td class="num">{{ p.Q_ecosystem | num(3) }}</td>
+        <td class="num">{{ p.R_lockup | num(3) }}</td>
+        <td><small><code>{{ p.panel_snapshot_id }}</code>{% if p.notes %}<br><span style="color: var(--text-muted);">{{ p.notes }}</span>{% endif %}</small></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+
+{# ====== 跨次稳定性 ====== #}
+{% if report.stability %}
+<article class="card">
+  <h3>Stability across runs (std)</h3>
+  <table class="numeric compact">
+    <tbody>
+      <tr><td>NACS_adj std</td><td class="num">{{ report.stability.nacs_std | num(4) }}</td></tr>
+      <tr><td>Q_company std</td><td class="num">{{ report.stability.Q_company_std | num(4) }}</td></tr>
+      <tr><td>Q_ecosystem std</td><td class="num">{{ report.stability.Q_ecosystem_std | num(4) }}</td></tr>
+      <tr><td>R_lockup std</td><td class="num">{{ report.stability.R_lockup_std | num(4) }}</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top: 0.75rem; font-size: 0.8125rem; color: var(--text-muted);">
+    std=0 表示同一 offering 跨次跑出来一致; 跨次 std 大说明面板/输入有显著变化.
+  </p>
+</article>
+{% endif %}
+
+{# ====== Inputs vs Actual diff ====== #}
+{% if report.inputs_vs_actual %}
+<article class="card">
+  <h3>Inputs at analysis vs final actual</h3>
+  <table class="numeric compact">
+    <thead>
+      <tr>
+        <th>field</th>
+        <th class="num">predicted</th>
+        <th class="num">actual</th>
+        <th class="num">delta</th>
+        <th class="num">delta %</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in report.inputs_vs_actual %}
+      <tr>
+        <td>{{ d.field }}</td>
+        <td class="num">{{ d.pred | num(2) }}</td>
+        <td class="num">{{ d.actual | num(2) }}</td>
+        <td class="num {{ d.delta | ret_class }}">{{ d.delta | num(2) }}</td>
+        <td class="num {{ d.delta_pct | ret_class }}">{{ d.delta_pct | pct(1) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+
+{# ====== Similar cases vs this stock ====== #}
+{% if report.similar_cases and report.similar_cases["items"] %}
+<article class="card">
+  <h3>同伴比对回看 (similar listed IPOs · 当时给的列表)</h3>
+  <table class="numeric compact">
+    <thead>
+      <tr>
+        <th>stock</th>
+        <th>name</th>
+        <th class="num">d30</th>
+        <th class="num">m6</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in report.similar_cases["items"] %}
+      <tr>
+        <td><code>{{ s.stock_code }}</code></td>
+        <td>{{ s.name or '' }}</td>
+        <td class="num {{ s.actual_d30 | ret_class }}">{{ s.actual_d30 | pct }}</td>
+        <td class="num {{ s.actual_m6 | ret_class }}">{{ s.actual_m6 | pct }}</td>
+      </tr>
+      {% endfor %}
+      <tr style="border-top: 2px solid var(--border-strong); font-weight: 500;">
+        <td colspan="2">similar median</td>
+        <td class="num">{{ report.similar_cases.d30_median | pct }}</td>
+        <td class="num">{{ report.similar_cases.m6_median | pct }}</td>
+      </tr>
+      <tr style="font-weight: 500; background: var(--bg-subtle);">
+        <td colspan="2"><strong>THIS stock actual</strong></td>
+        <td class="num {{ report.actuals.return_d30 | ret_class }}">
+          {% if report.actuals.is_d30_due == 1 %}{{ report.actuals.return_d30 | pct }}{% else %}<small>not due</small>{% endif %}
+        </td>
+        <td class="num {{ report.actuals.return_m6 | ret_class }}">
+          {% if report.actuals.is_m6_due == 1 %}{{ report.actuals.return_m6 | pct }}{% else %}<small>not due</small>{% endif %}
+        </td>
+      </tr>
+      {% if report.similar_d30_diff is not none or report.similar_m6_diff is not none %}
+      <tr style="font-weight: 500; color: var(--text-muted);">
+        <td colspan="2"><small>delta vs similar median</small></td>
+        <td class="num {{ report.similar_d30_diff | ret_class }}">
+          {{ report.similar_d30_diff | pct }}
+        </td>
+        <td class="num {{ report.similar_m6_diff | ret_class }}">
+          {{ report.similar_m6_diff | pct }}
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+
+{% endif %}{# error else block #}
+
+{% endblock %}

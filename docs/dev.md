@@ -374,3 +374,35 @@ ipo_returns (随业绩到期逐步填) + ipo_returns.is_*_due 标志
     ↓ scripts/case_review.py
 诊断报告: 预测 vs 实际, 哪里偏了, 为什么
 ```
+
+### 11.7 HTML IC memo (`--html`)
+所有 3 个 CLI 都支持 `--html <path>` 输出自包含 HTML, 可直接邮件分发或投委
+会传阅:
+
+```bash
+# 单 deal IC memo
+python scripts/analyze_deal.py --stock-code 1187.HK \
+    --html outputs/memos/1187.html
+
+# 多 deal 横评 (compare)
+python scripts/analyze_deal.py --stock-codes "1187.HK,2493.HK,3296.HK" \
+    --compare --html outputs/memos/compare.html
+
+# 上市后复盘
+python scripts/case_review.py --stock-code 1187.HK \
+    --html outputs/memos/1187_review.html
+```
+
+特性:
+- **单文件**: 整套 CSS 内嵌在 `<style>` 块, 无外部 CSS/JS/CDN 依赖, 双击即开
+- **决策徽章**: FULL=绿 / LARGE=蓝 / TRIAL=橙 / RELATIONSHIP=琥珀 / SKIP=红
+- **三因子柱**: Q_company / Q_ecosystem / R_lockup 可视化进度条 (R_lockup 用红色)
+- **L1/L2/L3 子项**: `<details>` 折叠, 默认收起
+- **Similar listed peers**: 收益正负自动着色 (`ret-pos` / `ret-neg` / `ret-pending`)
+- **`--price-scan` 跨决策边界警告**: 如 low 给 LARGE 而 high 给 TRIAL, memo 顶部出黄色 warning
+- **打印样式**: `@media print` 投委会包打印不变形, 折叠的子项打印时不显示
+- **暗黑模式**: `@prefers-color-scheme: dark` 自动切换 (邮件客户端各异, 默认浅色)
+- **审计快照**: Inputs snapshot (折叠) 含完整 IPOOffering JSON, 复盘可还原
+
+实现: `src/reports/html_renderer.py` + `src/reports/templates/*.html.j2` (Jinja2),
+样式: `src/reports/static/report.css` (~300 行原创, 无第三方框架).

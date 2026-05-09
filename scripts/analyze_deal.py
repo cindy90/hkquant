@@ -321,6 +321,8 @@ def main() -> int:
     ap.add_argument("--persist", action="store_true",
                     help="把结果写进 nacs_predictions (audit trail)")
     ap.add_argument("--notes", help="本次评估的备注 (写入 prediction.notes)")
+    ap.add_argument("--html", metavar="PATH",
+                    help="同时输出自包含 HTML IC memo 到 PATH (单文件可邮件分发)")
     args = ap.parse_args()
 
     if args.compare and not args.stock_codes:
@@ -386,6 +388,52 @@ def main() -> int:
                 _print_single_report(recs, snap, _resolve_asof_for_deal(
                     recs[0]["row"], args.asof))
                 _print_similar_cases_for_deals(conn, {code: recs})
+
+        # ===== HTML IC memo 输出 =====
+        if args.html:
+            from data.predictions import find_similar_cases
+            from reports.html_renderer import (
+                render_single_deal, render_compare, write_html,
+            )
+            cutoff = (date.today().replace(year=date.today().year - 2)).isoformat()
+
+            if args.compare and len(deals_results) > 1:
+                similar_per_deal = {}
+                for code, recs in deals_results.items():
+                    mid = next((r for r in recs
+                                if r["scenario"] in ("mid", "final")), recs[0])
+                    chapter_val = mid["offering"].listing_chapter.value
+                    gics = mid["row"]["gics_l2"]
+                    similar_per_deal[code] = find_similar_cases(
+                        conn, chapter=chapter_val, gics_l2=gics,
+                        q_company=mid["result"].Q_company,
+                        q_ecosystem=mid["result"].Q_ecosystem,
+                        r_lockup=mid["result"].R_lockup,
+                        min_listing_date=cutoff, k=5,
+                    )
+                html = render_compare(deals_results, snap, similar_per_deal,
+                                      title=args.notes)
+            else:
+                # 单 deal: 取第一个 (一般也只有一个)
+                code, recs = next(iter(deals_results.items()))
+                mid = next((r for r in recs
+                            if r["scenario"] in ("mid", "final")), recs[0])
+                chapter_val = mid["offering"].listing_chapter.value
+                gics = mid["row"]["gics_l2"]
+                similar = find_similar_cases(
+                    conn, chapter=chapter_val, gics_l2=gics,
+                    q_company=mid["result"].Q_company,
+                    q_ecosystem=mid["result"].Q_ecosystem,
+                    r_lockup=mid["result"].R_lockup,
+                    min_listing_date=cutoff, k=5,
+                )
+                html = render_single_deal(
+                    recs, snap,
+                    asof=_resolve_asof_for_deal(recs[0]["row"], args.asof),
+                    similar_cases=similar,
+                )
+            out_path = write_html(html, Path(args.html))
+            print(f"\n✓ HTML IC memo: {out_path}")
 
     return 0
 

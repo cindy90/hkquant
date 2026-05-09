@@ -181,6 +181,8 @@ def review(conn, stock_code: str) -> Dict[str, Any]:
         "d30_median": statistics.median(sim_d30) if sim_d30 else None,
         "m6_median": statistics.median(sim_m6) if sim_m6 else None,
     }
+    out["similar_d30_diff"] = None
+    out["similar_m6_diff"] = None
     if actuals["return_d30_filtered"] is not None and out["similar_cases"]["d30_median"] is not None:
         out["similar_d30_diff"] = (actuals["return_d30_filtered"]
                                    - out["similar_cases"]["d30_median"])
@@ -279,6 +281,8 @@ def main() -> int:
     ap.add_argument("--stock-code", required=True)
     ap.add_argument("--db", default=str(_ROOT / "data" / "nacs_real.db"))
     ap.add_argument("--json", action="store_true", help="JSON 输出")
+    ap.add_argument("--html", metavar="PATH",
+                    help="同时输出自包含 HTML 复盘报告到 PATH")
     args = ap.parse_args()
 
     with db_connect(args.db) as conn:
@@ -288,6 +292,13 @@ def main() -> int:
         print(json.dumps(rep, ensure_ascii=False, indent=2, default=str))
     else:
         print_review(rep)
+
+    if args.html:
+        from reports.html_renderer import render_case_review, write_html
+        html = render_case_review(rep)
+        out_path = write_html(html, Path(args.html))
+        print(f"\n✓ HTML case review: {out_path}")
+
     return 0 if not rep.get("error") else 1
 
 
