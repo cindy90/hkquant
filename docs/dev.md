@@ -195,3 +195,90 @@ python run_v7_backtest.py --workers 4   # 4 进程并行
 - IPO < 100 只: spawn 开销 > 收益
 - Windows 子进程启动慢, workers>=4 才显著加速
 - 调试时用 workers=1 (异常 traceback 在主进程)
+
+---
+
+## 10. 数据质量与 schema 演进 (P3, migration v1)
+
+### 10.1 raw + overrides 双层存储
+原始 CSV 视为只读"原始档", 任何人工修正集中在 `data/raw/overrides.yaml`.
+ETL 在 `read_csv_dict()` 之后调用 `apply_ipo_overrides()` 把覆盖项合并进 dict, 让
+(raw + overrides) → DB 是确定性可重建过程.
+
+```yaml
+# data/raw/overrides.yaml
+ipo_info:
+  "2453.HK":
+    listing_date: "2024-01-09"
+    _reason: "raw CSV 是 typo (定价日 2023-12-29, 上市不可能在定价前 11 个月)"
+    _source: "raw self-consistency: f034=2024-01-09"
+```
+
+可覆盖字段集合见 `src/data_sources/ifind/overrides.py::ALLOWED_IPO_FIELDS`.
+新增覆盖时 `_reason` / `_source` 必填 (`lint_overrides()` 强制校验).
+
+### 10.2 一次性迁移 `migrate_data_quality_v1.py`
+`scripts/migrate_data_quality_v1.py` 把生产 DB 升级到 schema v1.
+9 个步骤 (M0..M8) 都按 `db_metadata.migration_v1_M*` 标志做幂等控制.
+
+```bash
+# 干跑: 在 .dryrun.db 副本上演练, 完毕自动删除
+python scripts/migrate_data_quality_v1.py --dry-run
+
+# 真跑: 自动备份原 DB 到 nacs_real.db.bak_migrate_v1_<ts>
+python scripts/migrate_data_quality_v1.py
+```
+
+| Step | 内容 |
+|---|---|
+| M0 | 合并 (ipo_id, cs_id) 重复行 (sum ticket / shares) |
+| M1 | 补 `ipo_financials` / `ipo_concepts` / `ipo_industries` 表定义 |
+| M2 | 加 5 个高频索引 (link 双向 + master.stock_code + financials.code+year) |
+| M3 | `ipo_master.gross_proceeds_excl_greenshoe` 列 + 回填 (= price × shares) |
+| M4 | `ipo_returns.is_d30_due / is_m6_due / is_m12_due / is_unlock_due` |
+| M5 | `ipo_cornerstone_link.currency / ticket_size_native / fx_to_hkd` 归一 |
+| M6 | 重建 link 表加 `CHECK (affiliation_flag IN (0, 1, 2))` |
+| M7 | 缺失 share_capital 用 `actual_issued_shares` 反推 pre_ipo_shares |
+| M8 | 创建 `mv_ipo_full` 视图 (探索/回测统一入口) |
+
+### 10.3 `mv_ipo_full` 视图 — 探索的统一入口
+所有探索 (`scripts/explore_*.py`) 和回测应优先 `SELECT * FROM mv_ipo_full`
+而不是手写 ipo_master + cornerstone_link + ipo_returns 三连 join.
+字段定义在一处, 加新列时只改 `schema.py` 的 VIEW DDL 一处.
+
+### 10.4 业绩成熟标记
+`ipo_returns.is_*_due` 区分"业绩还没到期"和"应该有业绩但缺数".
+
+```sql
+-- 错误用法: NULL 同时混了两种含义, 缺失率被高估
+SELECT AVG(return_m6) FROM ipo_returns;
+
+-- 正确: 只统计已到期样本
+SELECT AVG(return_m6) FROM ipo_returns WHERE is_m6_due = 1;
+```
+
+`compute_ipo_returns()` 现在自动派生这 4 个标记.
+
+### 10.5 货币归一
+`ipo_cornerstone_link` 之前默认全 HKD, 但 raw CSV 里有 33 USD + 4 CNY 行.
+现在 schema:
+
+| 列 | 含义 |
+|---|---|
+| `currency` | HKD / USD / CNY |
+| `ticket_size_native` | 招股书原文金额 |
+| `fx_to_hkd` | 写入时锁定的换算率 |
+| `ticket_size_hkd` | = `ticket_size_native × fx_to_hkd` (派生, 下游聚合用此值) |
+
+汇率常量 (`FX_USD_HKD = 7.80`, `FX_CNY_HKD = 1.10`) 在
+`load_to_db.py` + `migrate_data_quality_v1.py` 共享. 后续若改成按月查 fx,
+两处一起改.
+
+### 10.6 已知未填充表 / 未启用字段
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| `price_history` | 0 行 | `ipo_returns` 已通过 `fix_p1_returns_via_ifind.py` 直接派生写入. **重跑 `dao.compute_ipo_returns()` 会清空 ipo_returns**. 长期方案: 拉日 K 入此表后改回派生路径. |
+| `sponsor_performance_asof` | 0 行 | schema 预留, 与基石画像同思路按 as-of 物化, 待补 sponsor 派生脚本. |
+| `ipo_master.last_round_premium` | 100% NULL | L1 否决条款 `last_round_premium > 0.50` 因此**未启用**. 数据补齐 (来自 wind/F&S 报告) 后自动生效. |
+| `data/raw/ifind/ifind_blocks.csv.broken` | 损坏 | 18A/18C/AH/SPAC 章节自动校验当前不可用; 须重 pull, 见 `data/raw/ifind/README_blocks_broken.md`. |

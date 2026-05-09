@@ -69,7 +69,9 @@ CREATE TABLE IF NOT EXISTS ipo_master (
     offer_price_hkd         REAL,
     offer_price_low         REAL,
     offer_price_high        REAL,
-    offering_size_hkd       REAL,
+    offering_size_hkd       REAL,                 -- 含绿鞋 (raw CSV 来源, 不一定 = price × shares)
+    gross_proceeds_excl_greenshoe REAL,           -- = offer_price × total_offer_shares (派生, migration v1)
+    total_offer_shares      REAL,                 -- 全球发售股数 (来自 raw CSV)
     pricing_in_range        REAL,
     intl_oversub            REAL,
     public_oversub          REAL,
@@ -84,7 +86,7 @@ CREATE TABLE IF NOT EXISTS ipo_master (
     -- 估值
     pe_at_offer             REAL,
     pe_peer_median          REAL,
-    last_round_premium      REAL,
+    last_round_premium      REAL,                 -- ⚠ 当前 100% NULL, L1 否决条款未启用; 数据补齐后自动生效
     -- 基石聚合
     cornerstone_total_hkd   REAL,
     cornerstone_coverage    REAL,
@@ -94,6 +96,13 @@ CREATE TABLE IF NOT EXISTS ipo_master (
     is_delisted             INTEGER DEFAULT 0,
     delisting_date          DATE,
     is_acquired             INTEGER DEFAULT 0,
+    -- 风险/股本 (originally added by fix_p1_* scripts; consolidated into schema)
+    pre_ipo_shares          REAL,
+    post_ipo_shares         REAL,
+    overhang_ratio          REAL,                 -- post / actual_issued
+    peer_lockup_avg_drawdown REAL,                -- 同行历史 lockup 期 max DD 平均
+    pe_vs_history_pct       REAL,                 -- 当前 PE 在该公司过去 PE 历史中的百分位
+    fundamental_risk_score  REAL,                 -- 财务恶化度 [0,1], 越高越糟
     -- 数据质量
     data_quality_score      REAL DEFAULT 1.0,    -- [0,1]
     data_source_notes       TEXT,
@@ -103,22 +112,34 @@ CREATE TABLE IF NOT EXISTS ipo_master (
 CREATE INDEX IF NOT EXISTS idx_ipo_date ON ipo_master(listing_date);
 CREATE INDEX IF NOT EXISTS idx_ipo_chapter ON ipo_master(listing_chapter);
 CREATE INDEX IF NOT EXISTS idx_ipo_gics ON ipo_master(gics_l2);
+CREATE INDEX IF NOT EXISTS idx_ipo_stock_code ON ipo_master(stock_code);
 
 -- =============================================================================
 -- 4. IPO-基石多对多关系
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ipo_cornerstone_link (
-    link_id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    ipo_id              TEXT NOT NULL,
-    cornerstone_id      TEXT NOT NULL,
-    ticket_size_hkd     REAL,
-    allocation_shares   INTEGER,
+    link_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    ipo_id               TEXT NOT NULL,
+    cornerstone_id       TEXT NOT NULL,
+    stock_code           TEXT,
+    cornerstone_name     TEXT,                    -- 招股书原文
+    ultimate_holder      TEXT,
+    ticket_size_hkd      REAL,                    -- 归一为 HKD (= ticket_size_native × fx_to_hkd)
+    ticket_size_native   REAL,                    -- 原始货币金额
+    currency             TEXT DEFAULT 'HKD',      -- HKD / USD / CNY
+    fx_to_hkd            REAL DEFAULT 1.0,        -- 写入时锁定的换算率
+    allocation_shares    INTEGER,
+    subscribe_pct        REAL,
     lockup_months_actual INTEGER,
-    affiliation_flag    INTEGER DEFAULT 0,
-    affiliation_reason  TEXT,
-    data_source         TEXT,                    -- prospectus / allocation_announcement / manual
-    is_estimated        INTEGER DEFAULT 0,       -- ticket_size 是否为估计
-    as_of_date          DATE,
+    unlock_date          DATE,
+    affiliation_flag     INTEGER DEFAULT 0
+                          CHECK (affiliation_flag IN (0, 1, 2)),
+                                                  -- 0=否, 1=明确关联, 2=可疑/待确认
+    affiliation_reason   TEXT,
+    hangseng_industry    TEXT,
+    data_source          TEXT,                    -- prospectus / allocation_announcement / manual / iFinD_p05309
+    is_estimated         INTEGER DEFAULT 0,       -- ticket_size 是否为估计
+    as_of_date           DATE,
     FOREIGN KEY (ipo_id) REFERENCES ipo_master(ipo_id),
     FOREIGN KEY (cornerstone_id) REFERENCES cornerstone_master(cornerstone_id)
 );
@@ -130,6 +151,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_link_unique
 
 -- =============================================================================
 -- 5. 日频价格历史 (派生 M+1/M+3/M+6/解禁后等收益)
+-- ⚠ 当前 0 行: ipo_returns 已通过 fix_p1_returns_via_ifind.py 直接派生写入,
+--   不依赖此表. 重跑 dao.compute_ipo_returns() 会清空 ipo_returns.
+--   见 docs/dev.md "未填充表".
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS price_history (
     ipo_id              TEXT NOT NULL,
@@ -176,11 +200,17 @@ CREATE TABLE IF NOT EXISTS ipo_returns (
     return_unlock_d90   REAL,                    -- 解禁后90天 (overhang测量)
     max_drawdown_m6     REAL,                    -- 锁定期内最大回撤
     avg_daily_volume_hkd REAL,                   -- 流动性
+    -- 业绩成熟标记 (NULL vs 真缺数 → IC 报告只统计 due=1 样本):
+    is_d30_due          INTEGER DEFAULT 0,
+    is_m6_due           INTEGER DEFAULT 0,
+    is_m12_due          INTEGER DEFAULT 0,
+    is_unlock_due       INTEGER DEFAULT 0,
     FOREIGN KEY (ipo_id) REFERENCES ipo_master(ipo_id)
 );
 
 -- =============================================================================
 -- 8. 保荐人画像 (类似基石画像, 按 as-of-date 物化)
+-- ⚠ 当前 0 行: 数据未灌, 见 docs/dev.md "未填充表" 章节
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS sponsor_performance_asof (
     sponsor_name            TEXT NOT NULL,
@@ -194,6 +224,78 @@ CREATE TABLE IF NOT EXISTS sponsor_performance_asof (
     pct_rank_avg_d30        REAL,
     PRIMARY KEY (sponsor_name, as_of_date)
 );
+
+-- =============================================================================
+-- 11. 财务年报 (THS_BD: total_oi/gross_margin/net_margin/roe/ni_attr)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS ipo_financials (
+    stock_code      TEXT NOT NULL,
+    report_year     INTEGER NOT NULL,
+    revenue_cny     REAL,
+    gross_margin    REAL,
+    net_margin      REAL,
+    roe             REAL,
+    PRIMARY KEY (stock_code, report_year)
+);
+CREATE INDEX IF NOT EXISTS idx_fin_code_year ON ipo_financials(stock_code, report_year);
+
+-- =============================================================================
+-- 12. 概念板块成分 (DataPool: 港股概念-IPO 多对多)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS ipo_concepts (
+    ipo_id          TEXT NOT NULL,
+    stock_code      TEXT NOT NULL,
+    concept_id      TEXT NOT NULL,
+    concept_name    TEXT,
+    data_date       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_ipo_concepts_stock ON ipo_concepts(stock_code);
+CREATE INDEX IF NOT EXISTS idx_ipo_concepts_concept ON ipo_concepts(concept_id);
+
+-- =============================================================================
+-- 13. 行业分类 (恒生/申万/同花顺 多源, 一只 IPO 一个 source 一行)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS ipo_industries (
+    ipo_id          TEXT NOT NULL,
+    stock_code      TEXT NOT NULL,
+    source          TEXT NOT NULL,                -- 'hs' / 'sw' / 'ths_global'
+    l1_name         TEXT, l2_name TEXT, l3_name TEXT, l4_name TEXT,
+    leaf_bid        TEXT,
+    leaf_level      INTEGER,
+    data_date       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_ipo_industries_stock ON ipo_industries(stock_code);
+CREATE INDEX IF NOT EXISTS idx_ipo_industries_leaf ON ipo_industries(leaf_bid);
+CREATE INDEX IF NOT EXISTS idx_ipo_industries_l1 ON ipo_industries(l1_name);
+
+-- =============================================================================
+-- 14. 视图: 探索 / 回测的统一入口 (一处更新, 全脚本受益)
+-- 用法:    SELECT * FROM mv_ipo_full WHERE listing_date >= '2024-01-01' AND is_m6_due = 1
+-- =============================================================================
+DROP VIEW IF EXISTS mv_ipo_full;
+CREATE VIEW mv_ipo_full AS
+SELECT
+    m.ipo_id, m.stock_code, m.company_name_zh, m.listing_date, m.pricing_date,
+    m.listing_chapter, m.gics_l2,
+    m.offer_price_hkd, m.offer_price_low, m.offer_price_high,
+    m.offering_size_hkd, m.gross_proceeds_excl_greenshoe, m.total_offer_shares,
+    m.cornerstone_coverage, m.cornerstone_count,
+    m.lockup_months,
+    m.pe_at_offer, m.pe_peer_median,
+    m.pre_ipo_shares, m.post_ipo_shares, m.overhang_ratio,
+    m.is_delisted, m.delisting_date, m.is_acquired,
+    m.data_quality_score,
+    r.return_d1_close, r.return_d30, r.return_m3, r.return_m6, r.return_m12,
+    r.return_unlock_d30, r.return_unlock_d90,
+    r.max_drawdown_m6, r.avg_daily_volume_hkd,
+    r.is_d30_due, r.is_m6_due, r.is_m12_due, r.is_unlock_due,
+    (SELECT COUNT(*) FROM ipo_cornerstone_link WHERE ipo_id = m.ipo_id) AS n_cs,
+    (SELECT SUM(ticket_size_hkd) FROM ipo_cornerstone_link
+        WHERE ipo_id = m.ipo_id) AS cs_total_hkd,
+    (SELECT GROUP_CONCAT(DISTINCT currency) FROM ipo_cornerstone_link
+        WHERE ipo_id = m.ipo_id) AS cs_currencies
+FROM ipo_master m
+LEFT JOIN ipo_returns r ON r.ipo_id = m.ipo_id;
 
 -- =============================================================================
 -- 9. 元数据: 数据库版本/构建时间

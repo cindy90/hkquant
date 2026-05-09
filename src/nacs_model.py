@@ -381,7 +381,13 @@ def _score_pe_discount(pe_at_offer: Optional[float],
 
 
 def _score_last_round_premium(last_round_premium: Optional[float]) -> float:
-    """对Pre-IPO最后一轮的折溢价: 折价 100, 持平 60, 溢价30%-> ~30, 溢价>50% -> 0"""
+    """对Pre-IPO最后一轮的折溢价: 折价 100, 持平 60, 溢价30%-> ~30, 溢价>50% -> 0.
+
+    ⚠ 当前 ipo_master.last_round_premium 全表 NULL (数据未灌), 所以这里 100%
+    走 60.0 中性默认值 → L1.1 估值评分中 last_round_premium 项实际未启用.
+    L1 否决条款 'last_round_premium > 0.50 → 强制 SKIP' 同样未启用 (见 _check_l1_veto).
+    数据补齐 (来自 wind/F&S 报告) 后自动生效, 无需改代码.
+    """
     if last_round_premium is None:
         return 60.0
     p = last_round_premium

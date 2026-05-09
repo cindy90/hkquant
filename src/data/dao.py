@@ -291,20 +291,54 @@ def upsert_ipo(conn: sqlite3.Connection, **kwargs) -> None:
 def link_cornerstone_to_ipo(conn: sqlite3.Connection, *,
                             ipo_id: str, cornerstone_id: str,
                             ticket_size_hkd: Optional[float] = None,
+                            ticket_size_native: Optional[float] = None,
+                            currency: str = "HKD",
+                            fx_to_hkd: float = 1.0,
                             allocation_shares: Optional[int] = None,
                             lockup_months_actual: Optional[int] = None,
-                            affiliation_flag: bool = False,
+                            affiliation_flag: int = 0,
                             affiliation_reason: Optional[str] = None,
+                            cornerstone_name: Optional[str] = None,
+                            stock_code: Optional[str] = None,
                             data_source: str = "prospectus",
                             is_estimated: bool = False) -> None:
+    """Upsert (ipo_id, cornerstone_id) link row.
+
+    affiliation_flag: 0=否, 1=明确关联, 2=可疑/待确认 (CHECK 约束).
+                      旧代码可能传 bool, 转 int.
+    currency:         HKD / USD / CNY; ticket_size_hkd 应是已归一为 HKD 的值.
+    """
+    aff = int(affiliation_flag) if not isinstance(affiliation_flag, bool) \
+          else int(bool(affiliation_flag))
+    if aff not in (0, 1, 2):
+        raise ValueError(f"affiliation_flag must be 0/1/2, got {affiliation_flag}")
+
     conn.execute("""
-        INSERT OR REPLACE INTO ipo_cornerstone_link (
-            ipo_id, cornerstone_id, ticket_size_hkd, allocation_shares,
-            lockup_months_actual, affiliation_flag, affiliation_reason,
+        INSERT INTO ipo_cornerstone_link (
+            ipo_id, cornerstone_id, stock_code, cornerstone_name,
+            ticket_size_hkd, ticket_size_native, currency, fx_to_hkd,
+            allocation_shares, lockup_months_actual,
+            affiliation_flag, affiliation_reason,
             data_source, is_estimated, as_of_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE)
-    """, (ipo_id, cornerstone_id, ticket_size_hkd, allocation_shares,
-          lockup_months_actual, int(affiliation_flag), affiliation_reason,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE)
+        ON CONFLICT(ipo_id, cornerstone_id) DO UPDATE SET
+            stock_code = excluded.stock_code,
+            cornerstone_name = excluded.cornerstone_name,
+            ticket_size_hkd = excluded.ticket_size_hkd,
+            ticket_size_native = excluded.ticket_size_native,
+            currency = excluded.currency,
+            fx_to_hkd = excluded.fx_to_hkd,
+            allocation_shares = excluded.allocation_shares,
+            lockup_months_actual = excluded.lockup_months_actual,
+            affiliation_flag = excluded.affiliation_flag,
+            affiliation_reason = excluded.affiliation_reason,
+            data_source = excluded.data_source,
+            is_estimated = excluded.is_estimated,
+            as_of_date = CURRENT_DATE
+    """, (ipo_id, cornerstone_id, stock_code, cornerstone_name,
+          ticket_size_hkd, ticket_size_native, currency, fx_to_hkd,
+          allocation_shares, lockup_months_actual,
+          aff, affiliation_reason,
           data_source, int(is_estimated)))
 
 
@@ -541,10 +575,13 @@ def hydrate_cornerstones_for_ipo(conn: sqlite3.Connection,
 # 6. IPO returns 计算 (从 price_history 派生)
 # =============================================================================
 
-def compute_ipo_returns(conn: sqlite3.Connection, ipo_id: str) -> Optional[Dict]:
+def compute_ipo_returns(conn: sqlite3.Connection, ipo_id: str,
+                        *, asof: Optional[date] = None) -> Optional[Dict]:
     """
     计算并落库 ipo_returns 一只IPO的全部收益指标.
     返回结果 dict 或 None (如数据不足).
+
+    asof: 用于派生 is_*_due 标志 (业绩到期判定); 默认 today.
     """
     ipo = conn.execute(
         "SELECT listing_date, offer_price_hkd, lockup_months FROM ipo_master WHERE ipo_id = ?",
@@ -553,9 +590,13 @@ def compute_ipo_returns(conn: sqlite3.Connection, ipo_id: str) -> Optional[Dict]
     if ipo is None or ipo["offer_price_hkd"] is None:
         return None
 
-    listing_date = date.fromisoformat(ipo["listing_date"])
+    ld_val = ipo["listing_date"]
+    listing_date = ld_val if isinstance(ld_val, date) \
+                   else date.fromisoformat(str(ld_val)[:10])
     offer = ipo["offer_price_hkd"]
     lockup = ipo["lockup_months"] or 6
+    if asof is None:
+        asof = date.today()
 
     prices = conn.execute("""
         SELECT trade_date, close_hkd, volume, turnover_hkd
@@ -565,7 +606,9 @@ def compute_ipo_returns(conn: sqlite3.Connection, ipo_id: str) -> Optional[Dict]
     if not prices:
         return None
 
-    by_date = {date.fromisoformat(p["trade_date"]): p for p in prices}
+    def _as_date(v):
+        return v if isinstance(v, date) else date.fromisoformat(str(v)[:10])
+    by_date = {_as_date(p["trade_date"]): p for p in prices}
 
     def _ret_at_offset(days: int) -> Optional[float]:
         """从上市日开始往后推 days 个交易日 (近似为日历日 + 容忍找最近一条)"""
@@ -590,7 +633,7 @@ def compute_ipo_returns(conn: sqlite3.Connection, ipo_id: str) -> Optional[Dict]
 
     # 锁定期内最大回撤
     in_lockup = [p["close_hkd"] for p in prices
-                 if date.fromisoformat(p["trade_date"]) <= unlock_date
+                 if _as_date(p["trade_date"]) <= unlock_date
                  and p["close_hkd"]]
     if in_lockup:
         peak = in_lockup[0]
@@ -605,6 +648,8 @@ def compute_ipo_returns(conn: sqlite3.Connection, ipo_id: str) -> Optional[Dict]
     avg_vol_hkd = (sum((p["turnover_hkd"] or 0) for p in prices)
                    / max(len(prices), 1))
 
+    # 业绩到期标志 (NULL vs 真缺数 → IC 报告只统计 due=1 样本)
+    unlock_d = listing_date + timedelta(days=int(lockup * 30.5))
     out = {
         "ipo_id": ipo_id,
         "return_d1_close": _ret_at_offset(1),
@@ -616,17 +661,24 @@ def compute_ipo_returns(conn: sqlite3.Connection, ipo_id: str) -> Optional[Dict]
         "return_unlock_d90": _ret_unlock(90),
         "max_drawdown_m6": max_dd,
         "avg_daily_volume_hkd": avg_vol_hkd,
+        "is_d30_due":   1 if listing_date + timedelta(days=30) <= asof else 0,
+        "is_m6_due":    1 if listing_date + timedelta(days=180) <= asof else 0,
+        "is_m12_due":   1 if listing_date + timedelta(days=365) <= asof else 0,
+        "is_unlock_due": 1 if unlock_d + timedelta(days=30) <= asof else 0,
     }
     conn.execute("""
         INSERT OR REPLACE INTO ipo_returns
         (ipo_id, return_d1_close, return_d30, return_m3, return_m6, return_m12,
          return_unlock_d30, return_unlock_d90, max_drawdown_m6,
-         avg_daily_volume_hkd)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         avg_daily_volume_hkd,
+         is_d30_due, is_m6_due, is_m12_due, is_unlock_due)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (out["ipo_id"], out["return_d1_close"], out["return_d30"],
           out["return_m3"], out["return_m6"], out["return_m12"],
           out["return_unlock_d30"], out["return_unlock_d90"],
-          out["max_drawdown_m6"], out["avg_daily_volume_hkd"]))
+          out["max_drawdown_m6"], out["avg_daily_volume_hkd"],
+          out["is_d30_due"], out["is_m6_due"],
+          out["is_m12_due"], out["is_unlock_due"]))
     return out
 
 

@@ -1,0 +1,104 @@
+# =============================================================================
+# raw/overrides.yaml — 字段级人工修正
+# =============================================================================
+#
+# 目的:
+#   raw iFinD CSV 偶尔有错误 (typo / 字段错位 / -- 占位), 这里是唯一的人工修正
+#   入口. ETL 在 load_to_db 之前会先 apply_overrides(), 让原始 CSV 可信任为
+#   "原始档", 而 DB 状态可由 (raw + overrides) 完全重建.
+#
+# 结构:
+#   ipo_info:
+#     <stock_code>:
+#       <field_name>: <value>           # 用语义列名 (见 field_mappings.P05310_IPO_INFO)
+#       _reason: <短描述>                # 必填: 为什么需要 override
+#       _source: <来源URL或人>           # 必填: 来源
+#
+# 适用字段 (语义名):
+#   listing_date, pricing_date, offer_price_hkd, offer_price_high,
+#   offer_price_low, offering_size_hkd, intl_oversub, public_oversub,
+#   cornerstone_coverage, total_offer_shares, listing_chapter
+#
+# 同样支持 cornerstones (按 (stock_code, cornerstone_name) 复合键)
+# =============================================================================
+
+ipo_info:
+  # ---------------------------------------------------------------------------
+  # 数据矛盾: iFinD CSV 中 listing_date typo 为 2023-01-09, 应为 2024-01-09
+  # ---------------------------------------------------------------------------
+  "2453.HK":
+    listing_date: "2024-01-09"
+    _reason: "raw CSV listing_date=2023-01-09 是 typo (定价日 2023-12-29, 上市日不可能在定价前 11 个月). 同行 p05310_f034=2024-01-09 印证."
+    _source: "raw CSV self-consistency: pricing_date(f028)=2023-12-29 + 招股截止后正常 6-10 工作日上市"
+
+  # ---------------------------------------------------------------------------
+  # listing_date 在 raw CSV 为 '--', 通过招股书或 HKEX 公告补齐
+  # ---------------------------------------------------------------------------
+  "1698.HK":
+    listing_date: "2022-09-21"
+    _reason: "腾讯音乐-SW 双重主要上市, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "2076.HK":
+    listing_date: "2022-12-22"
+    _reason: "BOSS 直聘-W 双重主要, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "2423.HK":
+    listing_date: "2022-05-11"
+    _reason: "贝壳-W 介绍上市, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "2562.HK":
+    listing_date: "2022-08-15"
+    listing_chapter: "spac"
+    _reason: "狮腾控股 SPAC, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "2665.HK":
+    listing_date: "2025-12-10"
+    listing_chapter: "spac"
+    _reason: "图达通 De-SPAC, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "3896.HK":
+    listing_date: "2022-12-30"
+    _reason: "金山云 双重主要, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "6623.HK":
+    listing_date: "2023-04-14"
+    _reason: "陆控 介绍上市, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "6676.HK":
+    listing_date: "2025-03-10"
+    listing_chapter: "spac"
+    _reason: "找钢网-W De-SPAC, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "6887.HK":
+    listing_date: "2025-08-07"
+    _reason: "东阳光药, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "7489.HK":
+    listing_date: "2026-03-19"
+    _reason: "岚图汽车, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "9658.HK":
+    listing_date: "2022-12-30"
+    _reason: "特海国际, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+  "9866.HK":
+    listing_date: "2022-03-10"
+    _reason: "蔚来-SW 双重主要, raw CSV listing_date='--'"
+    _source: "HKEX 公告 + 既有 DB 记录"
+
+
+# 基石 / 财务 / 股本 等其它表的 override 区段; 暂无修正需求, 保留接口
+cornerstones: {}
+financials_annual: {}
+share_capital: {}

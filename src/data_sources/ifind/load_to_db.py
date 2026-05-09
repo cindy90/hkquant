@@ -55,6 +55,11 @@ from data_sources.ifind.field_mappings import (  # noqa: E402
     make_ipo_id,
     make_cornerstone_id,
 )
+from data_sources.ifind.overrides import (  # noqa: E402
+    load_overrides,
+    apply_ipo_overrides,
+    lint_overrides,
+)
 from data.dao import (  # noqa: E402
     db_connect,
     upsert_cornerstone,
@@ -64,6 +69,22 @@ from data.dao import (  # noqa: E402
 )
 from data.schema import init_database  # noqa: E402
 from nacs_model import CornerstoneType  # noqa: E402
+
+
+# =============================================================================
+# 汇率: 与 scripts/migrate_data_quality_v1.py 保持一致
+# =============================================================================
+FX_USD_HKD = 7.80
+FX_CNY_HKD = 1.10
+
+
+def _fx_to_hkd(currency: Optional[str]) -> float:
+    c = (currency or "HKD").upper()
+    if c == "USD":
+        return FX_USD_HKD
+    if c == "CNY":
+        return FX_CNY_HKD
+    return 1.0  # HKD or 未知 (回退保守)
 
 
 # =============================================================================
@@ -111,13 +132,23 @@ class IpoLoadStats:
     n_inserted: int = 0
     n_skipped_no_date: int = 0
     n_skipped_no_code: int = 0
+    n_overrides_applied: int = 0
 
 
 def load_ipo_info(conn: sqlite3.Connection, csv_path: Path,
-                  *, dry_run: bool = False) -> IpoLoadStats:
-    """ifind_ipo_info.csv → ipo_master. 一行 = 一只 IPO."""
+                  *, dry_run: bool = False,
+                  overrides: Optional[Dict] = None) -> IpoLoadStats:
+    """ifind_ipo_info.csv → ipo_master. 一行 = 一只 IPO.
+
+    overrides: 由 load_overrides() 返回的 dict; None 表示自动按默认路径加载.
+    """
     rows = read_csv_dict(csv_path, P05310_IPO_INFO)
-    stats = IpoLoadStats(n_rows_csv=len(rows))
+    if overrides is None:
+        overrides = load_overrides()
+    n_before = sum(1 for r in rows
+                   if r.get("stock_code") in (overrides.get("ipo_info") or {}))
+    rows = apply_ipo_overrides(rows, overrides)
+    stats = IpoLoadStats(n_rows_csv=len(rows), n_overrides_applied=n_before)
 
     for row in rows:
         stock_code = parse_str(row.get("stock_code"))
@@ -137,22 +168,26 @@ def load_ipo_info(conn: sqlite3.Connection, csv_path: Path,
         coverage = (coverage_raw / 100.0) if coverage_raw is not None else None
 
         # public_oversub 在 CSV 是倍数 (e.g. 3972.67), 跟 schema 语义一致
+        # listing_chapter 在 ipo_info CSV 中无字段, 给 'main_board' 默认;
+        # overrides.yaml 可以指定具体章节 (spac/secondary 等)
+        chapter_override = parse_str(row.get("listing_chapter"))
         kwargs = {
             "ipo_id": ipo_id,
             "stock_code": stock_code,
             "company_name_zh": parse_str(row.get("company_name_zh")),
             "listing_date": listing_date,
             "pricing_date": parse_date(row.get("pricing_date")),
-            # listing_chapter 在 ipo_info CSV 中无字段, 给 'main_board' 默认
-            # (后续 blocks loader 会按 18A/18C/AH 覆盖)
-            "listing_chapter": "main_board",
+            "listing_chapter": chapter_override or "main_board",
             "offer_price_hkd": parse_float(row.get("offer_price_hkd")),
             "offer_price_high": parse_float(row.get("offer_price_high")),
             "offering_size_hkd": parse_float(row.get("offering_size_hkd")),
             "intl_oversub": parse_float(row.get("intl_oversub")),
             "public_oversub": parse_float(row.get("public_oversub")),
             "cornerstone_coverage": coverage,
-            "data_source_notes": "ifind:p05310",
+            "data_source_notes": "ifind:p05310" + (
+                "+overrides" if chapter_override or stock_code in
+                ((overrides or {}).get("ipo_info") or {}) else ""
+            ),
         }
         # 删掉 None 字段, 避免覆盖已存在的非空值
         kwargs = {k: v for k, v in kwargs.items()
@@ -245,12 +280,26 @@ def load_cornerstones(conn: sqlite3.Connection, csv_path: Path,
         stats.n_aliases_added += 1
 
         # ----- ipo_cornerstone_link -----
+        # 货币归一: raw CSV 的 ticket_size_hkd 列实际是 native 值 (currency 列另给).
+        # 写库时 ticket_size_native = native, ticket_size_hkd = native × FX.
+        currency_raw = (parse_str(row.get("currency")) or "HKD").upper()
+        if currency_raw not in ("HKD", "USD", "CNY"):
+            currency_raw = "HKD"  # 未知 — 保守不换算
+        fx = _fx_to_hkd(currency_raw)
+        native = parse_float(row.get("ticket_size_hkd"))
+        hkd_normalized = native * fx if native is not None else None
+
         if not dry_run:
             link_cornerstone_to_ipo(
                 conn,
                 ipo_id=ipo_id,
                 cornerstone_id=cs_id,
-                ticket_size_hkd=parse_float(row.get("ticket_size_hkd")),
+                stock_code=stock_code,
+                cornerstone_name=cs_name_raw,
+                ticket_size_hkd=hkd_normalized,
+                ticket_size_native=native,
+                currency=currency_raw,
+                fx_to_hkd=fx,
                 allocation_shares=parse_int(row.get("allocation_shares")),
                 lockup_months_actual=parse_int(row.get("lockup_months")),
                 data_source="ifind:p05309",
