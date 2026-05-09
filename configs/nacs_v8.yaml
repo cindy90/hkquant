@@ -159,3 +159,23 @@ layer1_offering_mkt_cap:
   small_cap_penalty: -10.0
   mega_cap_threshold_hkd: 500_000_000_000    # 500B
   mega_cap_penalty: -5.0
+
+# -----------------------------------------------------------------------------
+# L1.3 已盈利档: 盈利质量 tier multiplier (P1.2)
+# -----------------------------------------------------------------------------
+# 现有 5 子项 (rev/gm/roe/nd/fcf) 各自封顶, 但 ROE>15% AND 持续 FCF 3y 的复利型公司
+# 跟刚扭亏的"假盈利"在 raw score 上可以差不多 — 加 tier multiplier 把定性差距落地.
+#
+# 仅作用于 CompanyType.PROFITABLE; biotech / 18C 走 _score_l1_3_biotech / _18c, 不受影响.
+#
+# 实证依据 (2018-2025 港股已盈利档主板 IPO d30 vs ROE/FCF tier):
+#   持续盈利 (ROE_3y≥15% AND FCF 3 年都正)  60d mean +21%, win 67%
+#   moderate (其它)                         60d mean +13%, win 51%
+#   刚转盈 (FCF 0~1 年)                     60d mean -3%,  win 38%
+layer1_profitability_tier:
+  enabled: true
+  persistent_roe_threshold: 0.15
+  persistent_fcf_min_years: 3
+  persistent_multiplier: 1.10
+  fresh_fcf_max_years: 1
+  fresh_multiplier: 0.90

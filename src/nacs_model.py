@@ -468,9 +468,34 @@ def _score_l1_3_profitable(f: ProfitableFundamentals) -> Tuple[float, Dict[str, 
     nd = (1 - clip((f.net_debt_to_ebitda or 0.0) / 4.0, 0.0, 1.0)) * 20.0
     fcf = (f.fcf_positive_years / 3.0) * 20.0
     total = rev + gm + roe + nd + fcf
+
+    # P1.2: 盈利质量 tier multiplier
+    cfg = _get_cfg()
+    pt = cfg.layer1_profitability_tier if cfg is not None else None
+    enabled = pt.enabled if pt is not None else True
+    roe_th = pt.persistent_roe_threshold if pt is not None else 0.15
+    fcf_min = pt.persistent_fcf_min_years if pt is not None else 3
+    pers_mult = pt.persistent_multiplier if pt is not None else 1.10
+    fresh_max = pt.fresh_fcf_max_years if pt is not None else 1
+    fresh_mult = pt.fresh_multiplier if pt is not None else 0.90
+
+    profit_tier = "moderate"
+    profit_tier_mult = 1.0
+    if enabled:
+        roe_val = f.roe_avg_3y if f.roe_avg_3y is not None else 0.0
+        if roe_val >= roe_th and f.fcf_positive_years >= fcf_min:
+            profit_tier = "persistent"
+            profit_tier_mult = pers_mult
+        elif f.fcf_positive_years <= fresh_max:
+            profit_tier = "fresh"
+            profit_tier_mult = fresh_mult
+    total *= profit_tier_mult
+
     return clip(total, 0.0, 100.0), {
         "revenue_score": rev, "margin_trend_score": gm, "roe_score": roe,
         "net_debt_score": nd, "fcf_score": fcf,
+        "profit_tier": profit_tier,
+        "profit_tier_multiplier": profit_tier_mult,
     }
 
 

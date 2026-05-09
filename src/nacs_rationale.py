@@ -138,18 +138,34 @@ def _explain_l1_2(s: SponsorInfo) -> str:
             f"联席数={s.joint_sponsor_count}; 数据源={src}{bonus_str}")
 
 
-def _explain_l1_3_profitable(f: ProfitableFundamentals) -> str:
-    """主板已盈利基本面 (L1.3) — 5 项加和, 各封顶"""
+def _explain_l1_3_profitable(
+    f: ProfitableFundamentals,
+    components: Optional[Dict[str, Any]] = None,
+) -> str:
+    """主板已盈利基本面 (L1.3) — 5 项加和, 各封顶; P1.2 后附 tier multiplier"""
     rev = f.revenue_cagr_3y or 0.0
     gm = f.gross_margin_trend or 0.0
     roe = f.roe_avg_3y or 0.0
     nd = f.net_debt_to_ebitda or 0.0
     fcf = f.fcf_positive_years
-    return (f"营收 CAGR_3y {rev:+.1%} (满 30% 封顶, 占 20 分) · "
+    base = (f"营收 CAGR_3y {rev:+.1%} (满 30% 封顶, 占 20 分) · "
             f"毛利率趋势 {gm:+.1%} ({'正→15分' if gm > 0 else '非正→4.5分'}, 占 15) · "
             f"ROE 3y 均值 {roe:.1%} (满 20% 封顶, 占 25) · "
             f"net_debt/EBITDA {nd:.1f}× (反向, 0=满分, 4=0分, 占 20) · "
             f"FCF 正年数 {fcf}/3 (占 20)")
+    # P1.2: tier multiplier — components 在通过 score_layer1_company 时带 _ 前缀
+    if components:
+        tier = components.get("_profit_tier",
+                              components.get("profit_tier", "moderate"))
+        mult = components.get("_profit_tier_multiplier",
+                              components.get("profit_tier_multiplier", 1.0))
+        if mult != 1.0:
+            tier_label = {
+                "persistent": "持续盈利 (ROE≥15% AND FCF≥3y)",
+                "fresh": "刚转盈 (FCF≤1y)",
+            }.get(tier, tier)
+            base += f" · 盈利质量 tier={tier_label} → multiplier ×{mult:.2f}"
+    return base
 
 
 def _explain_l1_3_biotech(b: BiotechFundamentals) -> str:
@@ -177,10 +193,13 @@ def _explain_l1_3_18c(t: TechC18Fundamentals) -> str:
             f"runway 默认估值 20")
 
 
-def _explain_l1_3(o: IPOOffering) -> str:
+def _explain_l1_3(
+    o: IPOOffering,
+    components: Optional[Dict[str, Any]] = None,
+) -> str:
     if o.company_type == CompanyType.PROFITABLE:
         return "[主板已盈利] " + (
-            _explain_l1_3_profitable(o.profitable) if o.profitable
+            _explain_l1_3_profitable(o.profitable, components) if o.profitable
             else "ProfitableFundamentals 缺失")
     if o.company_type == CompanyType.BIOTECH_18A:
         return "[18A] " + (
@@ -266,7 +285,7 @@ def explain_layer1_components(o: IPOOffering,
     if "L1.2_sponsor" in components:
         reasons["L1.2_sponsor"] = _explain_l1_2(o.sponsor)
     if "L1.3_fundamentals" in components:
-        reasons["L1.3_fundamentals"] = _explain_l1_3(o)
+        reasons["L1.3_fundamentals"] = _explain_l1_3(o, components)
     if "L1.4_offering" in components:
         reasons["L1.4_offering"] = _explain_l1_4(o.offering, components)
     if "L1.5_chapter" in components:

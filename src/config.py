@@ -163,6 +163,31 @@ class Layer1OfferingMktCap:
 
 
 @dataclass
+class Layer1ProfitabilityTier:
+    """P1.2: 主板已盈利档基本面 (L1.3) 盈利质量 tier multiplier.
+
+    在 _score_l1_3_profitable 5 子项加和后乘以一个 quality multiplier:
+        persistent: roe_avg_3y >= roe_threshold AND fcf_positive_years >= fcf_min
+                    → ×persistent_multiplier (默认 1.10, 持续盈利的复利型公司)
+        fresh:      fcf_positive_years <= fresh_fcf_max
+                    → ×fresh_multiplier (默认 0.90, 刚转盈, 现金流不稳)
+        moderate:   两档都不命中 → ×1.00 不动
+
+    设计原因: 现有 5 子项 (rev/gm/roe/nd/fcf) 各自封顶 100, 但持续 ROE>15% 跟
+    刚扭亏的"假盈利"在 raw score 上可以差不多 — 加 tier 让定性差距体现到 nacs 上.
+
+    保守: roe_avg_3y=None / fcf=0 (default) 都不触发 persistent 加成,
+    fcf_positive_years=0 算 fresh.
+    """
+    enabled: bool = True
+    persistent_roe_threshold: float = 0.15        # 3y 平均 ROE >= 此 → 候选 persistent
+    persistent_fcf_min_years: int = 3             # FCF 正年数 >= 此 → 候选 persistent
+    persistent_multiplier: float = 1.10
+    fresh_fcf_max_years: int = 1                  # FCF 正年数 <= 此 → fresh
+    fresh_multiplier: float = 0.90
+
+
+@dataclass
 class Layer1MarketThemeHeat:
     """L1.6 主题情绪 modifier (P0.1).
 
@@ -215,6 +240,9 @@ class NacsConfig:
     layer1_offering_mkt_cap: Layer1OfferingMktCap = field(
         default_factory=Layer1OfferingMktCap
     )
+    layer1_profitability_tier: Layer1ProfitabilityTier = field(
+        default_factory=Layer1ProfitabilityTier
+    )
 
     # ---------------- I/O ----------------
 
@@ -258,6 +286,10 @@ class NacsConfig:
         if "layer1_offering_mkt_cap" in data:
             kwargs["layer1_offering_mkt_cap"] = Layer1OfferingMktCap(
                 **data["layer1_offering_mkt_cap"]
+            )
+        if "layer1_profitability_tier" in data:
+            kwargs["layer1_profitability_tier"] = Layer1ProfitabilityTier(
+                **data["layer1_profitability_tier"]
             )
         return cls(**kwargs)
 
