@@ -165,7 +165,7 @@ class OfferingStructure:
     public_oversubscription: float
     clawback_triggered: bool
     greenshoe_pct: float
-    offering_size_hkd: float
+    offering_size_hkd: float                             # 募资额 (含/不含绿鞋视字段语义)
     pe_at_offer: Optional[float] = None
     pe_peer_median: Optional[float] = None
     last_round_premium: Optional[float] = None
@@ -173,6 +173,8 @@ class OfferingStructure:
     auditor_changed_within_12m: bool = False
     material_litigation: bool = False
     controlling_shareholder_pledge_default: bool = False
+    # P1.1: 总市值 (post_ipo_shares × offer_price_hkd); None=未知 → modifier 跳过
+    mkt_cap_at_offer_hkd: Optional[float] = None
 
 
 @dataclass
@@ -532,6 +534,28 @@ def _score_l1_4_offering(o: OfferingStructure) -> Tuple[float, Dict[str, float]]
 
     total = range_score + intl + public + clawback + gs + size_score
 
+    # P1.1: 总市值分桶 modifier (跟 size_score 独立, 不重复扣)
+    mkt_cap_mod = 0.0
+    mkt_cap_label = "n/a"
+    if o.mkt_cap_at_offer_hkd is not None:
+        cfg = _get_cfg()
+        mc = cfg.layer1_offering_mkt_cap if cfg is not None else None
+        enabled = mc.enabled if mc is not None else True
+        small_th = mc.small_cap_threshold_hkd if mc is not None else 5e9
+        small_pen = mc.small_cap_penalty if mc is not None else -10.0
+        mega_th = mc.mega_cap_threshold_hkd if mc is not None else 5e11
+        mega_pen = mc.mega_cap_penalty if mc is not None else -5.0
+        if enabled:
+            if o.mkt_cap_at_offer_hkd < small_th:
+                mkt_cap_mod = small_pen
+                mkt_cap_label = "small_cap"
+            elif o.mkt_cap_at_offer_hkd > mega_th:
+                mkt_cap_mod = mega_pen
+                mkt_cap_label = "mega_cap"
+            else:
+                mkt_cap_label = "mid_cap"
+    total += mkt_cap_mod
+
     # 红旗: 国际倍数<1.5x 强制压低
     if o.intl_oversubscription < 1.5:
         total = min(total, 30.0)
@@ -539,6 +563,9 @@ def _score_l1_4_offering(o: OfferingStructure) -> Tuple[float, Dict[str, float]]
     return clip(total, 0.0, 100.0), {
         "range_score": range_score, "intl_score": intl, "public_score": public,
         "clawback_score": clawback, "greenshoe_score": gs, "size_score": size_score,
+        "mkt_cap_modifier": mkt_cap_mod,
+        "mkt_cap_at_offer_hkd": float(o.mkt_cap_at_offer_hkd) if o.mkt_cap_at_offer_hkd else 0.0,
+        "mkt_cap_bucket": mkt_cap_label,
     }
 
 

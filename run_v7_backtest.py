@@ -264,6 +264,12 @@ def build_offering(conn, ipo_id, regime_score, *, use_static_env: bool = False):
             offering_size_hkd=row["offering_size_hkd"] or 1e9,
             pe_at_offer=row["pe_at_offer"], pe_peer_median=row["pe_peer_median"],
             last_round_premium=row["last_round_premium"], auditor_tier=1,
+            # P1.1: mkt_cap = post_ipo_shares × offer_price (None 时 modifier 跳过)
+            mkt_cap_at_offer_hkd=(
+                (row["post_ipo_shares"] * row["offer_price_hkd"])
+                if (row["post_ipo_shares"] and row["offer_price_hkd"])
+                else None
+            ),
         ),
         sponsor=SponsorInfo(
             primary_sponsor=row["sponsor_primary"] or "Unknown",

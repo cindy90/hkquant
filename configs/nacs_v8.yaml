@@ -142,3 +142,20 @@ layer1_market_theme_heat:
   overheated_penalty: -5.0
   trough_threshold: 40              # heat < → 加分
   trough_bonus: 3.0
+
+# -----------------------------------------------------------------------------
+# L1.4 发行结构: 总市值分桶 modifier (P1.1)
+# -----------------------------------------------------------------------------
+# 在原 6 子项 (range/intl/public/clawback/greenshoe/size) = 100 分基础上加 modifier.
+# size_score 看的是"募资额", 本 modifier 看"总市值" — 二者独立 (一只小公司可以
+# 募资额很大占比超 50%, 也可以是大公司只融资很小一笔).
+#
+# 实证依据:
+#   小盘 (<5B HKD): 流动性陷阱风险, 锁定期内大单进出可能砸盘
+#   巨型盘 (>500B HKD): 主要是央企 / A 股已上市的回港 IPO, d30 涨幅历来很低
+layer1_offering_mkt_cap:
+  enabled: true
+  small_cap_threshold_hkd: 5_000_000_000     # 5B
+  small_cap_penalty: -10.0
+  mega_cap_threshold_hkd: 500_000_000_000    # 500B
+  mega_cap_penalty: -5.0

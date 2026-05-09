@@ -189,8 +189,9 @@ def _explain_l1_3(o: IPOOffering) -> str:
         _explain_l1_3_18c(o.tech18c) if o.tech18c else "TechC18Fundamentals 缺失")
 
 
-def _explain_l1_4(o: OfferingStructure) -> str:
-    """发行结构 (L1.4)"""
+def _explain_l1_4(o: OfferingStructure,
+                  components: Optional[Dict[str, Any]] = None) -> str:
+    """发行结构 (L1.4); P1.1 后 components 含 mkt_cap_modifier 时附加说明"""
     pir = o.pricing_in_range
     if 0.5 <= pir <= 0.8:
         pir_band = "区间中位偏上 (0.5~0.8) 满分 (占 20)"
@@ -200,13 +201,25 @@ def _explain_l1_4(o: OfferingStructure) -> str:
         pir_band = f"区间下半 ({pir:.1f}) → 40~100 线性 (占 20)"
     intl = o.intl_oversubscription
     intl_warn = " · ⚠ 国际配售<1.5x 红旗 → L1.4 上限压到 30" if intl < 1.5 else ""
-    return (f"区间利用率 {pir:.2f} → {pir_band} · "
+    base = (f"区间利用率 {pir:.2f} → {pir_band} · "
             f"国际配售 {intl:.1f}x (log scale, 20x 封顶, 占 30){intl_warn} · "
             f"公开认购 {o.public_oversubscription:.0f}x (log scale, 100x 封顶, 占 15) · "
             f"clawback {'已触发(+5)' if o.clawback_triggered else '未触发(+2.5)'} · "
             f"绿鞋 {o.greenshoe_pct:.0%} (15% 最佳的 U 型, 占 15) · "
             f"募资规模 {o.offering_size_hkd / 1e9:.1f}B HKD "
             f"(1.5~8B U 型最佳, 占 15)")
+    # P1.1: 总市值 modifier
+    if components:
+        mc_mod = components.get("_mkt_cap_modifier",
+                                components.get("mkt_cap_modifier", 0.0))
+        mc_val = components.get("_mkt_cap_at_offer_hkd",
+                                components.get("mkt_cap_at_offer_hkd", 0.0))
+        mc_bucket = components.get("_mkt_cap_bucket",
+                                   components.get("mkt_cap_bucket", "n/a"))
+        if mc_mod != 0.0 and mc_val:
+            base += (f" · 总市值 {mc_val / 1e9:.1f}B HKD ({mc_bucket}) "
+                     f"→ modifier {mc_mod:+.0f}")
+    return base
 
 
 def _explain_l1_5(o: IPOOffering) -> str:
@@ -255,7 +268,7 @@ def explain_layer1_components(o: IPOOffering,
     if "L1.3_fundamentals" in components:
         reasons["L1.3_fundamentals"] = _explain_l1_3(o)
     if "L1.4_offering" in components:
-        reasons["L1.4_offering"] = _explain_l1_4(o.offering)
+        reasons["L1.4_offering"] = _explain_l1_4(o.offering, components)
     if "L1.5_chapter" in components:
         reasons["L1.5_chapter"] = _explain_l1_5(o)
     if "L1.6_market" in components:

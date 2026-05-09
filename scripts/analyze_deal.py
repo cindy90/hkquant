@@ -201,6 +201,11 @@ def _evaluate_deal(conn, *, stock_code: str, asof: date,
                 new_off.pe_at_offer = offering_base.offering.pe_at_offer * ratio
             if offering_base.offering.offering_size_hkd is not None:
                 new_off.offering_size_hkd = offering_base.offering.offering_size_hkd * ratio
+            # P1.1: mkt_cap 也按价格 ratio 缩放 (post_ipo_shares 不变, 价格变 → 总市值变)
+            if offering_base.offering.mkt_cap_at_offer_hkd is not None:
+                new_off.mkt_cap_at_offer_hkd = (
+                    offering_base.offering.mkt_cap_at_offer_hkd * ratio
+                )
 
         offering_scenario = IPOOffering(**{
             **offering_base.__dict__,

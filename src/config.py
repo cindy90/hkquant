@@ -145,6 +145,24 @@ class PostAdjustments:
 
 
 @dataclass
+class Layer1OfferingMktCap:
+    """P1.1: 总市值分桶 modifier (作用于 L1.4 发行结构 score).
+
+    现有 size_score 看的是 offering_size_hkd (募资额, U-shape 1.5-8B).
+    本 modifier 看 mkt_cap_at_offer_hkd (总市值 = post_ipo_shares × offer_price),
+    专门对极小盘和巨型盘扣分:
+        市值 < small_cap_threshold (默认 5B HKD) → 流动性陷阱风险, -10
+        市值 > mega_cap_threshold  (默认 500B HKD) → IPO d30 涨幅历来低, -5
+        中盘 (5B-500B)             → 不动 (sweet spot)
+    """
+    enabled: bool = True
+    small_cap_threshold_hkd: float = 5e9       # 5B HKD
+    small_cap_penalty: float = -10.0
+    mega_cap_threshold_hkd: float = 5e11       # 500B HKD
+    mega_cap_penalty: float = -5.0
+
+
+@dataclass
 class Layer1MarketThemeHeat:
     """L1.6 主题情绪 modifier (P0.1).
 
@@ -194,6 +212,9 @@ class NacsConfig:
     layer1_market_theme_heat: Layer1MarketThemeHeat = field(
         default_factory=Layer1MarketThemeHeat
     )
+    layer1_offering_mkt_cap: Layer1OfferingMktCap = field(
+        default_factory=Layer1OfferingMktCap
+    )
 
     # ---------------- I/O ----------------
 
@@ -233,6 +254,10 @@ class NacsConfig:
         if "layer1_market_theme_heat" in data:
             kwargs["layer1_market_theme_heat"] = Layer1MarketThemeHeat(
                 **data["layer1_market_theme_heat"]
+            )
+        if "layer1_offering_mkt_cap" in data:
+            kwargs["layer1_offering_mkt_cap"] = Layer1OfferingMktCap(
+                **data["layer1_offering_mkt_cap"]
             )
         return cls(**kwargs)
 
