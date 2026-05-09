@@ -11,6 +11,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # --- IDE / 编辑器 ---
 .vscode/
