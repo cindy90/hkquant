@@ -65,7 +65,10 @@ def _serialize_for_json(obj: Any) -> Any:
 # Panel aggregates 计算 (从 listed-only 子集)
 # =============================================================================
 
-def compute_panel_aggregates(conn) -> Dict[str, Any]:
+def compute_panel_aggregates(
+    conn,
+    theme_definitions: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """从 mv_ipo_full WHERE status='listed' 算跨章节 / 跨年的中位/IQR.
 
     返回结构:
@@ -82,13 +85,17 @@ def compute_panel_aggregates(conn) -> Dict[str, Any]:
              ...
           },
           "by_gics_l2": { "医疗保健业(HS)-...": {...} },
+          "by_theme": { "ai_server": {n, ...}, "innovative_drug": {...} },   # P2.2
           "overall": { ... 整个 listed panel 的中位/IQR ... }
         }
-    """
-    import statistics
 
+    P2.2: theme_definitions 传入时, 每条 listed IPO 走 classify_deal_to_theme
+    生成 theme_id, 多打一个 by_theme 桶. theme_definitions=None 时跳过分桶
+    (旧行为, 向后兼容).
+    """
     rows = conn.execute("""
-        SELECT listing_chapter, gics_l2,
+        SELECT ipo_id, stock_code, company_name_zh,
+               listing_chapter, gics_l2,
                pe_at_offer, return_d30, return_m6,
                is_d30_due, is_m6_due
         FROM mv_ipo_full
@@ -138,10 +145,40 @@ def compute_panel_aggregates(conn) -> Dict[str, Any]:
         if len(rs) >= 5:
             by_gics[k] = _summarize(rs)
 
+    # P2.2: by_theme 桶 (theme_definitions 提供时启用)
+    by_theme: Dict[str, Any] = {}
+    if theme_definitions and "themes" in theme_definitions:
+        from reports.themes_data import classify_deal_to_theme
+        # 预取每行的 ipo_concept_names (一次 query 比逐行慢得多)
+        concept_rows = conn.execute(
+            "SELECT ipo_id, concept_name FROM ipo_concepts"
+        ).fetchall()
+        concepts_by_ipo: Dict[int, List[str]] = {}
+        for cr in concept_rows:
+            concepts_by_ipo.setdefault(cr["ipo_id"], []).append(cr["concept_name"])
+
+        by_theme_buckets: Dict[str, list] = {}
+        for r in rows:
+            res = classify_deal_to_theme(
+                stock_code=r["stock_code"] or "",
+                gics_l2=r["gics_l2"],
+                ipo_concept_names=concepts_by_ipo.get(r["ipo_id"]),
+                company_name=r["company_name_zh"],
+                theme_definitions=theme_definitions,
+            )
+            if res.theme_id is None:
+                continue
+            by_theme_buckets.setdefault(res.theme_id, []).append(r)
+        # 同 GICS L2: 样本 ≥ 5 才保留
+        for k, rs in by_theme_buckets.items():
+            if len(rs) >= 5:
+                by_theme[k] = _summarize(rs)
+
     return {
         "overall": overall,
         "by_chapter": by_chapter,
         "by_gics_l2": by_gics,
+        "by_theme": by_theme,
     }
 
 
@@ -157,12 +194,14 @@ def write_panel_snapshot(conn,
                          config_dict: Dict[str, Any],
                          config_yaml_text: Optional[str] = None,
                          notes: Optional[str] = None,
-                         project_root: Optional[Path] = None) -> str:
+                         project_root: Optional[Path] = None,
+                         theme_definitions: Optional[Dict[str, Any]] = None) -> str:
     """写一行 panel_snapshots 表; 返回 snapshot_id.
 
     内部:
       - member_ipo_ids 来自 mv_ipo_full WHERE status='listed' (顺带保 panel 边界)
-      - aggregates_json 来自 compute_panel_aggregates(conn)
+      - aggregates_json 来自 compute_panel_aggregates(conn) — theme_definitions
+        提供时增加 by_theme 桶 (P2.2)
       - 元数据 (git_sha, schema_version, config_hash) 自动采集
     """
     member_rows = conn.execute(
@@ -171,7 +210,7 @@ def write_panel_snapshot(conn,
     ).fetchall()
     member_ids = [r[0] for r in member_rows]
 
-    aggregates = compute_panel_aggregates(conn)
+    aggregates = compute_panel_aggregates(conn, theme_definitions=theme_definitions)
 
     cfg_hash = _config_hash(config_dict)
     snapshot_id = _make_snapshot_id(asof, cfg_hash)

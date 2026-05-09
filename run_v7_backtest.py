@@ -621,6 +621,14 @@ def main():
             avg_regime = (df_passed['regime_score'].mean()
                           if 'regime_score' in df_passed.columns and len(df_passed) > 0
                           else None)
+            # P2.2: 加载 theme_definitions, 让 panel aggregates 多算 by_theme 桶
+            theme_defs = None
+            try:
+                from reports.themes_data import load_theme_definitions
+                theme_defs, _ = load_theme_definitions(ROOT / "themes")
+            except Exception as e:
+                print(f"  ⚠ themes 数据未加载 (skip by_theme aggregates): {e}",
+                      file=sys.stderr)
             snapshot_id = write_panel_snapshot(
                 snap_conn, asof=asof_today,
                 market_env=market_env,
@@ -629,6 +637,7 @@ def main():
                 config_yaml_text=cfg_yaml,
                 notes=f"run_v7_backtest mode={summary['mode']} workers={args.workers}",
                 project_root=ROOT,
+                theme_definitions=theme_defs,
             )
             print(f"\n✓ panel snapshot: {snapshot_id}")
 
