@@ -19,7 +19,7 @@
 ├── check_health.py              数据 + 模型健康检查 (5 单测)
 ├── run_v7_backtest.py           完整 v8 回测 (含 production 实战报告, < 1 秒)
 ├── build_perf_cache.py          基石性能缓存预填充 (使回测 50x 加速)
-├── nacs_checklist_tool.html     ⚠ quick estimator (v3.2 规则硬编码; 决策权威以 scripts/analyze_deal.py 为准)
+├── legacy/                      已归档工具 (含 nacs_checklist_tool.html, 见 legacy/README.md)
 │
 ├── src/
 │   ├── nacs_model.py            v8 模型核心 (40KB)
@@ -104,21 +104,24 @@ python scripts/analyze_deal.py --stock-codes "1187.HK,2493.HK,3296.HK" \
 # 输出含 thesis (drivers/risks/base_rate) + L1/L2/L3 子项 reason + similar listed peers.
 ```
 
-### 5. 浏览器即时估算工具 (quick estimator, 非权威)
+### 5. 主题情绪 + AI 镀金溢价 panel (集成在 IC memo)
 
-`nacs_checklist_tool.html` 是一个**手填表单 + 浏览器即时打分**工具, 用于 deal 数据
-还没入库时的 quick-and-dirty 估算. 同时是当前**唯一的主题情绪追踪 + AI 镀金溢价测算 UI**
-(VII / VIII 区).
+`analyze_deal --html` 输出的 IC memo 自动带两个 panel:
 
-```bash
-python -m http.server 8080
-# 访问 http://localhost:8080/nacs_checklist_tool.html
-```
+- **主题情绪** (live): 用 `themes/heat_today.json` 的当日热度 + `history.csv` 30d 趋势 sparkline
+- **估值溢价测算 (AI 镀金检测器)**: 用 `themes/premium_curve.json` 拟合曲线 + AI 收入占比
 
-⚠ **该工具的 I-VI 决策区是 v3.2 实证规则的 JS 硬编码**, 跟 `nacs_model.py` 当前 v8
-配置存在版本差. **deal 数据已入库时, 决策权威以 `analyze_deal.py` 为准**, 不以此工具为准.
-VII/VIII (主题情绪 + AI 溢价) 是本工具独有, 计划按 `docs/roadmap_thesis_themes.md`
-迁移到 `analyze_deal --html` 的 thesis 段.
+数据由 `themes/theme_tracker.py` (cron 8:30) +
+`themes/research_premium_coefficient.py` (季度) 维护. 评估时 deal 自动按 keyword
++ core_companies 匹配主题; 无主题归类的 deal 不显示 panel.
+
+AI 收入占比来源优先级:
+1. `analyze_deal.py --ai-revenue-pct 0.05` CLI 一次性 override
+2. `data/deals/<stock_code>.yaml` 的 `themes.ai_revenue_pct` (持久 override, 见 TEMPLATE.yaml)
+3. `themes/ai_revenue_manual.json[stock_code]`
+
+历史一直作为 quick estimator 在用的 `nacs_checklist_tool.html` 已归档至
+`legacy/`, 见 `legacy/README.md`.
 
 ---
 

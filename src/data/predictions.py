@@ -198,11 +198,18 @@ def persist_prediction(conn: sqlite3.Connection,
                        deal_status_at_analysis: Optional[str] = None,
                        price_scenario: str = "mid",
                        offer_price_used: Optional[float] = None,
-                       notes: Optional[str] = None) -> str:
+                       notes: Optional[str] = None,
+                       thesis: Optional[Dict[str, Any]] = None) -> str:
     """落一行 nacs_predictions; 返回 case_id.
 
     幂等: 同 (stock_code, asof, scenario, panel_snapshot_id) 重复跑会 update
           (避免 audit trail 噪音; 真要"再分析一次"应换 panel 或换 asof).
+
+    thesis (S3 起新增): synthesize_thesis() 返回的 dict; 含 theme_heat /
+        premium_estimate / themes_provenance. 持久化以下衍生:
+            - theme_id, theme_confidence, theme_heat_score
+            - ai_revenue_pct_used  (premium_estimate.ai_revenue_pct)
+            - themes_provenance_json  (full audit blob)
     """
     case_id = _make_case_id(stock_code, asof, price_scenario, panel_snapshot_id)
 
@@ -232,6 +239,27 @@ def persist_prediction(conn: sqlite3.Connection,
 
     inputs_json = json.dumps(_to_jsonable(offering), ensure_ascii=False)
 
+    # S3 新增: theme audit 字段从 thesis dict 提取
+    theme_id_val: Optional[str] = None
+    theme_confidence_val: Optional[str] = None
+    theme_heat_score_val: Optional[int] = None
+    ai_revenue_pct_used_val: Optional[float] = None
+    themes_provenance_json_val: Optional[str] = None
+    if thesis:
+        if thesis.get("theme_heat"):
+            theme_id_val = thesis["theme_heat"].get("theme_id")
+            theme_heat_score_val = thesis["theme_heat"].get("heat_score")
+        if thesis.get("premium_estimate"):
+            ai_revenue_pct_used_val = thesis["premium_estimate"].get("ai_revenue_pct")
+        prov = thesis.get("themes_provenance") or {}
+        classification = prov.get("classification") or {}
+        theme_confidence_val = classification.get("confidence")
+        if not theme_id_val:
+            theme_id_val = prov.get("theme_id")
+        themes_provenance_json_val = json.dumps(
+            _to_jsonable(prov), ensure_ascii=False
+        )
+
     conn.execute("""
         INSERT INTO nacs_predictions (
             case_id, stock_code, asof_date, panel_snapshot_id,
@@ -240,8 +268,11 @@ def persist_prediction(conn: sqlite3.Connection,
             decision, position_pct, cluster_count,
             layer1_components_json, layer2_components_json, layer3_components_json,
             adjustments_json, warnings_json, inputs_json,
-            nacs_pct_in_panel, nacs_pct_in_chapter, similar_cases_json, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            nacs_pct_in_panel, nacs_pct_in_chapter, similar_cases_json, notes,
+            theme_id, theme_confidence, theme_heat_score,
+            ai_revenue_pct_used, themes_provenance_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                  ?, ?, ?, ?, ?)
         ON CONFLICT(case_id) DO UPDATE SET
             nacs_raw = excluded.nacs_raw,
             nacs_adjusted = excluded.nacs_adjusted,
@@ -257,6 +288,11 @@ def persist_prediction(conn: sqlite3.Connection,
             adjustments_json = excluded.adjustments_json,
             warnings_json = excluded.warnings_json,
             inputs_json = excluded.inputs_json,
+            theme_id = excluded.theme_id,
+            theme_confidence = excluded.theme_confidence,
+            theme_heat_score = excluded.theme_heat_score,
+            ai_revenue_pct_used = excluded.ai_revenue_pct_used,
+            themes_provenance_json = excluded.themes_provenance_json,
             nacs_pct_in_panel = excluded.nacs_pct_in_panel,
             nacs_pct_in_chapter = excluded.nacs_pct_in_chapter,
             similar_cases_json = excluded.similar_cases_json,
@@ -279,6 +315,9 @@ def persist_prediction(conn: sqlite3.Connection,
         pct_panel, pct_chapter,
         json.dumps(_to_jsonable(sim), ensure_ascii=False),
         notes,
+        # S3 新增 5 列:
+        theme_id_val, theme_confidence_val, theme_heat_score_val,
+        ai_revenue_pct_used_val, themes_provenance_json_val,
     ))
     return case_id
 

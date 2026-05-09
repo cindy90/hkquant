@@ -357,6 +357,76 @@ tr.with-reason td.reason {
   line-height: 1.45;
 }
 
+/* ===== Theme heat panel (S3, 主题情绪) ===== */
+.theme-heat .heat-display {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+.theme-heat .heat-label {
+  font-size: 1rem;
+  font-weight: 500;
+}
+.theme-heat .heat-score {
+  font-size: 1.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+}
+.heat-overheated  { background: #dc2626; color: white; }
+.heat-warm        { background: #ea580c; color: white; }
+.heat-moderate    { background: #2563eb; color: white; }
+.heat-trough      { background: #16a34a; color: white; }
+.heat-unknown     { background: var(--bg-subtle); color: var(--text-muted); }
+
+.theme-heat .heat-meta {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+.theme-heat .heat-reason {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0.5rem 0;
+}
+
+/* ===== Sparkline (内联 SVG) ===== */
+.sparkline {
+  height: 40px;
+  width: 100%;
+  margin: 0.5rem 0;
+}
+.sparkline polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.sparkline circle.last {
+  fill: var(--accent);
+}
+.sparkline text.label {
+  font-size: 9px;
+  fill: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== Premium estimate panel (S3, AI 镀金溢价) ===== */
+.premium-estimate table { width: auto; }
+.premium-estimate .interpretation {
+  font-size: 0.875rem;
+  color: var(--text);
+  margin: 0.5rem 0;
+  line-height: 1.5;
+}
+.premium-estimate .provenance {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  margin-top: 0.5rem;
+}
+
 /* ===== Adjustment list with explanations ===== */
 ul.adjustments {
   margin: 0;

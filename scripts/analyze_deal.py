@@ -323,6 +323,10 @@ def main() -> int:
     ap.add_argument("--notes", help="本次评估的备注 (写入 prediction.notes)")
     ap.add_argument("--html", metavar="PATH",
                     help="同时输出自包含 HTML IC memo 到 PATH (单文件可邮件分发)")
+    ap.add_argument("--ai-revenue-pct", type=float, metavar="PCT",
+                    help="AI 业务收入占比 (0-1) override; 优先于 themes/ai_revenue_manual.json")
+    ap.add_argument("--no-themes", action="store_true",
+                    help="禁用主题情绪 / AI 镀金溢价 panel (只渲染 NACS 决策段)")
     args = ap.parse_args()
 
     if args.compare and not args.stock_codes:
@@ -336,6 +340,34 @@ def main() -> int:
         # asof 仅用于 panel 默认值; 实际每个 deal 自己算 asof
         asof_default = date.fromisoformat(args.asof) if args.asof else date.today()
         snap = _ensure_panel_snapshot(conn, asof_default, args.panel_id)
+
+        # S5: 加载 themes/ 数据 (供 thesis.py + renderer 用); --no-themes 时跳过
+        themes_bundle = None
+        if not args.no_themes:
+            from reports.themes_data import load_all
+            themes_bundle = load_all(today=asof_default)
+            for name, (data, prov) in themes_bundle.items():
+                if prov.status == "missing":
+                    print(f"  ⚠ themes/{name}: missing", file=sys.stderr)
+                elif prov.is_stale:
+                    note_str = "; ".join(prov.notes[:1]) if prov.notes else "stale"
+                    print(f"  ⚠ themes/{name}: {note_str}", file=sys.stderr)
+
+        # S5: ai_revenue_pct 优先级: CLI > deal YAML themes.ai_revenue_pct >
+        #     ai_revenue_manual.json (在 thesis._resolve_ai_revenue_pct 里查)
+        ai_pct_per_code: Dict[str, float] = {}
+        for code in codes:
+            yaml_path = _ROOT / "data" / "deals" / f"{code}.yaml"
+            if yaml_path.exists():
+                try:
+                    import yaml as _yaml
+                    deal_data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+                    pct = ((deal_data.get("themes") or {}).get("ai_revenue_pct"))
+                    if pct is not None:
+                        ai_pct_per_code[code] = float(pct)
+                        print(f"  ↳ {code}: ai_revenue_pct={pct} from {yaml_path.name}")
+                except (ImportError, OSError, ValueError, TypeError):
+                    pass
 
         deals_results: Dict[str, List[Dict]] = {}
         for code in codes:
@@ -366,6 +398,34 @@ def main() -> int:
 
             # 持久化
             if args.persist:
+                # 先合成 thesis (含 theme_heat / premium_estimate / themes_provenance)
+                # 用 mid/final 主行作为代表
+                from reports.thesis import synthesize_thesis
+                main_rec = next((r for r in results
+                                  if r["scenario"] in ("mid", "final")),
+                                results[0])
+                ipo_concepts_for_persist = [
+                    r[0] for r in conn.execute(
+                        "SELECT concept_name FROM ipo_concepts WHERE stock_code = ?",
+                        (code,)
+                    )
+                ]
+                # 优先级: CLI > deal YAML > ai_revenue_manual (在 thesis 里查)
+                ai_pct_for_code = (
+                    args.ai_revenue_pct
+                    if args.ai_revenue_pct is not None
+                    else ai_pct_per_code.get(code)
+                )
+                thesis = synthesize_thesis(
+                    main_rec["result"],
+                    panel_snap=snap, similar_cases=[],
+                    themes_bundle=themes_bundle,
+                    stock_code=code,
+                    gics_l2=row["gics_l2"],
+                    ipo_concept_names=ipo_concepts_for_persist,
+                    company_name=row["company_name_zh"],
+                    ai_revenue_pct_override=ai_pct_for_code,
+                )
                 for rec in results:
                     case_id = persist_prediction(
                         conn,
@@ -376,8 +436,10 @@ def main() -> int:
                         price_scenario=rec["scenario"],
                         offer_price_used=rec["price"],
                         notes=args.notes,
+                        thesis=thesis,
                     )
-                    print(f"  ✓ persisted: {case_id}")
+                    print(f"  ✓ persisted: {case_id}"
+                          f"{' [theme=' + thesis['theme_heat']['theme_id'] + ']' if thesis.get('theme_heat') else ''}")
 
         # 输出报告
         if args.compare and len(deals_results) > 1:
@@ -427,10 +489,25 @@ def main() -> int:
                     r_lockup=mid["result"].R_lockup,
                     min_listing_date=cutoff, k=5,
                 )
+                # ipo_concepts for classifier (themes panel)
+                ipo_concepts_for_render = [
+                    r[0] for r in conn.execute(
+                        "SELECT concept_name FROM ipo_concepts WHERE stock_code = ?",
+                        (code,)
+                    )
+                ]
+                ai_pct_for_render = (
+                    args.ai_revenue_pct
+                    if args.ai_revenue_pct is not None
+                    else ai_pct_per_code.get(code)
+                )
                 html = render_single_deal(
                     recs, snap,
                     asof=_resolve_asof_for_deal(recs[0]["row"], args.asof),
                     similar_cases=similar,
+                    themes_bundle=themes_bundle,
+                    ipo_concept_names=ipo_concepts_for_render,
+                    ai_revenue_pct_override=ai_pct_for_render,
                 )
             out_path = write_html(html, Path(args.html))
             print(f"\n✓ HTML IC memo: {out_path}")

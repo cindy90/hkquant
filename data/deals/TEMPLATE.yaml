@@ -82,3 +82,18 @@ cornerstones: []
   #   currency: HKD
   #   lockup_months: 6
   #   ultimate_holder: 蓝思科技股份有限公司
+
+# 主题 / AI 镀金溢价 (S3 起 thesis.py 接管, IC memo 显示主题情绪 panel + 溢价测算)
+# 字段说明:
+#   ai_revenue_pct        AI 业务收入占比 (0-1, e.g. 0.05=5%). 优先级:
+#                           1. analyze_deal --ai-revenue-pct (CLI 一次性 override)
+#                           2. data/deals/<code>.yaml 的 themes.ai_revenue_pct (本字段; 持久 override)
+#                           3. themes/ai_revenue_manual.json[stock_code]
+#                           4. None → premium_estimate panel 不渲染
+#                         数据源: 招股书的"人工智能业务/智能计算"分部, 或年报披露
+#   ai_revenue_source     文字描述 (招股书章节 / 公告标题); 不影响逻辑, 仅 audit
+#   override_theme_id     强制指定主题 (绕过 classifier); 不填则按 keywords / core_companies 自动识别
+themes:
+  ai_revenue_pct: null              # 留 null 时走 manual 文件或 fallback
+  ai_revenue_source: null
+  override_theme_id: null            # e.g. ai_server / llm / humanoid_robot / ...

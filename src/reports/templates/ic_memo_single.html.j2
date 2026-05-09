@@ -109,6 +109,71 @@
 </section>
 {% endif %}
 
+{# ====== Theme heat panel (S3, 主题情绪 — 来自 themes/heat_today.json) ====== #}
+{% if thesis and thesis.theme_heat %}
+{% set th = thesis.theme_heat %}
+<article class="card theme-heat">
+  <h3>主题情绪 (live, asof {{ th.asof or '?' }})</h3>
+  <div class="heat-display">
+    <span class="heat-label">{{ th.label }}</span>
+    <span class="heat-score heat-{{ th.verdict }}">{{ th.heat_score }}/100</span>
+    <span class="heat-meta">verdict: <strong>{{ th.verdict }}</strong></span>
+  </div>
+  <div class="heat-meta">
+    {% if th.ret_5d is not none %}5d <span class="{{ th.ret_5d | ret_class }}">{{ th.ret_5d | pct }}</span>{% endif %}
+    {% if th.ret_20d is not none %} · 20d <span class="{{ th.ret_20d | ret_class }}">{{ th.ret_20d | pct }}</span>{% endif %}
+    {% if th.ret_60d is not none %} · 60d <span class="{{ th.ret_60d | ret_class }}">{{ th.ret_60d | pct }}</span>{% endif %}
+    {% if th.pe_ttm_avg is not none %} · PE_avg {{ th.pe_ttm_avg | num(1) }}{% endif %}
+    {% if th.source %} · source: <code>{{ th.source }}</code>{% endif %}
+  </div>
+  {% if th.trend_30d and th.trend_30d | length >= 2 %}
+    {# 30d sparkline (内联 SVG, 自动 scale 0-100 → 0-40px) #}
+    <svg class="sparkline" viewBox="0 0 300 40" preserveAspectRatio="none">
+      {% set n = th.trend_30d | length %}
+      {% set step = 300.0 / (n - 1) if n > 1 else 0 %}
+      {% set points_str = [] %}
+      {% for pt in th.trend_30d %}
+        {%- set _ = points_str.append("%.1f,%.1f"|format(loop.index0 * step, 40 - (pt.score or 0) * 0.4)) %}
+      {% endfor %}
+      <polyline points="{{ points_str | join(' ') }}" />
+      {# 末点圆点 + 标注分数 #}
+      {% set last = th.trend_30d[-1] %}
+      <circle class="last" cx="{{ '%.1f'|format(300) }}" cy="{{ '%.1f'|format(40 - (last.score or 0) * 0.4) }}" r="2.5" />
+      <text class="label" x="2" y="10">{{ th.trend_30d[0].score }}</text>
+      <text class="label" x="298" y="10" text-anchor="end">{{ last.score }}</text>
+    </svg>
+    <div class="heat-meta">trend: {{ th.trend_30d[0].date }} → {{ last.date }} ({{ th.trend_30d | length }} days)</div>
+  {% endif %}
+  {% if th.reason %}<p class="heat-reason">{{ th.reason }}</p>{% endif %}
+  {% if th.warning_from_verdict %}
+    <div class="warnings">⚠ {{ th.warning_from_verdict }}</div>
+  {% endif %}
+  {% if th.warning_from_source %}
+    <div class="warnings">⚠ (source warning) {{ th.warning_from_source }}</div>
+  {% endif %}
+</article>
+{% endif %}
+
+{# ====== Premium estimate panel (S3, AI 镀金溢价测算) ====== #}
+{% if thesis and thesis.premium_estimate %}
+{% set pe = thesis.premium_estimate %}
+<article class="card premium-estimate">
+  <h3>估值溢价测算 (AI 镀金检测器)</h3>
+  <table class="numeric compact">
+    <tr><td>AI 收入占比</td><td class="num">{{ pe.ai_revenue_pct | pct }}</td></tr>
+    <tr><td>期望溢价 (model)</td><td class="num">{{ pe.expected_premium | pct }}</td></tr>
+    <tr><td>R²</td><td class="num">{{ pe.r_squared | num(2) }}</td></tr>
+    <tr><td>n_samples 拟合</td><td class="num">{{ pe.n_samples_used }}</td></tr>
+    <tr><td>fitted_at</td><td class="num"><small>{{ pe.fitted_at }}</small></td></tr>
+  </table>
+  <p class="interpretation">{{ pe.interpretation }}</p>
+  <div class="provenance">
+    模型: <code>{{ pe.model }}</code>
+    {% if pe.is_stale %} · ⚠ premium_curve 已过期, 建议跑 <code>themes/research_premium_coefficient.py</code> 重拟{% endif %}
+  </div>
+</article>
+{% endif %}
+
 {# ====== Decision rationale (公式拆解 + band 映射) ====== #}
 {% if rec_main.decision_rationale %}
 <details open>
@@ -310,5 +375,14 @@
   <summary>Inputs snapshot (audit · 当时模型看到的全部输入)</summary>
   <pre>{{ rec_main.offering_inputs | json_dump }}</pre>
 </details>
+
+{# ====== Themes provenance (S3, audit) ====== #}
+{# 只在至少有一块 theme 内容时显示 audit footer (避免空 themes_bundle 时还出现) #}
+{% if thesis and (thesis.theme_heat or thesis.premium_estimate) %}
+<details>
+  <summary>Themes provenance (audit · 主题情绪 + 溢价测算的数据来源)</summary>
+  <pre>{{ thesis.themes_provenance | json_dump }}</pre>
+</details>
+{% endif %}
 
 {% endblock %}

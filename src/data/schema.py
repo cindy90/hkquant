@@ -349,6 +349,8 @@ CREATE TABLE IF NOT EXISTS panel_snapshots (
     config_yaml_snapshot TEXT,                            -- 完整 YAML 文本嵌入
     code_git_sha         TEXT,
     db_schema_version    TEXT,
+    -- v3: 回测时的 themes/ 数据快照 (5 个文件的 mtime/asof/is_stale)
+    themes_provenance_json TEXT,
     created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes                TEXT
 );
@@ -388,6 +390,12 @@ CREATE TABLE IF NOT EXISTS nacs_predictions (
     nacs_pct_in_panel    REAL,                            -- 0..1 panel 内百分位
     nacs_pct_in_chapter  REAL,                            -- 同章节子样本内百分位
     similar_cases_json   TEXT,                            -- 最相似 5 只 listed IPO 的实际收益
+    -- 主题情绪 / AI 镀金溢价 (v3 加; 来自 thesis.py 的 theme_heat + premium_estimate)
+    theme_id             TEXT,                            -- classify_deal_to_theme 输出
+    theme_confidence     TEXT,                            -- 'high' / 'medium' / 'low' / 'none'
+    theme_heat_score     INTEGER,                         -- 0-100 评估时点的当日值
+    ai_revenue_pct_used  REAL,                            -- premium_estimate 用的 AI 占比
+    themes_provenance_json TEXT,                          -- 5 themes/ 文件 + classifier 的完整 audit
     --
     run_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes                TEXT,

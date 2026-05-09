@@ -466,3 +466,196 @@ class TestRationaleSection:
         assert "类比组实证" in html
         # verdict 词
         assert "favorable" in html or "neutral" in html or "cautious" in html
+
+
+# =============================================================================
+# S4: Theme heat + premium estimate panel rendering
+# =============================================================================
+
+def _mock_themes_bundle_for_renderer(heat_score=72, ai_pct=1.0, theme_id="ai_server"):
+    """Renderer 测试专用 themes_bundle (跟 test_thesis 类似)"""
+    from reports.themes_data import Provenance
+    return {
+        "heat_today": (
+            {"as_of": "2026-05-08",
+             "themes": {theme_id: {
+                 "label": "AI 服务器",
+                 "heat_score": heat_score,
+                 "ret_5d": 0.03, "ret_20d": 0.09, "ret_60d": 0.05,
+                 "pe_ttm_avg": 35.5,
+                 "reason": "动能强劲",
+                 "warning": None,
+                 "source": "kimi"}}},
+            Provenance(path="themes/heat_today.json", status="ok",
+                       asof="2026-05-08")),
+        "premium_curve": (
+            {"fitted_at": "2026-05-08T19:00:00",
+             "as_of_data": "2026-05-08",
+             "n_samples_used": 31,
+             "model": "log_linear",
+             "params": {"a": 5.17, "b": 0.5, "c": -0.23},
+             "r_squared": 0.39,
+             "lookup_table": [
+                 {"ai_pct": 0.0, "premium": -0.23},
+                 {"ai_pct": 0.50, "premium": 0.85},
+                 {"ai_pct": 1.00, "premium": 1.87},
+             ]},
+            Provenance(path="themes/premium_curve.json", status="ok",
+                       asof="2026-05-08")),
+        "theme_definitions": (
+            {"_schema_version": "1.0",
+             "themes": {theme_id: {
+                 "label": "AI 服务器",
+                 "core_companies": [{"code": "00992.HK", "name": "联想"}],
+                 "keywords": ["AI 服务器", "算力"]}}},
+            Provenance(path="themes/theme_definitions.json", status="ok")),
+        "ai_revenue_manual": (
+            {"992.HK": ai_pct},     # 规范化后的 key
+            Provenance(path="themes/ai_revenue_manual.json", status="ok")),
+        "history": (
+            {theme_id: [
+                ("2026-04-08", 60), ("2026-04-15", 65),
+                ("2026-04-22", 68), ("2026-04-29", 70),
+                ("2026-05-08", heat_score)]},
+            Provenance(path="themes/history.csv", status="ok",
+                       asof="2026-05-08")),
+    }
+
+
+def _build_records_with_stock_code(make_ipo, stock_code="0992.HK"):
+    """跟 _build_records 一样, 但 stock_code 可指定"""
+    from nacs_model import compute_nacs
+
+    class MockRow:
+        def __init__(self, d): self._d = d
+        def __getitem__(self, k): return self._d.get(k)
+        def keys(self): return list(self._d.keys())
+
+    offering = make_ipo()
+    result = compute_nacs(offering)
+    row = MockRow({
+        "stock_code": stock_code,
+        "company_name_zh": "联想集团",
+        "status": "listed",
+        "listing_chapter": "main_board_profitable",
+        "gics_l2": "资讯科技业-硬件",
+        "listing_date": "2024-01-01",
+        "expected_listing_date": None,
+    })
+    return [{
+        "stock_code": stock_code, "ipo_id": "HK_X",
+        "row": row, "scenario": "mid", "price": 9.0,
+        "offering": offering, "result": result,
+    }]
+
+
+class TestThemeHeatRendering:
+    def test_theme_heat_card_appears(self, make_ipo):
+        from reports.html_renderer import render_single_deal
+        records = _build_records_with_stock_code(make_ipo)
+        bundle = _mock_themes_bundle_for_renderer()
+        html = render_single_deal(
+            records, _build_snap(), date(2026, 5, 9), [],
+            themes_bundle=bundle, ipo_concept_names=["AI 服务器", "算力"],
+        )
+        assert 'class="card theme-heat"' in html
+        assert "主题情绪" in html
+        assert "AI 服务器" in html
+        assert ">72/100<" in html or ">72</" in html
+
+    def test_verdict_color_class(self, make_ipo):
+        from reports.html_renderer import render_single_deal
+        records = _build_records_with_stock_code(make_ipo)
+        # heat_score=85 → overheated
+        bundle = _mock_themes_bundle_for_renderer(heat_score=85)
+        html = render_single_deal(
+            records, _build_snap(), date(2026, 5, 9), [],
+            themes_bundle=bundle, ipo_concept_names=["AI 服务器"],
+        )
+        assert 'class="heat-score heat-overheated"' in html
+        assert "锁定期反转" in html
+
+    def test_trough_verdict(self, make_ipo):
+        from reports.html_renderer import render_single_deal
+        records = _build_records_with_stock_code(make_ipo)
+        bundle = _mock_themes_bundle_for_renderer(heat_score=30)
+        html = render_single_deal(
+            records, _build_snap(), date(2026, 5, 9), [],
+            themes_bundle=bundle, ipo_concept_names=["AI 服务器"],
+        )
+        assert "heat-trough" in html
+        assert "谷底" in html
+
+    def test_sparkline_svg_rendered(self, make_ipo):
+        from reports.html_renderer import render_single_deal
+        records = _build_records_with_stock_code(make_ipo)
+        bundle = _mock_themes_bundle_for_renderer()
+        html = render_single_deal(
+            records, _build_snap(), date(2026, 5, 9), [],
+            themes_bundle=bundle, ipo_concept_names=["AI 服务器"],
+        )
+        # SVG sparkline 出现 + polyline + 5 个点
+        assert '<svg class="sparkline"' in html
+        assert "<polyline points=" in html
+        assert 'circle class="last"' in html
+
+    def test_no_panel_when_themes_bundle_none(self, make_ipo):
+        """没传 themes_bundle, 不应渲染 theme_heat 卡片"""
+        import re
+        from reports.html_renderer import render_single_deal
+        records = _build_records_with_stock_code(make_ipo)
+        html = render_single_deal(
+            records, _build_snap(), date(2026, 5, 9), [],
+            themes_bundle=None,
+        )
+        # 'theme-heat' 在嵌入 CSS 中作为选择器存在 (e.g. ".theme-heat .heat-display");
+        # 这里只断言 body 中不应有 <article class="card theme-heat">
+        body = re.sub(r'<style>.*?</style>', '', html, flags=re.DOTALL)
+        assert 'class="card theme-heat"' not in body
+        assert 'class="card premium-estimate"' not in body
+        assert "主题情绪" not in body
+
+
+class TestPremiumEstimateRendering:
+    def test_premium_card_with_interpretation(self, make_ipo):
+        from reports.html_renderer import render_single_deal
+        records = _build_records_with_stock_code(make_ipo)
+        bundle = _mock_themes_bundle_for_renderer(ai_pct=1.0)
+        html = render_single_deal(
+            records, _build_snap(), date(2026, 5, 9), [],
+            themes_bundle=bundle, ipo_concept_names=["AI 服务器"],
+        )
+        assert 'class="card premium-estimate"' in html
+        assert "AI 镀金检测器" in html
+        assert "log_linear" in html
+        # interpretation
+        assert "100% AI 收入" in html
+
+    def test_override_takes_priority(self, make_ipo):
+        from reports.html_renderer import render_single_deal
+        records = _build_records_with_stock_code(make_ipo)
+        bundle = _mock_themes_bundle_for_renderer(ai_pct=0.30)  # manual is 0.30
+        # override to 0.80
+        html = render_single_deal(
+            records, _build_snap(), date(2026, 5, 9), [],
+            themes_bundle=bundle, ipo_concept_names=["AI 服务器"],
+            ai_revenue_pct_override=0.80,
+        )
+        # 渲染应反映 80%, 不是 30%
+        assert "80% AI 收入" in html
+
+
+class TestThemesProvenanceFooter:
+    def test_provenance_footer_rendered(self, make_ipo):
+        from reports.html_renderer import render_single_deal
+        records = _build_records_with_stock_code(make_ipo)
+        bundle = _mock_themes_bundle_for_renderer()
+        html = render_single_deal(
+            records, _build_snap(), date(2026, 5, 9), [],
+            themes_bundle=bundle, ipo_concept_names=["AI 服务器"],
+        )
+        assert "Themes provenance" in html
+        # JSON 内含 5 个文件状态
+        assert "themes/heat_today.json" in html
+        assert "themes/premium_curve.json" in html
+        assert "classification" in html

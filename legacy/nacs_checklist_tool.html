@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>NACS Decision Checklist</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+body {
+    margin: 0;
+    background: linear-gradient(180deg, #0c0c0c 0%, #141414 100%);
+    color: #e8e6e3;
+    font-family: 'IBM Plex Sans', sans-serif;
+    padding: 40px 20px;
+    min-height: 100vh;
+}
+.container { max-width: 900px; margin: 0 auto; }
+.display-font { font-family: 'Cormorant Garamond', serif; }
+.mono-font { font-family: 'IBM Plex Mono', monospace; }
+
+input[type="number"], select {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.10);
+    color: #e8e6e3;
+    padding: 8px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
+}
+input[type="number"]:focus, select:focus {
+    outline: none;
+    border-color: rgba(212,175,55,0.4);
+    background: rgba(255,255,255,0.06);
+}
+select option { background: #1a1a1a; }
+.checkbox-label {
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer; padding: 6px 0; font-size: 13px;
+    color: #c4c2bf; user-select: none;
+}
+.checkbox-label:hover { color: #e8e6e3; }
+.checkbox-label input { accent-color: #d4af37; width: 14px; height: 14px; }
+
+.field-label {
+    display: block; font-size: 11px; letter-spacing: 1.5px;
+    text-transform: uppercase; color: #888581;
+    margin-bottom: 6px; font-weight: 500;
+}
+.section-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px; font-weight: 600; letter-spacing: -0.5px;
+    color: #d4af37; margin-bottom: 16px;
+    padding-bottom: 8px; border-bottom: 1px solid rgba(212,175,55,0.15);
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.section { margin-bottom: 40px; }
+.hidden { display: none; }
+
+.verdict-box { padding: 32px 28px; margin-top: 20px; transition: all 0.3s; }
+.verdict-LARGE   { background: rgba(74, 124, 89, 0.08);  border-left: 3px solid #a4d4a4; }
+.verdict-TRIAL   { background: rgba(212, 175, 55, 0.06); border-left: 3px solid #d4af37; }
+.verdict-SKIP    { background: rgba(139, 138, 133, 0.06); border-left: 3px solid #8b8a85; }
+.verdict-REJECT  { background: rgba(168, 85, 85, 0.08); border-left: 3px solid #a85555; }
+.verdict-PENDING { background: rgba(60, 60, 60, 0.04); border-left: 3px solid #5a5a5a; }
+
+.verdict-text-LARGE   { color: #a4d4a4; }
+.verdict-text-TRIAL   { color: #d4af37; }
+.verdict-text-SKIP    { color: #8b8a85; }
+.verdict-text-REJECT  { color: #a85555; }
+.verdict-text-PENDING { color: #5a5a5a; }
+
+.reasons-list { list-style: none; padding: 0; margin: 0; }
+.reasons-list li {
+    font-size: 14px; color: #d4d2cf; margin-bottom: 8px;
+    padding-left: 20px; position: relative; line-height: 1.5;
+}
+.reasons-list li::before {
+    content: '›'; position: absolute; left: 0;
+    font-family: 'IBM Plex Mono', monospace;
+}
+.warnings-list li {
+    font-size: 13px; color: #c4c2bf; margin-bottom: 6px;
+    padding-left: 20px; position: relative; font-style: italic;
+}
+.warnings-list li::before {
+    content: '!'; position: absolute; left: 0; color: #a85555;
+}
+
+.threshold-table {
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+    padding: 20px; font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace; color: #a8a6a3;
+}
+.threshold-table h4 { color: #d4af37; margin: 0 0 6px 0; font-size: 13px; }
+.threshold-table .gain  { color: #a4d4a4; }
+.threshold-table .loss  { color: #a85555; }
+.threshold-table .value { color: #e8e6e3; }
+.threshold-section { margin-bottom: 14px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header style="margin-bottom: 50px; text-align: center;">
+    <div style="font-size: 11px; letter-spacing: 4px; color: #d4af37; text-transform: uppercase; margin-bottom: 8px;">
+        HKEX IPO Cornerstone Strategy
+    </div>
+    <h1 class="display-font" style="font-size: 52px; font-weight: 600; margin: 0; letter-spacing: -1px; line-height: 1.1;">
+        NACS <span style="font-style: italic; font-weight: 400;">Decision</span> Checklist
+    </h1>
+    <div style="font-size: 13px; color: #888581; margin-top: 14px; font-family: 'IBM Plex Mono', monospace;">
+        v3.2 · v8 框架 (regime + cluster + 砍 RELATIONSHIP) · production 60d mean +42%, win 75%
+    </div>
+</header>
+
+<!-- ================================================================== -->
+<!-- 决策权威性 banner — 2026-05-09 加, 防止"双权威"风险                -->
+<!-- ================================================================== -->
+<section style="margin-bottom: 30px; padding: 18px 22px;
+                background: rgba(212, 175, 55, 0.06);
+                border-left: 3px solid #d4af37; border-radius: 4px;
+                font-family: 'IBM Plex Sans', sans-serif;">
+    <div style="font-size: 11px; letter-spacing: 2px; color: #d4af37;
+                text-transform: uppercase; margin-bottom: 8px;">
+        ⚠ 决策权威性说明
+    </div>
+    <div style="font-size: 13px; line-height: 1.6; color: #d8d4cf;">
+        本工具的 I–VI 决策区是
+        <strong style="color: #e8e6e3;">v3.2 实证规则的浏览器即时计算</strong>,
+        作为 deal 数据未入库时的 quick estimator. 决策权威以
+        <code style="color: #d4af37; background: rgba(0,0,0,0.3);
+                     padding: 2px 6px; border-radius: 2px;">
+            python scripts/analyze_deal.py --stock-code &lt;code&gt;
+        </code>
+        为准 — 后者实时调用 <code>nacs_model.compute_nacs()</code> +
+        <code>configs/nacs_v8.yaml</code> 当前阈值, 跟模型迭代零延迟同步.
+        当 deal 已入库 (<code>status='prospectus'/'pricing'/'listed'</code>)
+        时本工具结果可能与权威结果**不一致** (规则版本差).
+    </div>
+    <div style="font-size: 12px; line-height: 1.5; color: #888581;
+                margin-top: 10px;">
+        VII (主题情绪) 和 VIII (估值溢价) 是本工具
+        <strong style="color: #d8d4cf;">独有功能</strong>,
+        与 <code>themes/heat_today.json</code> +
+        <code>themes/premium_curve.json</code> 直连; 后续将整合到
+        <code>analyze_deal --html</code> 的 thesis 段, 见
+        <code>docs/roadmap_thesis_themes.md</code>.
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-title">I. IPO 基本信息 <span style="font-size: 11px; color: #888581; letter-spacing: 1.5px; font-family: 'IBM Plex Mono', monospace; text-transform: uppercase; margin-left: 12px;">— quick estimator (v3.2 rules · non-authoritative)</span></div>
+    <div class="grid-2">
+        <div>
+            <label class="field-label">上市章节</label>
+            <select id="chapter">
+                <option value="main_board_profitable">主板已盈利</option>
+                <option value="a_plus_h">A+H 双重上市</option>
+                <option value="18c_commercial">18C 已商业化</option>
+                <option value="18c_precommercial">18C 未商业化</option>
+            </select>
+        </div>
+        <div>
+            <label class="field-label">国际配售认购倍数 (intl_oversub)</label>
+            <input type="number" step="0.1" id="intl" placeholder="例: 13.5">
+        </div>
+        <div>
+            <label class="field-label">公开发售认购倍数 (pub_oversub) — 可选</label>
+            <input type="number" step="0.1" id="pub" placeholder="例: 50.0">
+        </div>
+        <div>
+            <label class="field-label">基石覆盖率 (基石总额/募资额)</label>
+            <input type="number" step="0.01" id="coverage" placeholder="例: 0.45 表示 45%">
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-title">II. 基石组合</div>
+    <div class="grid-2">
+        <div>
+            <label class="field-label">基石机构数量</label>
+            <input type="number" id="ncs" placeholder="例: 8">
+        </div>
+        <div>
+            <label class="field-label">估算 NACS 评分 (0-1)</label>
+            <input type="number" step="0.001" id="nacs" placeholder="主板典型范围 0.05-0.30">
+        </div>
+    </div>
+    <div style="margin-top: 18px;">
+        <label class="checkbox-label">
+            <input type="checkbox" id="hasTopCS">
+            <span>基石含至少 1 家顶级机构 (主权基金 / 全球长线公募 / 头部对冲 / 中资头部公募保险)</span>
+        </label>
+        <label class="checkbox-label">
+            <input type="checkbox" id="hasIndustrial">
+            <span>含产业资本基石 (上市公司客户/供应商/同集团)</span>
+        </label>
+    </div>
+</section>
+
+<section class="section" id="v7-section">
+    <div class="section-title">II.5 v7 制度门控 & 簇基石</div>
+    <div class="grid-2">
+        <div>
+            <label class="field-label">regime_score (过去 90 天港股 IPO 30 日中位收益)</label>
+            <input type="number" step="0.001" id="regime" placeholder="例: +0.020 表示中位 +2%; 留空 = 不启用门控">
+        </div>
+        <div>
+            <label class="field-label">簇基石数量 (同 ultimate_holder ≥ 2 的基石总数)</label>
+            <input type="number" id="cluster" placeholder="例: 2 (2 SPV 共 holder); 默认 0">
+        </div>
+    </div>
+    <div style="margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div id="regime-card" style="padding: 16px 18px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: rgba(255,255,255,0.02);">
+            <div style="font-size: 10px; letter-spacing: 2px; color: #888581; text-transform: uppercase; margin-bottom: 6px;">Regime Gate</div>
+            <div id="regime-status" class="display-font" style="font-size: 22px; font-weight: 500; line-height: 1.2;">未输入</div>
+            <div id="regime-detail" style="font-size: 12px; color: #888581; margin-top: 6px; line-height: 1.4;">阈值: regime_score ≥ 0 才允许评分通过</div>
+        </div>
+        <div id="cluster-card" style="padding: 16px 18px; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; background: rgba(255,255,255,0.02);">
+            <div style="font-size: 10px; letter-spacing: 2px; color: #888581; text-transform: uppercase; margin-bottom: 6px;">Cluster Bonus</div>
+            <div id="cluster-status" class="display-font" style="font-size: 22px; font-weight: 500; line-height: 1.2;">×1.00</div>
+            <div id="cluster-detail" style="font-size: 12px; color: #888581; margin-top: 6px; line-height: 1.4;">无簇基石</div>
+        </div>
+    </div>
+</section>
+
+<section class="section hidden" id="ah-section">
+    <div class="section-title">III. A+H 专属</div>
+    <label class="checkbox-label">
+        <input type="checkbox" id="aShareCanShort">
+        <span>对应 A 股可融券 (用于无风险对冲套利)</span>
+    </label>
+</section>
+
+<section class="section hidden" id="18c-section">
+    <div class="section-title">III. 18C 主题与 SII</div>
+    <div>
+        <label class="field-label">主题分类 (主题 beta &gt; 基石 alpha)</label>
+        <select id="theme18c">
+            <option value="llm">LLM 大模型 (历史 D60 平均 +395%)</option>
+            <option value="robotics">机器人</option>
+            <option value="ai_chip">AI 芯片 (中性)</option>
+            <option value="ai_driving">AI 智驾 (历史全部破发)</option>
+            <option value="other_ai">其他 AI / 制药 / 光子</option>
+        </select>
+    </div>
+    <div style="margin-top: 16px;">
+        <label class="checkbox-label">
+            <input type="checkbox" id="hasTopSII">
+            <span>SII 含顶级 VC ≥ 2 家 (高瓴/红杉/启明/君联/腾讯/阿里等)</span>
+        </label>
+    </div>
+</section>
+
+<section style="margin-top: 60px;">
+    <div class="section-title">决策建议</div>
+    <div id="verdict" class="verdict-box verdict-PENDING">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px;">
+            <div>
+                <div style="font-size: 11px; letter-spacing: 3px; color: #888581;">VERDICT</div>
+                <div id="verdict-decision" class="display-font verdict-text-PENDING" 
+                     style="font-size: 60px; font-weight: 600; line-height: 1; margin-top: 6px; letter-spacing: -1.5px;">
+                    PENDING
+                </div>
+            </div>
+            <div id="verdict-position-box" style="text-align: right; display: none;">
+                <div style="font-size: 11px; letter-spacing: 3px; color: #888581;">SUGGESTED ALLOCATION</div>
+                <div class="mono-font" style="font-size: 40px; font-weight: 500; color: #e8e6e3; margin-top: 6px;">
+                    <span id="verdict-position">0</span><span style="font-size: 24px; color: #888;">%</span>
+                </div>
+                <div style="font-size: 11px; color: #888581; margin-top: 2px;">of cornerstone budget</div>
+            </div>
+        </div>
+        <div id="verdict-confidence" style="font-size: 11px; letter-spacing: 2px; color: #888581; margin-bottom: 20px; text-transform: uppercase; display: none;"></div>
+        <div id="verdict-v7-section" style="margin-bottom: 20px; display: none; padding: 14px 16px; background: rgba(212, 175, 55, 0.05); border-left: 2px solid #d4af37; border-radius: 2px;">
+            <div style="font-size: 10px; letter-spacing: 2px; color: #d4af37; margin-bottom: 8px; text-transform: uppercase;">v7 Adjustments Applied</div>
+            <div id="verdict-v7-detail" style="font-size: 13px; color: #d8d4cf; line-height: 1.6;"></div>
+        </div>
+        <div id="verdict-reasons-section" style="margin-bottom: 20px; display: none;">
+            <div style="font-size: 11px; letter-spacing: 2px; color: #888581; margin-bottom: 10px; text-transform: uppercase;">Triggered Rules</div>
+            <ul class="reasons-list" id="verdict-reasons"></ul>
+        </div>
+        <div id="verdict-warnings-section" style="margin-bottom: 20px; display: none;">
+            <div style="font-size: 11px; letter-spacing: 2px; color: #a85555; margin-bottom: 10px; text-transform: uppercase;">Risk Notes</div>
+            <ul class="reasons-list warnings-list" id="verdict-warnings"></ul>
+        </div>
+        <div id="verdict-exit-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.06); display: none;">
+            <div style="font-size: 11px; letter-spacing: 2px; color: #888581; margin-bottom: 6px; text-transform: uppercase;">Exit Discipline</div>
+            <div id="verdict-exit" style="font-size: 14px; color: #d4af37; font-style: italic;"></div>
+        </div>
+    </div>
+</section>
+
+<!-- ====== 主题情绪追踪 ====== -->
+<section class="section" id="theme-tracker-section" style="margin-top: 60px;">
+    <div class="section-title">VII. 主题情绪追踪 (Composite Valuation Filter)</div>
+    <div style="font-size: 12px; color: #888581; margin-bottom: 16px; line-height: 1.6;">
+        服务复合业务公司估值. 数据来自 <code>themes/heat_today.json</code> + <code>themes/history.csv</code> (theme_tracker.py 每日 8:30 生成).
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div>
+            <label style="font-size: 11px; letter-spacing: 2px; color: #888581; text-transform: uppercase;">选择主题</label>
+            <select id="themeSelect" style="margin-top: 6px; width: 100%; padding: 8px; background: #1c1b1a; color: #d8d4cf; border: 1px solid rgba(255,255,255,0.1); font-family: inherit;">
+                <option value="">— 加载中 —</option>
+            </select>
+            <div id="themeLoadStatus" style="font-size: 11px; color: #888581; margin-top: 8px;"></div>
+        </div>
+        <div>
+            <label style="font-size: 11px; letter-spacing: 2px; color: #888581; text-transform: uppercase;">当前热度</label>
+            <div id="themeHeatScore" style="font-size: 48px; font-family: 'Cormorant Garamond', serif; color: #d4af37; line-height: 1; margin-top: 6px;">—</div>
+            <div id="themeHeatBar" style="height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; margin-top: 8px; overflow: hidden;">
+                <div id="themeHeatBarFill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #a4d4a4, #d4af37, #a85555); transition: width 0.4s;"></div>
+            </div>
+            <div id="themeHeatWarning" style="font-size: 13px; margin-top: 12px; min-height: 20px;"></div>
+        </div>
+    </div>
+    <div style="margin-top: 24px;">
+        <div style="font-size: 11px; letter-spacing: 2px; color: #888581; text-transform: uppercase; margin-bottom: 8px;">热度趋势 (30/60/90d)</div>
+        <div id="themeTrendBox" style="background: #1c1b1a; padding: 16px; border: 1px solid rgba(255,255,255,0.06);">
+            <canvas id="themeTrendChart" width="800" height="160" style="width: 100%; height: 160px;"></canvas>
+            <div id="themeTrendStats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 13px; color: #d8d4cf; margin-top: 12px;"></div>
+        </div>
+    </div>
+    <div id="themeReason" style="margin-top: 16px; font-size: 12px; color: #d8d4cf; font-style: italic;"></div>
+</section>
+
+<!-- ====== 估值溢价测算 ====== -->
+<section class="section" id="premium-calc-section" style="margin-top: 60px;">
+    <div class="section-title">VIII. 估值溢价测算 (AI 镀金检测器)</div>
+    <div style="font-size: 12px; color: #888581; margin-bottom: 16px; line-height: 1.6;">
+        公式: <code>溢价 = 主题热度 × AI 收入占比 × 历史溢价系数</code>. 系数曲线来自 <code>themes/premium_curve.json</code> (research_premium_coefficient.py 拟合, 港股 2 年 AI 概念股回测).
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 20px;">
+        <div>
+            <label style="font-size: 11px; letter-spacing: 2px; color: #888581; text-transform: uppercase;">公司 AI 收入占比 (%)</label>
+            <input type="number" id="aiRevenuePct" min="0" max="100" step="0.5" value="5"
+                   style="margin-top: 6px; width: 100%; padding: 8px; background: #1c1b1a; color: #d8d4cf; border: 1px solid rgba(255,255,255,0.1); font-family: inherit; font-size: 16px;" />
+            <div style="font-size: 11px; color: #888581; margin-top: 6px;">e.g. 华勤 ≈ 5%, 联想 ≈ 15%, 小鹏 ≈ 50%</div>
+        </div>
+        <div>
+            <label style="font-size: 11px; letter-spacing: 2px; color: #888581; text-transform: uppercase;">参照主题</label>
+            <select id="premiumThemeSelect" style="margin-top: 6px; width: 100%; padding: 8px; background: #1c1b1a; color: #d8d4cf; border: 1px solid rgba(255,255,255,0.1); font-family: inherit;">
+                <option value="">— 加载中 —</option>
+            </select>
+            <div id="premiumThemeHeat" style="font-size: 11px; color: #888581; margin-top: 6px;">主题当前热度: —</div>
+        </div>
+    </div>
+    <div style="background: #1c1b1a; padding: 20px; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+            <div>
+                <div style="font-size: 10px; letter-spacing: 2px; color: #888581; text-transform: uppercase; margin-bottom: 6px;">基础溢价系数</div>
+                <div id="premiumBase" style="font-family: 'Cormorant Garamond', serif; font-size: 28px; color: #d8d4cf;">—</div>
+                <div style="font-size: 11px; color: #888581;">来自 premium_curve</div>
+            </div>
+            <div>
+                <div style="font-size: 10px; letter-spacing: 2px; color: #888581; text-transform: uppercase; margin-bottom: 6px;">主题热度修正</div>
+                <div id="premiumHeatFactor" style="font-family: 'Cormorant Garamond', serif; font-size: 28px; color: #d4af37;">—</div>
+                <div style="font-size: 11px; color: #888581;">heat_score / 50</div>
+            </div>
+            <div>
+                <div style="font-size: 10px; letter-spacing: 2px; color: #888581; text-transform: uppercase; margin-bottom: 6px;">期望估值溢价</div>
+                <div id="premiumFinal" style="font-family: 'Cormorant Garamond', serif; font-size: 36px; color: #a4d4a4;">—</div>
+                <div style="font-size: 11px; color: #888581;">vs 同行非 AI peer</div>
+            </div>
+        </div>
+        <div id="premiumInterpret" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 13px; color: #d8d4cf; line-height: 1.7;"></div>
+    </div>
+</section>
+
+<section style="margin-top: 60px;">
+    <div class="section-title">阈值参考表 (基于实证回测)</div>
+    <div class="threshold-table">
+        <div class="threshold-section">
+            <h4>主板已盈利 v8 (n=269)</h4>
+            <div>NACS Top 33% 临界:        <span class="value">0.177</span></div>
+            <div>NACS 死亡区间 (砍掉):      <span class="loss">0.25 - 0.35</span></div>
+            <div>regime≥0 后 60d IC:      <span class="gain">+0.245</span> (t=2.41 ✅)</div>
+            <div>v8 production 60d:        <span class="gain">+42%</span> mean, win 75%</div>
+        </div>
+        <div class="threshold-section">
+            <h4>v7 Regime Gate</h4>
+            <div>2022 年通过率:            <span class="loss">0/57</span> (全 SKIP)</div>
+            <div>2025 年通过率:            <span class="gain">36/71</span> (51%)</div>
+            <div>≥0 子样本 L-S spread:     <span class="gain">+34.8%</span></div>
+            <div>≥0.05 极保守 IC:         <span class="gain">+0.315</span></div>
+        </div>
+        <div class="threshold-section">
+            <h4>v7 Cluster Bonus</h4>
+            <div>cluster≥2 IPO 60d:        <span class="gain">+22.3%</span> (n=14)</div>
+            <div>无簇基石 IPO 60d:         <span class="value">+13.8%</span> (n=238)</div>
+            <div>cluster≥2 std:           <span class="value">39.6%</span></div>
+            <div>无簇基石 std:            <span class="value">67.6%</span></div>
+        </div>
+        <div>
+            <h4>A+H 双重 (n=44)</h4>
+            <div>intl_oversub ≥ 13x:       D60 <span class="gain">+38%</span> (n=8)</div>
+            <div>intl_oversub 5-13x:       D60 <span class="loss">-3%</span> (死亡区间)</div>
+            <div>intl_oversub 2-5x:        D60 +29% (波动大)</div>
+        </div>
+        <div>
+            <h4>18C 特专科技 (n=14)</h4>
+            <div>LLM 主题 D60 平均:        <span class="gain">+395%</span></div>
+            <div>AI 智驾主题 D60 平均:     <span class="loss">-12%</span> (全负)</div>
+            <div>解禁日典型回吐:           <span class="loss">80%+ 浮盈</span></div>
+        </div>
+    </div>
+</section>
+
+<footer style="margin-top: 60px; text-align: center; font-size: 11px; color: #5a5a5a; font-family: 'IBM Plex Mono', monospace; padding-top: 30px; border-top: 1px solid rgba(255,255,255,0.04);">
+    基于 2022-01 至 2026-05 期间 385 只 HKEX IPO 实证 · 主板 269 只<br>
+    NACS v8 (regime gate + cluster bonus + 砍 RELATIONSHIP 死亡区间) · 单元测试 5/5 通过
+</footer>
+
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function compute() {
+    const chapter = $('chapter').value;
+    const intl = parseFloat($('intl').value) || 0;
+    const nCS = parseInt($('ncs').value) || 0;
+    const cov = parseFloat($('coverage').value) || 0;
+    const nacs = parseFloat($('nacs').value) || 0;
+    const hasTopCS = $('hasTopCS').checked;
+    const hasIndustrial = $('hasIndustrial').checked;
+    const theme18c = $('theme18c').value;
+    const hasTopSII = $('hasTopSII').checked;
+    const aShareCanShort = $('aShareCanShort').checked;
+
+    // v7 输入: regime_score 用 raw value 区分"未输入"和"0"
+    const regimeRaw = $('regime').value;
+    const regimeScore = regimeRaw === '' ? null : parseFloat(regimeRaw);
+    const clusterCount = parseInt($('cluster').value) || 0;
+
+    // 切换专属 section
+    $('ah-section').classList.toggle('hidden', chapter !== 'a_plus_h');
+    $('18c-section').classList.toggle('hidden', !chapter.startsWith('18c'));
+    
+    let decision = 'PENDING', position = 0, confidence = 'low';
+    const reasons = [], warnings = [];
+    let exitTiming = '';
+    
+    // 通用拒签
+    if (nCS > 0 && nCS <= 2 && cov > 0 && cov < 0.15) {
+        reasons.push('基石数 ≤ 2 且覆盖率 < 15% (通用 SKIP 条件)');
+        return { decision: 'REJECT', position: 0, confidence: 'high', reasons, warnings, exitTiming,
+                 originalDecision: 'REJECT', regimeScore, clusterCount, v7Notes: [] };
+    }
+    if (intl > 0 && intl < 1.5) {
+        reasons.push('intl_oversub < 1.5x — 国际配售不足，触发 L1 否决');
+        return { decision: 'REJECT', position: 0, confidence: 'high', reasons, warnings, exitTiming,
+                 originalDecision: 'REJECT', regimeScore, clusterCount, v7Notes: [] };
+    }
+    
+    // 主板
+    if (chapter === 'main_board_profitable') {
+        if (nacs >= 0.18 && intl >= 5 && nCS >= 5 && hasTopCS) {
+            decision = 'LARGE'; position = 70; confidence = 'high';
+            reasons.push('NACS ≥ 0.18 (Top 33%)');
+            reasons.push(`intl_oversub = ${intl}x ≥ 5`);
+            reasons.push(`基石数 = ${nCS} ≥ 5`);
+            reasons.push('含顶级基石机构');
+            exitTiming = '解禁前 2 周必须减仓';
+            warnings.push('D180 反向信号: 不要 buy & hold 超 6 个月');
+        } else if (nacs >= 0.064 && nacs <= 0.107 && intl < 5) {
+            decision = 'SKIP'; confidence = 'high';
+            reasons.push('NACS 在 0.064-0.107 (D2-D3 死亡区间)');
+            reasons.push(`intl_oversub = ${intl}x < 5x`);
+            reasons.push('历史 5 日均值 -7%, 胜率 22%');
+        } else if (nacs >= 0.122 && nacs < 0.18 && intl >= 3) {
+            decision = 'TRIAL'; position = 35; confidence = 'medium';
+            reasons.push(`NACS ${nacs.toFixed(3)} 在中高区间`);
+            reasons.push(`intl_oversub = ${intl}x ≥ 3`);
+            exitTiming = '解禁前 2 周减仓';
+        } else if (nacs >= 0.18 && intl >= 5 && !hasTopCS) {
+            decision = 'TRIAL'; position = 40; confidence = 'medium';
+            reasons.push('NACS 强但缺顶级基石机构 → 信号打折');
+            warnings.push('考虑等待解禁后参与二级');
+        } else {
+            decision = 'SKIP'; confidence = 'medium';
+            reasons.push('未触发任何 LARGE/TRIAL 条件');
+            if (nacs > 0) reasons.push(`NACS ${nacs.toFixed(3)} 不在高分区`);
+            if (intl > 0) reasons.push(`intl_oversub ${intl}x 不足`);
+        }
+    }
+    
+    // A+H
+    else if (chapter === 'a_plus_h') {
+        if (intl >= 13) {
+            decision = 'LARGE'; position = 70; confidence = 'high';
+            reasons.push(`intl_oversub = ${intl}x ≥ 13x → A+H 强信号区`);
+            reasons.push('历史 D60 平均 +38%');
+            if (nacs >= 0.20) reasons.push('NACS 双确认 ≥ 0.20');
+            exitTiming = 'D90-D120 估值高点考虑减仓; 解禁前 2 周必减';
+            if (aShareCanShort) warnings.push('💡 可同步建立 A 股空头对冲 → 类无风险套利');
+        } else if (intl >= 5 && intl < 13) {
+            decision = 'SKIP'; confidence = 'high';
+            reasons.push(`intl_oversub = ${intl}x 在 5-13x 死亡区间`);
+            reasons.push('历史 D60 平均 -3%, 大输家集中在此档');
+        } else if (intl >= 2 && intl < 5) {
+            decision = 'TRIAL'; position = 30; confidence = 'low';
+            reasons.push(`intl_oversub = ${intl}x 在 2-5x 冷门档`);
+            reasons.push('历史 D60 平均 +29% 但波动大');
+            warnings.push('需要检查具体行业是否有特殊催化剂');
+        } else if (intl > 0 && intl < 2) {
+            decision = 'SKIP'; confidence = 'medium';
+            reasons.push(`intl_oversub = ${intl}x < 2x — 无市场共识`);
+        }
+    }
+    
+    // 18C
+    else if (chapter === '18c_commercial' || chapter === '18c_precommercial') {
+        if (theme18c === 'ai_driving') {
+            decision = 'SKIP'; confidence = 'high';
+            reasons.push('AI 智驾主题历史全部破发 (4 只 D60 平均 -12%)');
+            reasons.push('A 股已充分定价同行业，港股难创增量');
+        } else if (theme18c === 'other_ai') {
+            decision = 'TRIAL'; position = 20; confidence = 'low';
+            reasons.push('其他 AI 主题波动太大 (晶泰 D60+120% 但 D180 仅+16%)');
+            warnings.push('重点看 SII 阵容 + 招股书人工审读');
+            warnings.push('解禁前 3 周必须减 50%+');
+            exitTiming = 'D150 开始分批减仓';
+        } else if (theme18c === 'llm') {
+            if (intl >= 15 && nCS >= 10 && hasTopSII) {
+                decision = 'LARGE'; position = 80; confidence = 'high';
+                reasons.push('LLM 大模型主题 (历史 D60 平均 +395%)');
+                reasons.push(`intl_oversub = ${intl}x ≥ 15x`);
+                reasons.push(`基石数 = ${nCS} ≥ 10`);
+                reasons.push('含顶级 VC SII (高瓴/红杉/启明等)');
+                exitTiming = '解禁前 3 周必减 50%+ (晶泰回吐 87% 教训)';
+                warnings.push('⚠ 锁定期内浮盈 ≠ 落袋收益');
+            } else {
+                decision = 'TRIAL'; position = 30; confidence = 'medium';
+                reasons.push('LLM 主题但基石组合不够强');
+                if (intl < 15) reasons.push(`intl_oversub ${intl}x < 15x`);
+                if (nCS < 10) reasons.push(`基石数 ${nCS} < 10`);
+                if (!hasTopSII) reasons.push('缺顶级 VC 的 SII 背书');
+            }
+        } else if (theme18c === 'robotics') {
+            decision = 'TRIAL'; position = 30; confidence = 'medium';
+            reasons.push('机器人主题 - 极智嘉 D60 +68% (但 D180 -5% 反转)');
+            warnings.push('解禁日反转风险高, 必须严守退出纪律');
+            exitTiming = 'D150 必须减 70%+';
+        } else if (theme18c === 'ai_chip') {
+            decision = 'TRIAL'; position = 25; confidence = 'low';
+            reasons.push('AI 芯片主题中性 (壁仞-8%, 黑芝麻+19%)');
+            warnings.push('赛道争议大, 单看基石不可靠');
+        }
+    }
+    
+    if (chapter !== 'a_plus_h' && hasIndustrial && nCS > 0) {
+        warnings.push('含产业资本/客户/供应商基石 → 关联污染可能影响 Q_ecosystem');
+    }
+
+    // ============ v7 后处理: regime gate + cluster bonus ============
+    const originalDecision = decision;
+    const v7Notes = [];
+
+    // Cluster bonus: 决策可能升档 (实际数据: cluster≥2 IPO 60d mean +22% vs 无关联 +14%)
+    if (clusterCount >= 2 && (decision === 'TRIAL' || decision === 'RELATIONSHIP') && nCS >= 5) {
+        const upgradeMap = { 'RELATIONSHIP': ['TRIAL', 35], 'TRIAL': ['LARGE', 60] };
+        const [newDec, newPos] = upgradeMap[decision];
+        const bonusMult = clusterCount >= 5 ? 1.20 : (clusterCount >= 3 ? 1.15 : 1.10);
+        v7Notes.push(`Cluster ×${bonusMult.toFixed(2)} (${clusterCount} 簇基石): ${decision} → ${newDec}`);
+        decision = newDec;
+        position = Math.max(position, newPos);
+    } else if (clusterCount >= 2) {
+        const bonusMult = clusterCount >= 5 ? 1.20 : (clusterCount >= 3 ? 1.15 : 1.10);
+        v7Notes.push(`Cluster ×${bonusMult.toFixed(2)} (${clusterCount} 簇基石, 决策不变)`);
+    }
+
+    // Regime gate: 必须最后应用, 否决其他升级
+    if (regimeScore !== null && regimeScore < 0) {
+        v7Notes.push(`Regime gate: ${(regimeScore*100).toFixed(2)}% < 0 → 强制 SKIP (原决策 ${decision})`);
+        warnings.push('⚠ 制度门控阻断: 过去 90 天港股 IPO 表现弱, NACS 模型在此环境失效');
+        warnings.push(`📊 数据支撑: regime_score<0 子样本主板 60d IC = -0.03 (vs 通过样本 +0.245)`);
+        decision = 'SKIP';
+        position = 0;
+    } else if (regimeScore !== null && regimeScore >= 0.05) {
+        v7Notes.push(`Regime score ${(regimeScore*100).toFixed(2)}% ≥ +5% → 强信号区 (60d IC +0.315)`);
+    } else if (regimeScore !== null && regimeScore >= 0) {
+        v7Notes.push(`Regime score ${(regimeScore*100).toFixed(2)}% ≥ 0 → 通过门控`);
+    }
+
+    return { decision, position, confidence, reasons, warnings, exitTiming,
+             originalDecision, regimeScore, clusterCount, v7Notes };
+}
+
+function render() {
+    const v = compute();
+
+    // ============ v7 状态卡片 (regime + cluster) ============
+    const rs = v.regimeScore;
+    const rsStatus = $('regime-status'), rsDetail = $('regime-detail'), rsCard = $('regime-card');
+    if (rs === null) {
+        rsStatus.textContent = '未输入'; rsStatus.style.color = '#888581';
+        rsDetail.textContent = '阈值: regime_score ≥ 0 才允许评分通过';
+        rsCard.style.borderColor = 'rgba(255,255,255,0.08)';
+        rsCard.style.background = 'rgba(255,255,255,0.02)';
+    } else if (rs < 0) {
+        rsStatus.textContent = `🔴 阻断 ${(rs*100).toFixed(2)}%`; rsStatus.style.color = '#d96b5e';
+        rsDetail.innerHTML = '过去 90 天港股 IPO 中位收益为负 → <strong>强制 SKIP</strong> (即使 NACS 高)';
+        rsCard.style.borderColor = 'rgba(217, 107, 94, 0.4)';
+        rsCard.style.background = 'rgba(217, 107, 94, 0.06)';
+    } else if (rs >= 0.05) {
+        rsStatus.textContent = `🟢 强信号 +${(rs*100).toFixed(2)}%`; rsStatus.style.color = '#7eb88a';
+        rsDetail.innerHTML = `≥ +5% 强制度区 (n=32 子样本 60d IC = <strong>+0.315</strong>, t=2.50)`;
+        rsCard.style.borderColor = 'rgba(126, 184, 138, 0.4)';
+        rsCard.style.background = 'rgba(126, 184, 138, 0.06)';
+    } else {
+        rsStatus.textContent = `🟢 通过 +${(rs*100).toFixed(2)}%`; rsStatus.style.color = '#7eb88a';
+        rsDetail.innerHTML = `≥ 0 → NACS 评分有效 (60d IC <strong>+0.245</strong>, t=2.41 ✅)`;
+        rsCard.style.borderColor = 'rgba(126, 184, 138, 0.3)';
+        rsCard.style.background = 'rgba(126, 184, 138, 0.04)';
+    }
+
+    const cc = v.clusterCount;
+    const ccStatus = $('cluster-status'), ccDetail = $('cluster-detail'), ccCard = $('cluster-card');
+    if (cc >= 5) {
+        ccStatus.textContent = `×1.20`; ccStatus.style.color = '#d4af37';
+        ccDetail.innerHTML = `${cc} 簇基石 → Q_ecosystem 加成 20% (产业资本重仓背书)`;
+        ccCard.style.borderColor = 'rgba(212, 175, 55, 0.45)';
+        ccCard.style.background = 'rgba(212, 175, 55, 0.08)';
+    } else if (cc >= 3) {
+        ccStatus.textContent = `×1.15`; ccStatus.style.color = '#d4af37';
+        ccDetail.innerHTML = `${cc} 簇基石 → Q_ecosystem 加成 15%`;
+        ccCard.style.borderColor = 'rgba(212, 175, 55, 0.35)';
+        ccCard.style.background = 'rgba(212, 175, 55, 0.06)';
+    } else if (cc >= 2) {
+        ccStatus.textContent = `×1.10`; ccStatus.style.color = '#d4af37';
+        ccDetail.innerHTML = `${cc} 簇基石 → Q_ecosystem 加成 10% (60d mean +22% vs 无关联 +14%)`;
+        ccCard.style.borderColor = 'rgba(212, 175, 55, 0.3)';
+        ccCard.style.background = 'rgba(212, 175, 55, 0.05)';
+    } else {
+        ccStatus.textContent = `×1.00`; ccStatus.style.color = '#888581';
+        ccDetail.textContent = cc === 1 ? '仅 1 簇基石 (需 ≥2 才触发加成)' : '无簇基石';
+        ccCard.style.borderColor = 'rgba(255,255,255,0.08)';
+        ccCard.style.background = 'rgba(255,255,255,0.02)';
+    }
+
+    // ============ 主 verdict ============
+    const box = $('verdict');
+    box.className = 'verdict-box verdict-' + v.decision;
+
+    const dEl = $('verdict-decision');
+    dEl.textContent = v.decision;
+    dEl.className = 'display-font verdict-text-' + v.decision;
+
+    if (v.position > 0) {
+        $('verdict-position-box').style.display = 'block';
+        $('verdict-position').textContent = v.position;
+    } else {
+        $('verdict-position-box').style.display = 'none';
+    }
+
+    if (v.confidence !== 'low' && v.decision !== 'PENDING') {
+        $('verdict-confidence').style.display = 'block';
+        $('verdict-confidence').innerHTML = `Confidence: <span style="color: #d4af37;">${v.confidence}</span>`;
+    } else {
+        $('verdict-confidence').style.display = 'none';
+    }
+
+    // v7 调整说明
+    if (v.v7Notes && v.v7Notes.length > 0) {
+        $('verdict-v7-section').style.display = 'block';
+        const lines = v.v7Notes.map(n => `· ${n}`);
+        if (v.originalDecision !== v.decision) {
+            lines.unshift(`<strong style="color:#d4af37;">原决策 ${v.originalDecision} → 调整后 ${v.decision}</strong>`);
+        }
+        $('verdict-v7-detail').innerHTML = lines.join('<br>');
+    } else {
+        $('verdict-v7-section').style.display = 'none';
+    }
+
+    if (v.reasons.length > 0) {
+        $('verdict-reasons-section').style.display = 'block';
+        $('verdict-reasons').innerHTML = v.reasons.map(r => `<li>${r}</li>`).join('');
+    } else {
+        $('verdict-reasons-section').style.display = 'none';
+    }
+
+    if (v.warnings.length > 0) {
+        $('verdict-warnings-section').style.display = 'block';
+        $('verdict-warnings').innerHTML = v.warnings.map(w => `<li>${w}</li>`).join('');
+    } else {
+        $('verdict-warnings-section').style.display = 'none';
+    }
+
+    if (v.exitTiming) {
+        $('verdict-exit-section').style.display = 'block';
+        $('verdict-exit').textContent = v.exitTiming;
+    } else {
+        $('verdict-exit-section').style.display = 'none';
+    }
+}
+
+// 监听所有输入 (含 v7)
+['chapter', 'intl', 'pub', 'coverage', 'ncs', 'nacs', 'hasTopCS',
+ 'hasIndustrial', 'theme18c', 'hasTopSII', 'aShareCanShort',
+ 'regime', 'cluster']
+    .forEach(id => {
+        const el = $(id);
+        if (el) {
+            el.addEventListener('input', render);
+            el.addEventListener('change', render);
+        }
+    });
+
+render();
+
+// ============================================================================
+// 主题情绪追踪 + 估值溢价测算 (Phase 7-8)
+// ============================================================================
+const ThemeTracker = (() => {
+    let heatToday = null;     // themes/heat_today.json
+    let history = null;       // themes/history.csv 解析后的 [{date, ai_server: 78, ...}]
+    let curve = null;         // themes/premium_curve.json
+
+    async function loadAll() {
+        try {
+            const r1 = await fetch('themes/heat_today.json');
+            heatToday = r1.ok ? await r1.json() : null;
+        } catch (e) { heatToday = null; }
+        try {
+            const r2 = await fetch('themes/history.csv');
+            if (r2.ok) {
+                const text = await r2.text();
+                history = parseCSV(text);
+            }
+        } catch (e) { history = null; }
+        try {
+            const r3 = await fetch('themes/premium_curve.json');
+            curve = r3.ok ? await r3.json() : null;
+        } catch (e) { curve = null; }
+        renderThemeUI();
+    }
+
+    function parseCSV(text) {
+        const lines = text.trim().split(/\r?\n/);
+        if (lines.length < 2) return null;
+        const headers = lines[0].split(',');
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+            const vals = lines[i].split(',');
+            const row = {};
+            headers.forEach((h, j) => {
+                const v = vals[j];
+                row[h] = (h === 'date') ? v : (v === '' ? null : Number(v));
+            });
+            rows.push(row);
+        }
+        return { headers, rows };
+    }
+
+    function renderThemeUI() {
+        const sel = $('themeSelect');
+        const sel2 = $('premiumThemeSelect');
+        const status = $('themeLoadStatus');
+
+        if (!heatToday || !heatToday.themes) {
+            sel.innerHTML = '<option>无数据 (heat_today.json 未生成)</option>';
+            sel2.innerHTML = '<option>无数据</option>';
+            status.textContent = '提示: 跑 python themes/theme_tracker.py 生成今日数据';
+            status.style.color = '#a85555';
+            return;
+        }
+        const themes = heatToday.themes;
+        const opts = Object.entries(themes).map(([id, t]) =>
+            `<option value="${id}">${t.label || id}  [${t.heat_score ?? '—'}]</option>`).join('');
+        sel.innerHTML = opts;
+        sel2.innerHTML = opts;
+        status.textContent = `as_of: ${heatToday.as_of} · ${Object.keys(themes).length} 主题`;
+        status.style.color = '#888581';
+        // 默认选 AI 服务器
+        if (themes['ai_server']) {
+            sel.value = 'ai_server';
+            sel2.value = 'ai_server';
+        }
+        renderHeatPanel();
+        renderPremiumPanel();
+    }
+
+    function renderHeatPanel() {
+        const id = $('themeSelect').value;
+        if (!id || !heatToday?.themes?.[id]) return;
+        const t = heatToday.themes[id];
+        const score = t.heat_score ?? 0;
+        $('themeHeatScore').textContent = score;
+        $('themeHeatBarFill').style.width = score + '%';
+
+        // 颜色
+        let color = '#a4d4a4';
+        if (score >= 80) color = '#a85555';
+        else if (score >= 60) color = '#d4af37';
+        else if (score < 40) color = '#5a8caa';
+        $('themeHeatScore').style.color = color;
+
+        // 警告
+        const warn = $('themeHeatWarning');
+        if (score > 80) {
+            warn.innerHTML = '⚠ <span style="color:#a85555">主题过热 — 锁定期反转风险高, 谨慎入场</span>';
+        } else if (score < 40) {
+            warn.innerHTML = '★ <span style="color:#a4d4a4">主题谷底 — 可能是基石入场好时机</span>';
+        } else {
+            warn.innerHTML = '<span style="color:#888581">情绪中性</span>';
+        }
+
+        // 趋势
+        renderTrendChart(id);
+
+        // 原因
+        const reason = t.reason ? `Kimi 解读: ${t.reason}` : '';
+        $('themeReason').textContent = reason;
+    }
+
+    function renderTrendChart(id) {
+        const canvas = $('themeTrendChart');
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (!history || !history.headers.includes(id)) {
+            ctx.fillStyle = '#888581';
+            ctx.font = '12px sans-serif';
+            ctx.fillText('暂无历史数据 (需积累 ≥7 天)', 16, h / 2);
+            $('themeTrendStats').innerHTML = '';
+            return;
+        }
+        const series = history.rows.map(r => ({ date: r.date, v: r[id] })).filter(r => r.v != null);
+        const last90 = series.slice(-90);
+        if (last90.length < 2) {
+            ctx.fillStyle = '#888581';
+            ctx.fillText('数据点不足', 16, h / 2);
+            return;
+        }
+
+        // 网格
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        [20, 40, 60, 80].forEach(level => {
+            const y = h - (level / 100) * (h - 30) - 10;
+            ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w, y); ctx.stroke();
+            ctx.fillStyle = '#5a5a5a'; ctx.font = '10px sans-serif';
+            ctx.fillText(level, 8, y + 3);
+        });
+
+        // 折线
+        ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        last90.forEach((p, i) => {
+            const x = 40 + (i / Math.max(1, last90.length - 1)) * (w - 50);
+            const y = h - (p.v / 100) * (h - 30) - 10;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // 阈值带 (80 红, 40 绿)
+        ctx.strokeStyle = 'rgba(168,85,85,0.4)'; ctx.setLineDash([4, 4]);
+        let y80 = h - 0.8 * (h - 30) - 10;
+        ctx.beginPath(); ctx.moveTo(40, y80); ctx.lineTo(w, y80); ctx.stroke();
+        ctx.strokeStyle = 'rgba(164,212,164,0.4)';
+        let y40 = h - 0.4 * (h - 30) - 10;
+        ctx.beginPath(); ctx.moveTo(40, y40); ctx.lineTo(w, y40); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 30/60/90d 平均
+        const avg = (arr) => arr.reduce((s, x) => s + x.v, 0) / arr.length;
+        const a30 = series.slice(-30); const a60 = series.slice(-60); const a90 = series.slice(-90);
+        $('themeTrendStats').innerHTML = `
+            <div>30d 均值: <strong style="color:#d4af37">${a30.length ? avg(a30).toFixed(1) : '—'}</strong> <span style="color:#888581">(n=${a30.length})</span></div>
+            <div>60d 均值: <strong style="color:#d4af37">${a60.length ? avg(a60).toFixed(1) : '—'}</strong> <span style="color:#888581">(n=${a60.length})</span></div>
+            <div>90d 均值: <strong style="color:#d4af37">${a90.length ? avg(a90).toFixed(1) : '—'}</strong> <span style="color:#888581">(n=${a90.length})</span></div>
+        `;
+    }
+
+    function lookupPremium(aiPct) {
+        if (!curve || !curve.params) return null;
+        const { a, b, c } = curve.params;
+        return a * Math.log(1.0 + b * aiPct) + c;
+    }
+
+    function renderPremiumPanel() {
+        const aiPctRaw = parseFloat($('aiRevenuePct').value);
+        if (isNaN(aiPctRaw)) return;
+        const aiPct = Math.max(0, Math.min(100, aiPctRaw)) / 100;
+        const themeId = $('premiumThemeSelect').value;
+        const heat = heatToday?.themes?.[themeId]?.heat_score ?? 50;
+        $('premiumThemeHeat').innerHTML = `主题当前热度: <strong style="color:#d4af37">${heat}</strong> (${heatToday?.themes?.[themeId]?.label || '—'})`;
+
+        const base = lookupPremium(aiPct);
+        if (base === null) {
+            $('premiumBase').textContent = '—';
+            $('premiumHeatFactor').textContent = '—';
+            $('premiumFinal').textContent = '—';
+            $('premiumInterpret').innerHTML = '<span style="color:#a85555">premium_curve.json 未加载</span>';
+            return;
+        }
+        const heatFactor = heat / 50.0;
+        const finalPremium = base * heatFactor;
+
+        $('premiumBase').textContent = (base * 100).toFixed(1) + '%';
+        $('premiumHeatFactor').textContent = '×' + heatFactor.toFixed(2);
+        $('premiumFinal').textContent = (finalPremium * 100).toFixed(0) + '%';
+
+        // 颜色: 高溢价 = 红 (镀金), 中性 = 黄, 低 = 绿
+        let col = '#a4d4a4';
+        if (finalPremium > 0.6) col = '#a85555';
+        else if (finalPremium > 0.3) col = '#d4af37';
+        $('premiumFinal').style.color = col;
+
+        // 解读
+        let warn = '';
+        if (finalPremium > 0.6) {
+            warn = `<span style="color:#a85555">⚠ 高溢价警告</span>: 模型预测市场已为该 AI 故事支付 <strong>${(finalPremium*100).toFixed(0)}%</strong> 溢价 (vs 同行非 AI peer). 但公司实际 AI 收入仅 ${aiPctRaw}%, 镀金风险高 — 锁定期解禁后估值回归概率大.`;
+        } else if (finalPremium > 0.3) {
+            warn = `<span style="color:#d4af37">中等溢价</span>: 主题热度配上 AI 占比, 期望溢价 ${(finalPremium*100).toFixed(0)}%. 在合理区间, 但需配合个股锁定期/基石质量综合判断.`;
+        } else {
+            warn = `<span style="color:#a4d4a4">低溢价</span>: 主题情绪温和或公司 AI 占比有限, 期望溢价仅 ${(finalPremium*100).toFixed(0)}%. 估值层面镀金风险小, 业绩兑现可见即可.`;
+        }
+        const aiAbs = aiPctRaw.toFixed(1);
+        $('premiumInterpret').innerHTML = `
+            ${warn}<br><br>
+            <span style="color:#888581">公式分解:</span>
+            premium = log(1 + ${(curve.params.b).toFixed(1)} × ${(aiPct).toFixed(3)}) × ${curve.params.a.toFixed(2)}
+            = <strong>${(base*100).toFixed(1)}%</strong>;
+            heat_factor = ${heat}/50 = <strong>${heatFactor.toFixed(2)}</strong>;
+            <strong style="color:${col}">final = ${(finalPremium*100).toFixed(0)}%</strong>.<br>
+            <span style="color:#888581">语义:</span> 当前主题 (${heatToday?.themes?.[themeId]?.label || '—'}) 热度 ${heat}, 持有该公司 (${aiAbs}% AI 收入)
+            理论上应给同行 +${(finalPremium*100).toFixed(0)}% 估值. 实际市场溢价超过此值 → 镀金过头 (减持/规避); 低于 → 价值洼地.
+        `;
+    }
+
+    // 事件
+    document.addEventListener('DOMContentLoaded', loadAll);
+    window.addEventListener('load', () => {
+        // 二次保险 (本地 file:// 偶尔慢)
+        if (!heatToday) loadAll();
+    });
+    $('themeSelect')?.addEventListener('change', renderHeatPanel);
+    $('premiumThemeSelect')?.addEventListener('change', renderPremiumPanel);
+    $('aiRevenuePct')?.addEventListener('input', renderPremiumPanel);
+
+    return { loadAll };
+})();
+</script>
+
+</body>
+</html>

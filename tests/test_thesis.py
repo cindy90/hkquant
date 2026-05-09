@@ -230,3 +230,231 @@ def test_thesis_works_with_no_panel_no_similar(make_ipo):
     assert isinstance(t["risks"], list)
     assert t["base_rate"] is None
     assert t["panel_context"] is None
+    # S3 新增: themes_provenance 应永远有值 (即使 themes_bundle=None)
+    assert "themes_provenance" in t
+    assert t["theme_heat"] is None
+    assert t["premium_estimate"] is None
+
+
+# =============================================================================
+# S3 新增: theme_heat verdict 阈值
+# =============================================================================
+
+class TestHeatVerdict:
+    @pytest.mark.parametrize("score,expected", [
+        (None, "unknown"),
+        (35, "trough"),
+        (50, "moderate"),
+        (70, "warm"),
+        (80, "overheated"),
+        (95, "overheated"),
+    ])
+    def test_heat_verdict_thresholds(self, score, expected):
+        from reports.thesis import _heat_verdict
+        assert _heat_verdict(score) == expected
+
+    def test_overheated_emits_warning(self):
+        from reports.thesis import _heat_warning_for_verdict
+        w = _heat_warning_for_verdict("overheated", 85)
+        assert "锁定期反转" in w
+
+    def test_trough_emits_warning(self):
+        from reports.thesis import _heat_warning_for_verdict
+        w = _heat_warning_for_verdict("trough", 30)
+        assert "谷底" in w
+
+    def test_moderate_no_warning(self):
+        from reports.thesis import _heat_warning_for_verdict
+        assert _heat_warning_for_verdict("moderate", 55) is None
+
+
+# =============================================================================
+# S3 新增: theme_heat 构造
+# =============================================================================
+
+def _mock_themes_bundle(**overrides):
+    """构造一个最小 themes_bundle 用于测试"""
+    from reports.themes_data import Provenance
+    base = {
+        "heat_today": (
+            {"as_of": "2026-05-08",
+             "themes": {"ai_server": {
+                 "label": "AI 服务器", "heat_score": 72,
+                 "ret_5d": 0.03, "ret_20d": 0.09, "ret_60d": 0.05,
+                 "pe_ttm_avg": 35.5, "reason": "动能强劲", "warning": None,
+                 "source": "kimi"}}},
+            Provenance(path="themes/heat_today.json", status="ok",
+                       asof="2026-05-08")),
+        "premium_curve": (
+            {"fitted_at": "2026-05-08T19:00:00", "as_of_data": "2026-05-08",
+             "n_samples_used": 31, "model": "log_linear",
+             "params": {"a": 5.17, "b": 0.5, "c": -0.23},
+             "r_squared": 0.39,
+             "lookup_table": [
+                 {"ai_pct": 0.0, "premium": -0.23},
+                 {"ai_pct": 0.05, "premium": -0.10},
+                 {"ai_pct": 0.10, "premium": 0.02},
+                 {"ai_pct": 0.50, "premium": 0.85},
+                 {"ai_pct": 1.00, "premium": 1.87},
+             ]},
+            Provenance(path="themes/premium_curve.json", status="ok",
+                       asof="2026-05-08")),
+        "theme_definitions": (
+            {"_schema_version": "1.0",
+             "themes": {"ai_server": {
+                 "label": "AI 服务器",
+                 "core_companies": [{"code": "00992.HK", "name": "联想"}],
+                 "keywords": ["AI 服务器", "算力"]}}},
+            Provenance(path="themes/theme_definitions.json", status="ok")),
+        "ai_revenue_manual": (
+            {"0992.HK": 0.30, "2533.HK": 1.00},
+            Provenance(path="themes/ai_revenue_manual.json", status="ok")),
+        "history": (
+            {"ai_server": [("2026-05-06", 70), ("2026-05-07", 71),
+                           ("2026-05-08", 72)]},
+            Provenance(path="themes/history.csv", status="ok",
+                       asof="2026-05-08")),
+    }
+    base.update(overrides)
+    return base
+
+
+class TestThemeHeatPanel:
+    def test_theme_heat_built_when_classifier_hits(self, make_ipo):
+        from nacs_model import compute_nacs
+        from reports.thesis import synthesize_thesis
+        r = compute_nacs(make_ipo())
+        bundle = _mock_themes_bundle()
+        t = synthesize_thesis(
+            r, themes_bundle=bundle, stock_code="0992.HK",
+            company_name="联想集团",
+        )
+        assert t["theme_heat"] is not None
+        assert t["theme_heat"]["theme_id"] == "ai_server"
+        assert t["theme_heat"]["heat_score"] == 72
+        assert t["theme_heat"]["verdict"] == "warm"
+
+    def test_theme_heat_none_when_no_match(self, make_ipo):
+        from nacs_model import compute_nacs
+        from reports.thesis import synthesize_thesis
+        r = compute_nacs(make_ipo())
+        bundle = _mock_themes_bundle()
+        t = synthesize_thesis(
+            r, themes_bundle=bundle, stock_code="9999.HK",
+            company_name="无关公司", gics_l2="医疗保健",
+        )
+        assert t["theme_heat"] is None
+        # 但 themes_provenance 仍记录"为什么没匹配"
+        assert t["themes_provenance"]["theme_id"] is None
+        assert t["themes_provenance"]["classification"]["confidence"] == "none"
+
+    def test_trend_30d_truncated(self, make_ipo):
+        from nacs_model import compute_nacs
+        from reports.thesis import synthesize_thesis
+        r = compute_nacs(make_ipo())
+        bundle = _mock_themes_bundle()
+        t = synthesize_thesis(
+            r, themes_bundle=bundle, stock_code="0992.HK",
+        )
+        assert len(t["theme_heat"]["trend_30d"]) == 3   # mock 只有 3 天
+
+
+# =============================================================================
+# S3 新增: premium_estimate
+# =============================================================================
+
+class TestPremiumEstimate:
+    def test_premium_estimate_uses_manual_lookup(self, make_ipo):
+        from nacs_model import compute_nacs
+        from reports.thesis import synthesize_thesis
+        r = compute_nacs(make_ipo())
+        bundle = _mock_themes_bundle()
+        t = synthesize_thesis(
+            r, themes_bundle=bundle, stock_code="2533.HK",
+        )
+        assert t["premium_estimate"] is not None
+        assert t["premium_estimate"]["ai_revenue_pct"] == 1.0
+        assert t["premium_estimate"]["expected_premium"] == pytest.approx(1.87, abs=0.05)
+        assert "100% AI 收入" in t["premium_estimate"]["interpretation"]
+        assert t["themes_provenance"]["ai_revenue_source"].startswith(
+            "ai_revenue_manual.json")
+
+    def test_override_takes_priority(self, make_ipo):
+        from nacs_model import compute_nacs
+        from reports.thesis import synthesize_thesis
+        r = compute_nacs(make_ipo())
+        bundle = _mock_themes_bundle()
+        # ai_revenue_manual 里 0992.HK 是 0.30, 但 override 给 0.50
+        t = synthesize_thesis(
+            r, themes_bundle=bundle, stock_code="0992.HK",
+            ai_revenue_pct_override=0.50,
+        )
+        assert t["premium_estimate"]["ai_revenue_pct"] == 0.50
+        assert "override" in t["themes_provenance"]["ai_revenue_source"]
+
+    def test_low_r_squared_disclaimer(self, make_ipo):
+        from nacs_model import compute_nacs
+        from reports.thesis import synthesize_thesis
+        from reports.themes_data import Provenance
+        r = compute_nacs(make_ipo())
+        bundle = _mock_themes_bundle()
+        # 改 r_squared 到 0.20 (低)
+        bundle["premium_curve"] = (
+            {**bundle["premium_curve"][0], "r_squared": 0.20},
+            bundle["premium_curve"][1],
+        )
+        t = synthesize_thesis(
+            r, themes_bundle=bundle, stock_code="2533.HK",
+        )
+        assert "R² 偏低" in t["premium_estimate"]["interpretation"]
+
+    def test_no_estimate_when_pct_unknown(self, make_ipo):
+        from nacs_model import compute_nacs
+        from reports.thesis import synthesize_thesis
+        r = compute_nacs(make_ipo())
+        bundle = _mock_themes_bundle()
+        t = synthesize_thesis(
+            r, themes_bundle=bundle, stock_code="9999.HK",  # 不在 manual
+        )
+        assert t["premium_estimate"] is None
+
+
+# =============================================================================
+# S3 新增: themes_provenance audit
+# =============================================================================
+
+class TestThemesProvenance:
+    def test_provenance_always_present(self, make_ipo):
+        """即便没传 themes_bundle, themes_provenance 也应是 dict (空 dict)"""
+        from nacs_model import compute_nacs
+        from reports.thesis import synthesize_thesis
+        r = compute_nacs(make_ipo())
+        t = synthesize_thesis(r, themes_bundle=None)
+        assert isinstance(t["themes_provenance"], dict)
+
+    def test_provenance_jsonable(self, make_ipo):
+        """themes_provenance 应能直接 json.dumps (写进 nacs_predictions)"""
+        import json
+        from nacs_model import compute_nacs
+        from reports.thesis import synthesize_thesis
+        r = compute_nacs(make_ipo())
+        bundle = _mock_themes_bundle()
+        t = synthesize_thesis(
+            r, themes_bundle=bundle, stock_code="0992.HK",
+        )
+        s = json.dumps(t["themes_provenance"], ensure_ascii=False)
+        assert "ai_server" in s
+        assert "themes/heat_today.json" in s
+
+    def test_provenance_contains_all_5_files(self, make_ipo):
+        from nacs_model import compute_nacs
+        from reports.thesis import synthesize_thesis
+        r = compute_nacs(make_ipo())
+        bundle = _mock_themes_bundle()
+        t = synthesize_thesis(
+            r, themes_bundle=bundle, stock_code="0992.HK",
+        )
+        for k in ["heat_today", "premium_curve", "theme_definitions",
+                  "ai_revenue_manual", "history"]:
+            assert k in t["themes_provenance"]
+            assert "status" in t["themes_provenance"][k]

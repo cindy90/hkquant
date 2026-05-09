@@ -161,13 +161,21 @@ def render_single_deal(records: List[Dict[str, Any]],
                        asof: date,
                        similar_cases: List[Dict[str, Any]],
                        *,
-                       title: Optional[str] = None) -> str:
+                       title: Optional[str] = None,
+                       themes_bundle: Optional[Dict[str, Any]] = None,
+                       ipo_concept_names: Optional[List[str]] = None,
+                       ai_revenue_pct_override: Optional[float] = None) -> str:
     """渲染单 deal IC memo (含 --price-scan 多场景).
 
     records: list of scenario dicts from analyze_deal._evaluate_deal:
              [{stock_code, ipo_id, row, scenario, price, offering, result}, ...]
     snap:    dict from panel_snapshots row
     similar_cases: list from find_similar_cases()
+
+    S3 新增 (themes 接管):
+        themes_bundle:           reports.themes_data.load_all() 返回; 决定是否出 theme panel
+        ipo_concept_names:       传给 classifier
+        ai_revenue_pct_override: 传给 thesis 的 ai_revenue_pct_override
     """
     if not records:
         raise ValueError("records cannot be empty")
@@ -176,8 +184,26 @@ def render_single_deal(records: List[Dict[str, Any]],
     from reports.thesis import synthesize_thesis
     main = next((r for r in records if r["scenario"] in ("mid", "final")),
                 records[0])
+    row = main["row"]
+    # row 可能是 sqlite Row 或 mock; 用 hasattr 判定
+    def _row_get(r, key):
+        if hasattr(r, "keys") and key in r.keys():
+            return r[key]
+        try:
+            return r[key]
+        except (KeyError, IndexError):
+            return None
+
     thesis = synthesize_thesis(
-        main["result"], panel_snap=snap, similar_cases=similar_cases,
+        main["result"],
+        panel_snap=snap,
+        similar_cases=similar_cases,
+        themes_bundle=themes_bundle,
+        stock_code=main.get("stock_code"),
+        gics_l2=_row_get(row, "gics_l2"),
+        ipo_concept_names=ipo_concept_names,
+        company_name=_row_get(row, "company_name_zh"),
+        ai_revenue_pct_override=ai_revenue_pct_override,
     )
 
     env = _get_env()

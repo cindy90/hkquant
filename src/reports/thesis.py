@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import statistics
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # =============================================================================
@@ -33,6 +33,11 @@ R_DRIVER_LOW_RISK = 0.15
 Q_HIGH = 0.65
 Q_LOW = 0.45
 R_HIGH = 0.30
+
+# 主题热度 verdict 阈值
+HEAT_OVERHEATED = 80          # ≥80 → overheated (锁定期反转风险)
+HEAT_TROUGH = 40              # <40 → trough (主题谷底, 基石入场好时机)
+HEAT_WARM = 60                # 60-80 → warm
 
 
 # =============================================================================
@@ -215,22 +220,210 @@ def _base_rate_from_similar(similar_cases: List[Dict]) -> Optional[Dict]:
 
 
 # =============================================================================
+# Theme heat panel — 主题情绪 (来自 themes/heat_today + history)
+# =============================================================================
+
+def _heat_verdict(heat_score: Optional[int]) -> str:
+    """heat_score (0-100) → verdict label"""
+    if heat_score is None:
+        return "unknown"
+    if heat_score >= HEAT_OVERHEATED:
+        return "overheated"      # ≥80 锁定期反转风险
+    if heat_score >= HEAT_WARM:
+        return "warm"             # 60-79
+    if heat_score >= HEAT_TROUGH:
+        return "moderate"         # 40-59
+    return "trough"               # <40 谷底
+
+
+def _heat_warning_for_verdict(verdict: str, heat_score: Optional[int]) -> Optional[str]:
+    if verdict == "overheated":
+        return (f"主题热度 {heat_score}/100 ≥{HEAT_OVERHEATED} (overheated) — "
+                f"锁定期反转风险高, 基石入场前评估退出 timing")
+    if verdict == "trough":
+        return (f"主题热度 {heat_score}/100 <{HEAT_TROUGH} (trough) — "
+                f"主题谷底, 可能是基石入场好时机, 但需确认基本面非趋势性恶化")
+    return None
+
+
+def _build_theme_heat_section(theme_id: Optional[str],
+                              themes_bundle: Optional[Dict[str, Any]]
+                              ) -> Optional[Dict[str, Any]]:
+    """组装 theme_heat 字段; 返回 None 时表示无法构造 (主题未识别 / 数据缺)"""
+    if not theme_id or not themes_bundle:
+        return None
+    heat_data, heat_prov = themes_bundle.get("heat_today") or (None, None)
+    if not heat_data or theme_id not in heat_data.get("themes", {}):
+        return None
+
+    rec = heat_data["themes"][theme_id]
+    score = rec.get("heat_score")
+    verdict = _heat_verdict(score)
+
+    # 30d 趋势 (来自 history.csv)
+    history_data, _ = themes_bundle.get("history") or (None, None)
+    trend_30d: List[Tuple[str, int]] = []
+    if history_data and theme_id in history_data:
+        trend_30d = history_data[theme_id][-30:]
+
+    return {
+        "theme_id": theme_id,
+        "label": rec.get("label", theme_id),
+        "heat_score": score,
+        "verdict": verdict,
+        "ret_5d": rec.get("ret_5d"),
+        "ret_20d": rec.get("ret_20d"),
+        "ret_60d": rec.get("ret_60d"),
+        "pe_ttm_avg": rec.get("pe_ttm_avg"),
+        "reason": rec.get("reason"),
+        "warning_from_source": rec.get("warning"),
+        "warning_from_verdict": _heat_warning_for_verdict(verdict, score),
+        "source": rec.get("source"),
+        "trend_30d": [{"date": d, "score": s} for d, s in trend_30d],
+        "asof": heat_data.get("as_of"),
+    }
+
+
+# =============================================================================
+# Premium estimate panel — AI 镀金溢价测算
+# =============================================================================
+
+def _lookup_premium(ai_pct: float, lookup_table: List[Dict]) -> Optional[float]:
+    """在 premium_curve.lookup_table 里 nearest-neighbor 查 ai_pct → premium."""
+    if not lookup_table:
+        return None
+    # 找最接近的 ai_pct 行
+    nearest = min(lookup_table,
+                  key=lambda r: abs((r.get("ai_pct") or 0) - ai_pct))
+    return nearest.get("premium")
+
+
+def _build_premium_estimate(ai_revenue_pct: Optional[float],
+                            themes_bundle: Optional[Dict[str, Any]]
+                            ) -> Optional[Dict[str, Any]]:
+    """组装 premium_estimate 字段; 返回 None 时表示无法构造."""
+    if ai_revenue_pct is None or not themes_bundle:
+        return None
+    curve_data, curve_prov = themes_bundle.get("premium_curve") or (None, None)
+    if not curve_data:
+        return None
+
+    expected = _lookup_premium(ai_revenue_pct, curve_data.get("lookup_table", []))
+    if expected is None:
+        return None
+
+    r_squared = curve_data.get("r_squared")
+    n_used = curve_data.get("n_samples_used")
+    fitted_at = curve_data.get("fitted_at")
+
+    # 解读句子 (跟 nacs_checklist_tool VIII 区一致)
+    r2_str = f"{r_squared:.2f}" if r_squared is not None else "n/a"
+    interp = (
+        f"{ai_revenue_pct:.0%} AI 收入 → 期望溢价 {expected:+.0%} "
+        f"(模型: {curve_data.get('model', 'unknown')}; "
+        f"n={n_used} 样本; R²={r2_str})"
+    )
+    if r_squared is not None and r_squared < 0.30:
+        interp += " ⚠ R² 偏低, 估计置信度有限"
+
+    return {
+        "ai_revenue_pct": ai_revenue_pct,
+        "expected_premium": expected,
+        "model": curve_data.get("model"),
+        "params": curve_data.get("params"),
+        "r_squared": r_squared,
+        "n_samples_used": n_used,
+        "fitted_at": fitted_at,
+        "interpretation": interp,
+        "is_stale": curve_prov.is_stale if curve_prov else False,
+    }
+
+
+def _resolve_ai_revenue_pct(stock_code: Optional[str],
+                            override: Optional[float],
+                            themes_bundle: Optional[Dict[str, Any]]
+                            ) -> Tuple[Optional[float], str]:
+    """
+    返回 (ai_revenue_pct, source). 优先级:
+        1. CLI/YAML override
+        2. ai_revenue_manual.json[stock_code]
+        3. None
+    source 是字符串说明数据出处, 写入 provenance.
+    """
+    if override is not None:
+        return float(override), f"override (analyze_deal --ai-revenue-pct or deal YAML)"
+    if stock_code and themes_bundle:
+        manual_data, manual_prov = themes_bundle.get("ai_revenue_manual") or (None, None)
+        if manual_data:
+            # 跟 themes_data._canon 一致: 去前导 0 后比较
+            canon = stock_code.upper().strip()
+            if "." in canon:
+                num, suffix = canon.split(".", 1)
+                canon = f"{num.lstrip('0') or '0'}.{suffix}"
+            if canon in manual_data:
+                return manual_data[canon], f"ai_revenue_manual.json[{canon}]"
+    return None, "no_ai_revenue_data"
+
+
+# =============================================================================
+# Themes provenance bundle — 把 5 个文件的 provenance 整理成一个 dict
+# =============================================================================
+
+def _themes_provenance(themes_bundle: Optional[Dict[str, Any]],
+                       theme_id: Optional[str],
+                       classification_result: Optional[Any],
+                       ai_revenue_source: Optional[str]) -> Dict[str, Any]:
+    """
+    返回写进 nacs_predictions.themes_provenance_json 的 dict, 含:
+        - 5 个文件各自的 (status, mtime, asof, is_stale)
+        - classification_result 的 reason + matched_signals
+        - ai_revenue_pct 的来源
+    """
+    out: Dict[str, Any] = {
+        "theme_id": theme_id,
+        "ai_revenue_source": ai_revenue_source,
+    }
+    if themes_bundle:
+        for name, value in themes_bundle.items():
+            if isinstance(value, tuple) and len(value) == 2:
+                _, prov = value
+                if prov is not None:
+                    out[name] = prov.to_dict() if hasattr(prov, "to_dict") else prov
+    if classification_result is not None and hasattr(classification_result, "to_dict"):
+        out["classification"] = classification_result.to_dict()
+    return out
+
+
+# =============================================================================
 # 主入口
 # =============================================================================
 
 def synthesize_thesis(result,
                       panel_snap: Optional[Dict] = None,
-                      similar_cases: Optional[List[Dict]] = None) -> Dict[str, Any]:
+                      similar_cases: Optional[List[Dict]] = None,
+                      themes_bundle: Optional[Dict[str, Any]] = None,
+                      stock_code: Optional[str] = None,
+                      gics_l2: Optional[str] = None,
+                      ipo_concept_names: Optional[List[str]] = None,
+                      company_name: Optional[str] = None,
+                      ai_revenue_pct_override: Optional[float] = None
+                      ) -> Dict[str, Any]:
     """生成投资逻辑综合 dict.
 
-    返回:
+    新增参数 (S3, 接管 themes 面板):
+        themes_bundle:   reports.themes_data.load_all() 的返回; None 时不出 theme panel
+        stock_code:      用于 classify_deal_to_theme + ai_revenue_manual lookup
+        gics_l2 / ipo_concept_names / company_name:  classifier 的输入
+        ai_revenue_pct_override:  优先于 ai_revenue_manual
+
+    返回结构 (S3 后):
         {
-            "headline": "推荐 LARGE (70%): 估值/保荐质量过硬, 但 overhang 风险偏高.",
-            "drivers": [<bullet dicts>],   # ≥75 子项 + cluster bonus 等正面信号
-            "risks": [<bullet dicts>],     # ≤45 L1/L2 子项 + ≥0.40 L3 子项
-            "warnings": [<str>],           # NACSResult.warnings 透传
-            "base_rate": <dict or None>,   # similar_cases 实证
-            "panel_context": {...} or None,
+            "headline", "drivers", "risks", "warnings", "base_rate",
+            "panel_context",
+            # 新增:
+            "theme_heat": {...} | None,
+            "premium_estimate": {...} | None,
+            "themes_provenance": {...},          # 永远有值, 即便降级
         }
     """
     # 1. drivers / risks
@@ -255,8 +448,6 @@ def synthesize_thesis(result,
             "n_panel": panel_snap.get("n_ipos_in_universe"),
             "regime_score": panel_snap.get("regime_score"),
         }
-        # NACS 在 panel 里的位置 (通过 aggregates 估算; 因 panel 不存 NACS, 用 pe 中位作 anchor)
-        # 主要用 panel.regime 来评 "市场情绪"
         regime = panel_ctx.get("regime_score")
         if regime is not None:
             if regime >= 0.05:
@@ -266,6 +457,34 @@ def synthesize_thesis(result,
             else:
                 panel_ctx["regime_label"] = "情绪偏弱 (regime<0)"
 
+    # 5. theme classification (S3 新增)
+    classification = None
+    theme_id = None
+    if themes_bundle and stock_code:
+        from reports.themes_data import classify_deal_to_theme
+        defs_data, _ = themes_bundle.get("theme_definitions") or (None, None)
+        classification = classify_deal_to_theme(
+            stock_code=stock_code, gics_l2=gics_l2,
+            ipo_concept_names=ipo_concept_names,
+            company_name=company_name,
+            theme_definitions=defs_data,
+        )
+        theme_id = classification.theme_id
+
+    # 6. theme heat panel
+    theme_heat = _build_theme_heat_section(theme_id, themes_bundle)
+
+    # 7. premium estimate panel
+    ai_pct, ai_source = _resolve_ai_revenue_pct(
+        stock_code, ai_revenue_pct_override, themes_bundle,
+    )
+    premium_est = _build_premium_estimate(ai_pct, themes_bundle)
+
+    # 8. themes provenance (永远有值)
+    themes_prov = _themes_provenance(
+        themes_bundle, theme_id, classification, ai_source,
+    )
+
     return {
         "headline": headline,
         "drivers": drivers,
@@ -273,6 +492,9 @@ def synthesize_thesis(result,
         "warnings": list(result.warnings),
         "base_rate": base_rate,
         "panel_context": panel_ctx,
+        "theme_heat": theme_heat,
+        "premium_estimate": premium_est,
+        "themes_provenance": themes_prov,
     }
 
 
