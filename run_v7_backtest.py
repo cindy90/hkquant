@@ -193,8 +193,22 @@ def build_offering(conn, ipo_id, regime_score, *, use_static_env: bool = False):
     if not row:
         return None
     sc = row["stock_code"]
+    # asof 优先级: pricing_date > expected_listing_date - 7 天 > listing_date - 7 天 > today
+    # (prospectus deals 没 pricing_date, 用 expected 减一周近似定价日)
     pd_val = row["pricing_date"]
-    asof = pd_val if isinstance(pd_val, date) else date.fromisoformat(str(pd_val)[:10])
+    if pd_val is not None and str(pd_val) not in ("None", "--", ""):
+        asof = pd_val if isinstance(pd_val, date) else date.fromisoformat(str(pd_val)[:10])
+    else:
+        from datetime import timedelta as _td
+        for fallback_col in ("expected_listing_date", "listing_date"):
+            fallback = row[fallback_col] if fallback_col in row.keys() else None
+            if fallback and str(fallback) not in ("None", "--", ""):
+                fb = fallback if isinstance(fallback, date) else \
+                     date.fromisoformat(str(fallback)[:10])
+                asof = fb - _td(days=7)
+                break
+        else:
+            asof = date.today()
     cs, cluster_count = hydrate_cornerstones(conn, ipo_id, asof)
 
     chapter = ListingChapter(row["listing_chapter"])
@@ -416,6 +430,8 @@ def main():
                              '与 configs/nacs_v8.yaml 等价)')
     parser.add_argument('--workers', type=int, default=1,
                         help='并行 worker 数 (默认 1=串行; >1 走 ProcessPoolExecutor)')
+    parser.add_argument('--skip-panel-snapshot', action='store_true',
+                        help='不写 panel_snapshots 行 (实验/调试用; 生产应保留写入)')
     args = parser.parse_args()
 
     # 加载参数化配置 (可选; 不传则用 src/config.py 中默认 = v8 原硬编码)
@@ -442,10 +458,12 @@ def main():
 
     conn = db_connect(db_path)
 
-    # 1. 加载所有 IPO 历史 (供 regime detector)
+    # 1. 加载所有 listed IPO 历史 (供 regime detector + panel 边界)
+    #    严格只用 status='listed' (排除 prospectus/pricing 中的 deal pipeline 数据)
     all_ipos = conn.execute("""
         SELECT m.ipo_id, m.listing_date, r.return_d30
         FROM ipo_master m LEFT JOIN ipo_returns r ON m.ipo_id = r.ipo_id
+        WHERE m.status = 'listed'
         ORDER BY m.listing_date
     """).fetchall()
     history = [
@@ -454,13 +472,13 @@ def main():
         for x in all_ipos
     ]
 
-    # 2. 评分每只 IPO
+    # 2. 评分每只 IPO (panel 成员严格 status='listed')
     rows = conn.execute("""
         SELECT m.ipo_id, m.stock_code, m.company_name_zh, m.listing_date,
                m.listing_chapter, m.pricing_date,
                r.return_d1_close, r.return_d30, r.return_m3, r.return_m6
         FROM ipo_master m LEFT JOIN ipo_returns r ON m.ipo_id = r.ipo_id
-        WHERE (m.is_delisted=0 OR m.is_delisted IS NULL)
+        WHERE m.status = 'listed'
         ORDER BY m.listing_date
     """).fetchall()
 
@@ -573,6 +591,40 @@ def main():
     ic_json_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2),
                             encoding='utf-8')
     print(f"\n✓ IC 摘要: {ic_json_path}")
+
+    # ===== 写 panel_snapshots =====
+    # 单 deal 评估 (analyze_deal.py) 后续会引用最近的 snapshot_id 锁上下文.
+    if not args.skip_panel_snapshot:
+        from data.panel_snapshot import write_panel_snapshot
+        from data.dao import fetch_market_env_at as _fmenv
+        from config import get_config as _get_cfg
+        with db_connect(db_path) as snap_conn:
+            asof_today = date.today()
+            try:
+                market_env = _fmenv(snap_conn, asof_today, allow_ifind=False)
+            except Exception:
+                market_env = None
+            cfg = _get_cfg()
+            cfg_dict = cfg.to_dict() if hasattr(cfg, 'to_dict') else {}
+            cfg_yaml = None
+            if args.config:
+                try:
+                    cfg_yaml = Path(args.config).read_text(encoding='utf-8')
+                except OSError:
+                    cfg_yaml = None
+            avg_regime = (df_passed['regime_score'].mean()
+                          if 'regime_score' in df_passed.columns and len(df_passed) > 0
+                          else None)
+            snapshot_id = write_panel_snapshot(
+                snap_conn, asof=asof_today,
+                market_env=market_env,
+                regime_score=float(avg_regime) if avg_regime is not None else None,
+                config_dict=cfg_dict,
+                config_yaml_text=cfg_yaml,
+                notes=f"run_v7_backtest mode={summary['mode']} workers={args.workers}",
+                project_root=ROOT,
+            )
+            print(f"\n✓ panel snapshot: {snapshot_id}")
 
 
 if __name__ == "__main__":

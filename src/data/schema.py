@@ -96,6 +96,12 @@ CREATE TABLE IF NOT EXISTS ipo_master (
     is_delisted             INTEGER DEFAULT 0,
     delisting_date          DATE,
     is_acquired             INTEGER DEFAULT 0,
+    -- Deal pipeline (v2: 区分招股/定价/上市/退市/撤回阶段)
+    status                  TEXT NOT NULL DEFAULT 'listed'
+                            CHECK (status IN ('prospectus', 'pricing', 'listed',
+                                              'delisted', 'withdrawn')),
+    prospectus_pdf_path     TEXT,                  -- 本地招股说明书存档
+    expected_listing_date   DATE,                  -- 招股说明书披露的预期日 (与最终 listing_date 区分)
     -- 风险/股本 (originally added by fix_p1_* scripts; consolidated into schema)
     pre_ipo_shares          REAL,
     post_ipo_shares         REAL,
@@ -113,6 +119,7 @@ CREATE INDEX IF NOT EXISTS idx_ipo_date ON ipo_master(listing_date);
 CREATE INDEX IF NOT EXISTS idx_ipo_chapter ON ipo_master(listing_chapter);
 CREATE INDEX IF NOT EXISTS idx_ipo_gics ON ipo_master(gics_l2);
 CREATE INDEX IF NOT EXISTS idx_ipo_stock_code ON ipo_master(stock_code);
+CREATE INDEX IF NOT EXISTS idx_ipo_status ON ipo_master(status);
 
 -- =============================================================================
 -- 4. IPO-基石多对多关系
@@ -270,12 +277,14 @@ CREATE INDEX IF NOT EXISTS idx_ipo_industries_l1 ON ipo_industries(l1_name);
 
 -- =============================================================================
 -- 14. 视图: 探索 / 回测的统一入口 (一处更新, 全脚本受益)
--- 用法:    SELECT * FROM mv_ipo_full WHERE listing_date >= '2024-01-01' AND is_m6_due = 1
+-- 用法:    SELECT * FROM mv_ipo_full WHERE status='listed' AND is_m6_due = 1
+-- 注:      包含所有 status 的 IPO; 探索 panel 时务必加 WHERE status='listed'
 -- =============================================================================
 DROP VIEW IF EXISTS mv_ipo_full;
 CREATE VIEW mv_ipo_full AS
 SELECT
-    m.ipo_id, m.stock_code, m.company_name_zh, m.listing_date, m.pricing_date,
+    m.ipo_id, m.stock_code, m.company_name_zh,
+    m.status, m.listing_date, m.expected_listing_date, m.pricing_date,
     m.listing_chapter, m.gics_l2,
     m.offer_price_hkd, m.offer_price_low, m.offer_price_high,
     m.offering_size_hkd, m.gross_proceeds_excl_greenshoe, m.total_offer_shares,
@@ -322,6 +331,71 @@ CREATE TABLE IF NOT EXISTS market_environment_cache (
     source                          TEXT,                -- 'ifind' / 'json' / 'fallback'
     created_at                      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- =============================================================================
+-- 15. Panel snapshot: 全量回测面板的可还原快照 (deal 评估的"参考标杆")
+-- 每跑一次 run_v7_backtest 写一行; 单 deal 评估引用 panel_snapshot_id 锁定上下文
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS panel_snapshots (
+    snapshot_id          TEXT PRIMARY KEY,                -- e.g. PANEL_2026-05-09_a3f2
+    asof_date            DATE NOT NULL,
+    n_ipos_in_universe   INTEGER NOT NULL,                -- panel 成员 (status='listed') 数量
+    market_env_json      TEXT NOT NULL,                   -- MarketEnvironment 8 字段
+    regime_score         REAL,                            -- panel 整体 regime_score
+    member_ipo_ids_json  TEXT NOT NULL,                   -- JSON array of ipo_id
+    aggregates_json      TEXT,                            -- 跨章节聚合 (中位/IQR/分章节)
+    config_version       TEXT,
+    config_hash          TEXT,
+    config_yaml_snapshot TEXT,                            -- 完整 YAML 文本嵌入
+    code_git_sha         TEXT,
+    db_schema_version    TEXT,
+    created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes                TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_panel_asof ON panel_snapshots(asof_date);
+
+-- =============================================================================
+-- 16. NACS predictions: 单 deal 一次评估的完整快照 (audit trail)
+-- key = (stock_code, asof_date, price_scenario, panel_snapshot_id) → case_id
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS nacs_predictions (
+    case_id              TEXT PRIMARY KEY,                -- e.g. PRED_1187.HK_2025-08-15_mid_a3f2
+    stock_code           TEXT NOT NULL,                   -- 拟上市/已上市代码
+    asof_date            DATE NOT NULL,                   -- 分析切点
+    panel_snapshot_id    TEXT NOT NULL,                   -- → panel_snapshots
+    deal_status_at_analysis TEXT,                         -- prospectus / pricing / listed
+    -- 多场景定价
+    price_scenario       TEXT,                            -- low / mid / high / final
+    offer_price_used     REAL,
+    -- 模型输出
+    nacs_raw             REAL,
+    nacs_adjusted        REAL,
+    Q_company            REAL,
+    Q_ecosystem          REAL,
+    R_lockup             REAL,
+    decision             TEXT,
+    position_pct         REAL,
+    cluster_count        INTEGER,
+    -- 完整诊断
+    layer1_components_json TEXT,
+    layer2_components_json TEXT,
+    layer3_components_json TEXT,
+    adjustments_json     TEXT,
+    warnings_json        TEXT,
+    -- 输入快照 (锁定"分析当时知道什么")
+    inputs_json          TEXT NOT NULL,                   -- 完整 IPOOffering dict
+    -- 同伴比对
+    nacs_pct_in_panel    REAL,                            -- 0..1 panel 内百分位
+    nacs_pct_in_chapter  REAL,                            -- 同章节子样本内百分位
+    similar_cases_json   TEXT,                            -- 最相似 5 只 listed IPO 的实际收益
+    --
+    run_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes                TEXT,
+    FOREIGN KEY (panel_snapshot_id) REFERENCES panel_snapshots(snapshot_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pred_code ON nacs_predictions(stock_code, asof_date);
+CREATE INDEX IF NOT EXISTS idx_pred_panel ON nacs_predictions(panel_snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_pred_decision ON nacs_predictions(decision);
 """
 
 

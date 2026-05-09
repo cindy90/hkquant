@@ -1,0 +1,84 @@
+# =============================================================================
+# Deal YAML 模板 — 拷贝重命名为 <stock_code>.yaml 后填写
+# =============================================================================
+#
+# 使用:
+#   cp data/deals/TEMPLATE.yaml data/deals/1187.HK.yaml
+#   # 编辑后:
+#   python scripts/load_deal.py --file data/deals/1187.HK.yaml --dry-run  # lint
+#   python scripts/load_deal.py --file data/deals/1187.HK.yaml            # 写库
+#   python scripts/analyze_deal.py --stock-code 1187.HK                   # 评估
+#
+# 字段说明:
+#   stock_code              拟上市代码 (聆讯通过后港交所已分配; 形如 1187.HK)
+#   company_name_zh         中文名
+#   listing_chapter         main_board_profitable / main_board_unprofitable /
+#                           a_plus_h / secondary / 18a / 18c_commercial /
+#                           18c_precommercial / spac
+#   company_type            profitable / biotech_18a / tech_18c
+#                           (决定 L1.3 用哪套打分)
+#   expected_listing_date   招股说明书披露的预期上市日 (YYYY-MM-DD)
+#   prospectus_pdf_path     本地存档路径 (可空)
+#   analyst_notes           人工备注 (路演反馈、定性观察)
+#
+#   ipo_master_overrides    覆盖 ipo_master 的字段集合.
+#                           不允许的字段会被 lint 拒绝 (见 ALLOWED_MASTER_FIELDS).
+#                           只填你能从招股说明书 / iFinD 拿到的; 没有的留空.
+#
+#   cornerstones            基石名单. 招股说明书未披露完整时只填能确认的几个.
+#     - cornerstone_name    招股书署名 (中英文都可, 后面 alias 自动归一)
+#       cornerstone_type    sovereign_pension / global_long_only / top_hedge_preipo /
+#                           cn_mutual_insurance / strategic_industrial / policy_fund /
+#                           pe_vc_continuation / family_office_spv  (默认 family_office_spv)
+#       ticket_size_native  招股书披露金额 (原始货币)
+#       currency            HKD / USD / CNY (默认 HKD)
+#       lockup_months       锁定期月数 (默认 6)
+#       ultimate_holder     实际控制人 (用于 cluster 识别)
+#       country_of_origin   ISO 国家代码 (可选)
+#       aum_usd             基石 AUM 美元 (可选)
+#       affiliation_flag    0=否 / 1=明确关联 / 2=可疑 (默认 0)
+#       affiliation_reason  关联说明 (若 flag>0)
+#       is_estimated        true 表示 ticket 是估计 (招股书未直接披露)
+#       notes               人工备注
+# =============================================================================
+
+stock_code: REPLACE.HK                      # 必填
+company_name_zh: REPLACE 公司名              # 必填
+listing_chapter: main_board_profitable      # 必填
+company_type: profitable                    # 必填
+expected_listing_date: 2026-01-01           # 必填
+prospectus_pdf_path: null                   # 可空
+analyst_notes: |
+  路演反馈摘要 / 定性观察
+
+ipo_master_overrides:
+  # 招股说明书披露的招股价区间 (analyze_deal --price-scan 用到)
+  offer_price_low: null
+  offer_price_high: null
+  # 发行结构
+  total_offer_shares: null
+  offering_size_hkd: null
+  greenshoe_pct: 0.15
+  lockup_months: 6
+  # 中介
+  sponsor_primary: null
+  sponsor_tier: 1
+  joint_sponsor_count: 1
+  auditor_tier: 1
+  # 估值
+  pe_at_offer: null                         # 用区间中点 × post_ipo_shares / 净利润算
+  pe_peer_median: null                      # 留空时 analyze 自动用 panel 同章节同 GICS 中位
+  # 行业 (恒生 GICS L2 字符串)
+  gics_l2: null
+  # 股本 / overhang
+  pre_ipo_shares: null
+  post_ipo_shares: null
+  overhang_ratio: null
+
+cornerstones: []
+  # - cornerstone_name: 蓝思科技(香港)有限公司
+  #   cornerstone_type: strategic_industrial
+  #   ticket_size_native: 78305000
+  #   currency: HKD
+  #   lockup_months: 6
+  #   ultimate_holder: 蓝思科技股份有限公司

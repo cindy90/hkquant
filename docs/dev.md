@@ -282,3 +282,95 @@ SELECT AVG(return_m6) FROM ipo_returns WHERE is_m6_due = 1;
 | `sponsor_performance_asof` | 0 行 | schema 预留, 与基石画像同思路按 as-of 物化, 待补 sponsor 派生脚本. |
 | `ipo_master.last_round_premium` | 100% NULL | L1 否决条款 `last_round_premium > 0.50` 因此**未启用**. 数据补齐 (来自 wind/F&S 报告) 后自动生效. |
 | `data/raw/ifind/ifind_blocks.csv.broken` | 损坏 | 18A/18C/AH/SPAC 章节自动校验当前不可用; 须重 pull, 见 `data/raw/ifind/README_blocks_broken.md`. |
+
+---
+
+## 11. Deal pipeline 与预测复盘 (P3, migration v2)
+
+### 11.1 数据模型
+聆讯通过的拟上市公司 = `ipo_master.status='prospectus'` 的行. 字段与 listed IPO
+完全相同, 区别只在 status 反映数据完整度:
+
+```
+prospectus → pricing → listed → delisted / withdrawn
+```
+
+ETL (`load_ipo_info`) 自动按 `(listing_date, intl_oversub)` 推断 status:
+- 未来 + 没 oversub → `prospectus`
+- 未来 + 有 oversub → `pricing`
+- 过去 → `listed`
+- delisted CSV 命中 → `delisted` (load_delisted)
+
+panel 探索查询时**务必加 `WHERE status='listed'`**, 否则 deal pipeline 数据
+会污染 pe_peer_median / regime_score 等参考统计.
+
+### 11.2 Deal YAML 输入
+iFinD 没拉到的字段 (招股说明书细节、人工核实的基石名单) 走 `data/deals/<stock>.yaml`:
+
+```bash
+cp data/deals/TEMPLATE.yaml data/deals/1187.HK.yaml
+# 编辑 YAML
+python scripts/load_deal.py --file data/deals/1187.HK.yaml --dry-run    # lint
+python scripts/load_deal.py --file data/deals/1187.HK.yaml              # 写库
+```
+
+`load_deal_dict` 是幂等的: 重复跑同一 YAML 会 update ipo_master + cornerstone_link.
+
+### 11.3 Panel snapshot — 评估的"参考标杆"
+每次 `python run_v7_backtest.py` 跑完, 自动写一行 `panel_snapshots`:
+
+| 列 | 内容 |
+|---|---|
+| snapshot_id | `PANEL_<asof>_<cfg_hash[:6]>` |
+| member_ipo_ids_json | 当时 panel 成员 (status='listed') 全集 |
+| aggregates_json | 跨章节 / 跨 GICS 的中位/IQR (单 deal 评估时直接读) |
+| market_env_json | 当时 MarketEnvironment 8 字段 |
+| config_yaml_snapshot | 完整配置 YAML 嵌入 |
+| code_git_sha | 当时 HEAD |
+
+### 11.4 单 deal 评估: `scripts/analyze_deal.py`
+```bash
+# 单 deal
+python scripts/analyze_deal.py --stock-code 1187.HK
+
+# 区间扫描 (low/mid/high 各跑一次, 看 NACS 对定价敏感度)
+python scripts/analyze_deal.py --stock-code 1187.HK --price-scan
+
+# 多 deal 横评 (日常工作流)
+python scripts/analyze_deal.py --stock-codes "1187.HK,2493.HK,3296.HK" --compare
+
+# 持久化 audit trail
+python scripts/analyze_deal.py --stock-code 1187.HK --persist --notes "路演 follow-up"
+```
+
+每次 `--persist` 写一行 `nacs_predictions`, 含:
+- 完整 `inputs_json` (IPOOffering 当时的快照)
+- L1 / L2 / L3 各子项 (`layer1_components_json` 等)
+- 同伴比对 `similar_cases_json` (top-5 listed IPO 的实际表现)
+- panel 上下文 `panel_snapshot_id` 引用
+
+### 11.5 上市后复盘: `scripts/case_review.py`
+```bash
+python scripts/case_review.py --stock-code 1187.HK
+```
+
+输出:
+- 该 stock 在 `nacs_predictions` 中的全部历史预测 (按 asof 升序)
+- 跨次预测的 NACS / Q_company / Q_eco / R_lockup 标准差 (稳定性)
+- 锁定预测 (最后一次) vs 当前 `ipo_returns` 的实际 (受 `is_*_due` 过滤)
+- 当时 inputs vs 上市后 actual 字段差 (intl_oversub 估值偏差等)
+- 当时给出的 similar_cases 实际表现 vs 这只本身的实际, 看模型类比是否准
+- 业绩未到期的字段返回 `not yet due` 而非 NULL
+
+### 11.6 完整工作流
+```
+data/deals/<stock>.yaml         (人工录入)
+    ↓ scripts/load_deal.py
+ipo_master(status='prospectus') + ipo_cornerstone_link
+    ↓ scripts/analyze_deal.py --persist
+nacs_predictions  +  panel_snapshots
+    ↓ ... 几个月后实际上市 + ETL 自动 status: prospectus → pricing → listed ...
+ipo_returns (随业绩到期逐步填) + ipo_returns.is_*_due 标志
+    ↓ scripts/case_review.py
+诊断报告: 预测 vs 实际, 哪里偏了, 为什么
+```

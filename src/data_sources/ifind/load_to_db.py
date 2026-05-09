@@ -133,15 +133,40 @@ class IpoLoadStats:
     n_skipped_no_date: int = 0
     n_skipped_no_code: int = 0
     n_overrides_applied: int = 0
+    n_status_prospectus: int = 0
+    n_status_pricing: int = 0
+
+
+def _classify_status(listing_date_iso: str,
+                     intl_oversub: Optional[float],
+                     today_iso: str) -> str:
+    """根据 listing_date + 数据完整度推断 deal 阶段.
+
+    Rules:
+        listing_date <= today                 → 'listed'   (default)
+        listing_date  > today + intl_oversub None  → 'prospectus'
+        listing_date  > today + intl_oversub 已有  → 'pricing'
+
+    退市标记由 load_delisted() 单独处理 ('delisted').
+    """
+    if listing_date_iso <= today_iso:
+        return "listed"
+    return "pricing" if intl_oversub is not None else "prospectus"
 
 
 def load_ipo_info(conn: sqlite3.Connection, csv_path: Path,
                   *, dry_run: bool = False,
-                  overrides: Optional[Dict] = None) -> IpoLoadStats:
+                  overrides: Optional[Dict] = None,
+                  asof_today: Optional[str] = None) -> IpoLoadStats:
     """ifind_ipo_info.csv → ipo_master. 一行 = 一只 IPO.
 
-    overrides: 由 load_overrides() 返回的 dict; None 表示自动按默认路径加载.
+    overrides:    由 load_overrides() 返回的 dict; None 表示自动按默认路径加载.
+    asof_today:   推断 status 时用的"今天"; None → 系统当前日期 (date.today()).
+                  测试可以注入固定日期保证可重复.
     """
+    from datetime import date as _date
+    today_iso = asof_today or _date.today().isoformat()
+
     rows = read_csv_dict(csv_path, P05310_IPO_INFO)
     if overrides is None:
         overrides = load_overrides()
@@ -171,6 +196,13 @@ def load_ipo_info(conn: sqlite3.Connection, csv_path: Path,
         # listing_chapter 在 ipo_info CSV 中无字段, 给 'main_board' 默认;
         # overrides.yaml 可以指定具体章节 (spac/secondary 等)
         chapter_override = parse_str(row.get("listing_chapter"))
+        intl_oversub = parse_float(row.get("intl_oversub"))
+        deal_status = _classify_status(listing_date, intl_oversub, today_iso)
+        if deal_status == "prospectus":
+            stats.n_status_prospectus += 1
+        elif deal_status == "pricing":
+            stats.n_status_pricing += 1
+
         kwargs = {
             "ipo_id": ipo_id,
             "stock_code": stock_code,
@@ -181,17 +213,20 @@ def load_ipo_info(conn: sqlite3.Connection, csv_path: Path,
             "offer_price_hkd": parse_float(row.get("offer_price_hkd")),
             "offer_price_high": parse_float(row.get("offer_price_high")),
             "offering_size_hkd": parse_float(row.get("offering_size_hkd")),
-            "intl_oversub": parse_float(row.get("intl_oversub")),
+            "intl_oversub": intl_oversub,
             "public_oversub": parse_float(row.get("public_oversub")),
             "cornerstone_coverage": coverage,
+            "status": deal_status,
             "data_source_notes": "ifind:p05310" + (
                 "+overrides" if chapter_override or stock_code in
                 ((overrides or {}).get("ipo_info") or {}) else ""
             ),
         }
         # 删掉 None 字段, 避免覆盖已存在的非空值
+        # status 总是带上 (NOT NULL with default, 但显式覆盖更清晰)
         kwargs = {k: v for k, v in kwargs.items()
-                  if v is not None or k in ("ipo_id", "stock_code", "listing_date", "listing_chapter")}
+                  if v is not None or k in ("ipo_id", "stock_code", "listing_date",
+                                            "listing_chapter", "status")}
 
         if not dry_run:
             upsert_ipo(conn, **kwargs)
@@ -349,7 +384,8 @@ def load_delisted(conn: sqlite3.Connection, csv_path: Path,
             UPDATE ipo_master
             SET is_delisted = 1,
                 delisting_date = ?,
-                is_acquired = ?
+                is_acquired = ?,
+                status = 'delisted'
             WHERE stock_code = ?
         """, (delist_date, is_acquired, stock_code))
         if cur.rowcount > 0:
