@@ -62,19 +62,20 @@ RULES = [
     ("overwrite", "concept_coverage.csv",            "derived/ipo_classification", "concept_coverage.csv"),
 
     # 验证报告（快照）
-    ("snapshot",  "verify_chapter_report.csv",       "derived/verification", "chapter_report_{date}.csv"),
-    ("snapshot",  "verify_chapter_mismatch.csv",     "derived/verification", "chapter_mismatch_{date}.csv"),
-    ("snapshot",  "verify_industry_report.csv",      "derived/verification", "industry_report_{date}.csv"),
-    ("snapshot",  "verify_industry_mismatch.csv",    "derived/verification", "industry_mismatch_{date}.csv"),
+    # 命名约定: 目录 {date}=ISO (2026-05-09), 文件后缀 {ymd}=compact (20260509)
+    ("snapshot",  "verify_chapter_report.csv",       "derived/snapshots", "{date}/chapter_report_{ymd}.csv"),
+    ("snapshot",  "verify_chapter_mismatch.csv",     "derived/snapshots", "{date}/chapter_mismatch_{ymd}.csv"),
+    ("snapshot",  "verify_industry_report.csv",      "derived/snapshots", "{date}/industry_report_{ymd}.csv"),
+    ("snapshot",  "verify_industry_mismatch.csv",    "derived/snapshots", "{date}/industry_mismatch_{ymd}.csv"),
 
     # IC 探索（快照）
-    ("snapshot",  "peer_ic_results.csv",             "derived/peer_ic", "ic_results_{date}.csv"),
-    ("snapshot",  "peer_ic_top.csv",                 "derived/peer_ic", "ic_top50_{date}.csv"),
-    ("snapshot",  "peer_ic_robustness.csv",          "derived/peer_ic", "ic_robustness_{date}.csv"),
-    ("snapshot",  "peer_ic_top_signals_detail.csv",  "derived/peer_ic", "ic_top_signals_detail_{date}.csv"),
+    ("snapshot",  "peer_ic_results.csv",             "derived/snapshots", "{date}/ic_results_{ymd}.csv"),
+    ("snapshot",  "peer_ic_top.csv",                 "derived/snapshots", "{date}/ic_top50_{ymd}.csv"),
+    ("snapshot",  "peer_ic_robustness.csv",          "derived/snapshots", "{date}/ic_robustness_{ymd}.csv"),
+    ("snapshot",  "peer_ic_top_signals_detail.csv",  "derived/snapshots", "{date}/ic_top_signals_detail_{ymd}.csv"),
 
     # NACS 评分（快照）
-    ("snapshot",  "nacs_v7_scores.csv",              "derived/scores", "nacs_v7_scores_{date}.csv"),
+    ("snapshot",  "nacs_v7_scores.csv",              "derived/snapshots", "{date}/nacs_v7_scores_{ymd}.csv"),
 
     # 最新回测 IC 摘要（覆盖式 latest/）
     ("overwrite", "backtest_ic_static.json",         "derived/backtest/latest", "ic_static.json"),
@@ -181,8 +182,11 @@ def archive_one(mode: str, src_rel: str, dst_dir_rel: str, dst_name: str | None,
                 "status": "created" if not dry_run else "dry_run"}
 
     # 文件级
+    # date 接受 ISO (2026-05-09) 或 compact (20260509). {date} 直接用入参,
+    # {ymd} = 把 date 里的 '-' 去掉后的 compact 形式.
+    ymd = date.replace("-", "")
     dst_dir = DATA / dst_dir_rel
-    dst_filename = (dst_name or src_rel).format(date=date)
+    dst_filename = (dst_name or src_rel).format(date=date, ymd=ymd)
     dst = dst_dir / dst_filename
 
     is_snapshot = mode == "snapshot"
@@ -199,7 +203,8 @@ def archive_one(mode: str, src_rel: str, dst_dir_rel: str, dst_name: str | None,
         action = "overwrite (existing)"
 
     if not dry_run:
-        dst_dir.mkdir(parents=True, exist_ok=True)
+        # dst.parent 而非 dst_dir, 兼容 dst_filename 含子目录的情况 (e.g. "{date}/file.csv")
+        dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
         normalize_csv_inplace(dst)
 
@@ -255,8 +260,8 @@ def export_db_tables(date: str, dry_run: bool, ts: str) -> list[dict]:
 def main() -> int:
     ap = argparse.ArgumentParser(description="把 outputs/ 归档到 data/")
     ap.add_argument("--dry-run", action="store_true", help="预演，不写盘")
-    ap.add_argument("--date", default=datetime.now().strftime("%Y%m%d"),
-                    help="snapshot 日期后缀 (默认今日 YYYYMMDD)")
+    ap.add_argument("--date", default=datetime.now().strftime("%Y-%m-%d"),
+                    help="snapshot 日期 (默认今日 YYYY-MM-DD; 接受 ISO 或 compact)")
     ap.add_argument("--force-snapshot", action="store_true",
                     help="强制覆盖已存在的 snapshot（默认跳过）")
     args = ap.parse_args()
