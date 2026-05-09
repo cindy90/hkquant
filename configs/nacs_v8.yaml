@@ -124,6 +124,20 @@ post_adjustments:
       - semi_localization
     threshold: 0.10                 # AI 收入占比 < 10% 触发
     multiplier: 0.85
+  # P2.1: A+H 套利乘子按 A 股 ADV 分档 (替代 a_plus_h_short_borrowable 静态 1.10)
+  # 触发条件: is_a_h=true AND a_share_short_borrowable=true 时进入 ah_hedge 分桶
+  # 设计依据: 旧 ×1.10 把所有 A+H 一视同仁, 但 A 股流动性差距巨大:
+  #   00939.HK 建行 A 股 ADV >5B CNY, 对冲畅通 → 给 ×1.10
+  #   01357.HK 美图 A 股 ADV ~30M CNY, 借券贵 → 给 ×1.00 (不该奖励)
+  #   中间档 (50M~200M) 给 ×1.05 折中
+  ah_hedge:
+    enabled: true
+    high_threshold_cny: 200_000_000     # 200M CNY
+    high_multiplier: 1.10
+    mid_threshold_cny: 50_000_000       # 50M CNY
+    mid_multiplier: 1.05
+    low_multiplier: 1.00
+    fallback_multiplier: 1.10           # ADV 未知时沿用旧行为
 
 # -----------------------------------------------------------------------------
 # L1.6 主题情绪 modifier (P0.1, 接 themes/heat_today.json)

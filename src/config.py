@@ -135,13 +135,40 @@ class AiGildingAdjustment:
 
 
 @dataclass
+class AHHedgeMultiplier:
+    """P2.1: A+H 同名 A 股可融券对冲 — 按 A 股 ADV (日均成交额, CNY) 分档.
+
+    旧逻辑: is_a_h AND a_share_short_borrowable → 一律 ×1.10 (静态).
+    问题: A 股 ADV 1B CNY 跟 30M CNY 的对冲成本/可行性差很多, 一刀切高估了
+    冷门 A+H (如 1357.HK 美图同名 A 股流动性低, 卖空成本高) 的对冲收益.
+
+    新逻辑 (3 档):
+        adv >= high_threshold → ×high_multiplier (默认 1.10, 对冲畅通)
+        adv >= mid_threshold  → ×mid_multiplier (默认 1.05, 部分对冲)
+        adv <  mid_threshold  → ×low_multiplier (默认 1.00, 对冲成本拉满)
+
+    向后兼容: a_share_adv_cny=None (历史 deal 无此字段) → 走 fallback_multiplier
+    (默认 1.10, 即旧静态行为). enabled=False → 整段跳过.
+    """
+    enabled: bool = True
+    high_threshold_cny: float = 2e8       # 200M CNY ADV
+    high_multiplier: float = 1.10
+    mid_threshold_cny: float = 5e7        # 50M CNY ADV
+    mid_multiplier: float = 1.05
+    low_multiplier: float = 1.00
+    # adv 未知时的兜底 (向后兼容: 现有 IPO 不带 ADV 数据 → 沿用 1.10)
+    fallback_multiplier: float = 1.10
+
+
+@dataclass
 class PostAdjustments:
     """compute_nacs 后处理乘子链"""
     chapter_18c: float = 0.70
-    a_plus_h_short_borrowable: float = 1.10
+    a_plus_h_short_borrowable: float = 1.10                # legacy 静态值; cfg 启用 ah_hedge 后被覆盖
     secondary_listing: float = 0.85
     related_party_tx_recent: float = 0.85
     ai_gilding: AiGildingAdjustment = field(default_factory=AiGildingAdjustment)
+    ah_hedge: AHHedgeMultiplier = field(default_factory=AHHedgeMultiplier)
 
 
 @dataclass
@@ -301,9 +328,12 @@ class NacsConfig:
         if "post_adjustments" in data:
             pa_data = dict(data["post_adjustments"])
             ag_data = pa_data.pop("ai_gilding", None)
+            ah_data = pa_data.pop("ah_hedge", None)
             pa = PostAdjustments(**pa_data)
             if ag_data is not None:
                 pa.ai_gilding = AiGildingAdjustment(**ag_data)
+            if ah_data is not None:
+                pa.ah_hedge = AHHedgeMultiplier(**ah_data)
             kwargs["post_adjustments"] = pa
         if "layer1_market_theme_heat" in data:
             kwargs["layer1_market_theme_heat"] = Layer1MarketThemeHeat(

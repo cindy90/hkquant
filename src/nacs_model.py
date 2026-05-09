@@ -220,6 +220,8 @@ class IPOOffering:
     company_type: CompanyType
     is_a_h: bool = False
     a_share_short_borrowable: bool = False              # A+H专用: A股是否可融券
+    # P2.1: A 股日均成交额 (CNY); None=未知 → cfg.ah_hedge.fallback_multiplier
+    a_share_adv_cny: Optional[float] = None
     is_stock_connect_eligible_expected: bool = True
     weighted_voting_rights: bool = False
     has_related_party_tx_recent: bool = False           # 控股股东近12月重大关联交易
@@ -1198,10 +1200,42 @@ def compute_nacs(o: IPOOffering) -> NACSResult:
     # 净 m6 仓位贡献变差 -8.25%. 18A 内 NACS 区分度低,
     # 简单 chapter multiplier 不可行; 章节基础分=65 已经反映风险.
 
-    # A+H 可融券对冲
+    # A+H 可融券对冲 (P2.1: 按 A 股 ADV 分档)
     if o.is_a_h and o.a_share_short_borrowable:
-        nacs_adj *= m_ah
-        adjustments.append(f"A+H 同名A股可融券 x{m_ah}")
+        ah_cfg = adj.ah_hedge if adj is not None else None
+        ah_enabled = ah_cfg.enabled if ah_cfg is not None else True
+        if not ah_enabled:
+            # 整段 disabled → fallback 到旧静态值 m_ah (向后兼容)
+            nacs_adj *= m_ah
+            adjustments.append(f"A+H 同名A股可融券 x{m_ah}")
+        else:
+            high_th = ah_cfg.high_threshold_cny if ah_cfg else 2e8
+            high_m = ah_cfg.high_multiplier if ah_cfg else 1.10
+            mid_th = ah_cfg.mid_threshold_cny if ah_cfg else 5e7
+            mid_m = ah_cfg.mid_multiplier if ah_cfg else 1.05
+            low_m = ah_cfg.low_multiplier if ah_cfg else 1.00
+            fb_m = ah_cfg.fallback_multiplier if ah_cfg else 1.10
+            adv = o.a_share_adv_cny
+            if adv is None:
+                tier_label = "unknown_adv"
+                ah_mult = fb_m
+            elif adv >= high_th:
+                tier_label = "high_liq"
+                ah_mult = high_m
+            elif adv >= mid_th:
+                tier_label = "mid_liq"
+                ah_mult = mid_m
+            else:
+                tier_label = "low_liq"
+                ah_mult = low_m
+            nacs_adj *= ah_mult
+            if adv is not None:
+                adjustments.append(
+                    f"A+H 同名A股可融券 x{ah_mult} "
+                    f"(A股 ADV {adv / 1e6:.0f}M CNY, tier={tier_label})"
+                )
+            else:
+                adjustments.append(f"A+H 同名A股可融券 x{ah_mult} (ADV 未知, fallback)")
 
     # 第二上市
     if o.listing_chapter == ListingChapter.SECONDARY_LISTING:

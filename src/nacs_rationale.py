@@ -578,6 +578,20 @@ def explain_adjustment(adj_str: str) -> str:
         return ("18C 章节默认 ×0.70 折扣: 18C 标的多数估值不可直接比, "
                 "且未商业化档历史回报方差大, 模型保守处理")
     if "a+h" in s and "可融券" in adj_str:
+        # P2.1: 按 A 股 ADV 分档 (high_liq ×1.10 / mid_liq ×1.05 / low_liq ×1.00 /
+        # unknown_adv ×fallback)
+        if "high_liq" in adj_str:
+            return ("A+H 高流动性档 ×1.10: A 股 ADV 充足, 港股侧定价偏离 A 股可被"
+                    "套利者纠正 (可对冲), 给溢价")
+        if "mid_liq" in adj_str:
+            return ("A+H 中流动性档 ×1.05: A 股 ADV 在 50M~200M CNY, "
+                    "对冲存在但成本上升, 给小幅溢价")
+        if "low_liq" in adj_str:
+            return ("A+H 低流动性档 ×1.00: A 股 ADV < 50M CNY, "
+                    "卖空成本/借券难度让对冲不经济, 不给套利溢价")
+        if "fallback" in adj_str or "ADV 未知" in adj_str:
+            return ("A+H 可融券但 A 股 ADV 数据缺失 → fallback ×1.10 "
+                    "(沿用旧静态行为, 标注以待补数据)")
         return ("A+H 同名 A 股可融券 ×1.10: 港股侧定价不会脱离 A 股太久 "
                 "(可对冲), 给溢价")
     if "第二上市" in adj_str:
