@@ -21,6 +21,11 @@ regime_gate:
   lookback_days: 120
   min_lag_days: 30
   min_sample: 5
+  # P2.3: per_theme_enabled 时, 用同主题 listed IPO 中位代替 panel 全量
+  # 同主题样本 < per_theme_min_sample 时 fallback 到 panel 全量 (避免单主题过拟合)
+  per_theme_enabled: false       # 默认关闭 (重大行为变化, 需 deal pipeline 配合)
+  per_theme_min_sample: 5
+  fallback_to_panel: true
 
 # -----------------------------------------------------------------------------
 # v7 簇基石加成 (cluster bonus)

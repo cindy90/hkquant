@@ -33,11 +33,19 @@ class RegimeGateConfig:
     """v7 制度门控: regime_score < threshold 强制 SKIP
 
     数据支撑: regime>=0 子样本主板 60d IC 从 +0.09→+0.245, t 从 0.26→2.41
+
+    P2.3: per_theme_enabled=True 时, 计算 regime 用同主题 listed IPO 的中位
+    (替代 panel 全量), 落到主题 cohort 的 d30. 同主题样本 < theme_min_sample
+    时 fallback_to_panel=True 自动回 panel 全量 (避免单主题过拟合).
     """
     threshold: float = 0.0
     lookback_days: int = 120
     min_lag_days: int = 30
     min_sample: int = 5
+    # P2.3
+    per_theme_enabled: bool = False           # 默认 False (重大行为变化, 需要数据准备)
+    per_theme_min_sample: int = 5             # 同主题 IPO 样本 < 此值 fallback
+    fallback_to_panel: bool = True            # fallback 到 panel 全量
 
 
 @dataclass

@@ -1148,6 +1148,80 @@ def compute_regime_score(historical_ipos, current_date,
     return float(statistics.median(valid))
 
 
+def compute_regime_score_for_theme(
+    historical_ipos_with_theme,
+    current_date,
+    theme_id: Optional[str],
+    *,
+    lookback_days: Optional[int] = None,
+    min_lag: Optional[int] = None,
+    theme_min_sample: Optional[int] = None,
+    fallback_to_panel: Optional[bool] = None,
+):
+    """P2.3: 主题感知的 regime score.
+
+    跟 compute_regime_score 用同样的窗口 (lookback / min_lag), 但样本只取
+    同 theme_id 的 listed IPO. 同主题样本 < theme_min_sample 时:
+        fallback_to_panel=True  → 退回 panel 全量 (返回 (score, used_theme=None))
+        fallback_to_panel=False → 返回 (None, used_theme=theme_id) 表示门控样本不足
+
+    Args:
+        historical_ipos_with_theme: List[Tuple[listing_date, return_d30, theme_id]]
+            theme_id=None 表示该 IPO 没分类成功 (不入任何主题桶).
+        current_date: 评分参考日.
+        theme_id: 当前 deal 的 theme_id; None → 直接走 panel 全量 (跟旧行为一致).
+
+    Returns:
+        Tuple[Optional[float], Optional[str]]:
+            (score, theme_used) 其中 theme_used 标识"实际用了哪个主题样本":
+                - 同主题命中 → theme_used == theme_id
+                - fallback 到 panel → theme_used == None
+                - 主题样本不足且禁用 fallback → score=None
+    """
+    from datetime import timedelta
+    cfg = _get_cfg()
+    if lookback_days is None:
+        lookback_days = cfg.regime_gate.lookback_days if cfg is not None else 120
+    if min_lag is None:
+        min_lag = cfg.regime_gate.min_lag_days if cfg is not None else 30
+    if theme_min_sample is None:
+        theme_min_sample = (cfg.regime_gate.per_theme_min_sample
+                            if cfg is not None else 5)
+    if fallback_to_panel is None:
+        fallback_to_panel = (cfg.regime_gate.fallback_to_panel
+                             if cfg is not None else True)
+
+    cutoff_old = current_date - timedelta(days=lookback_days)
+    cutoff_recent = current_date - timedelta(days=min_lag)
+
+    # Pre-filter: 时间窗内 + 数据齐全
+    in_window = [(d, r, t) for (d, r, t) in historical_ipos_with_theme
+                 if d is not None and r is not None
+                 and cutoff_old <= d <= cutoff_recent]
+
+    # theme_id=None → 直接走 panel 全量 (旧行为)
+    if theme_id is None:
+        panel_returns = [r for (_, r, _) in in_window]
+        panel_min = cfg.regime_gate.min_sample if cfg is not None else 5
+        if len(panel_returns) < panel_min:
+            return (None, None)
+        return (float(statistics.median(panel_returns)), None)
+
+    # 主题过滤
+    theme_returns = [r for (_, r, t) in in_window if t == theme_id]
+    if len(theme_returns) >= theme_min_sample:
+        return (float(statistics.median(theme_returns)), theme_id)
+
+    # 主题样本不足 → fallback?
+    if not fallback_to_panel:
+        return (None, theme_id)
+    panel_returns = [r for (_, r, _) in in_window]
+    panel_min = cfg.regime_gate.min_sample if cfg is not None else 5
+    if len(panel_returns) < panel_min:
+        return (None, None)
+    return (float(statistics.median(panel_returns)), None)
+
+
 # v8 hardcoded fallback (用于 config 未加载时)
 _DEFAULT_POSITION_BANDS: List[Tuple[float, float, str]] = [
     (0.55, 1.00, "FULL"),
