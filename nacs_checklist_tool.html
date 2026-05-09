@@ -257,6 +257,82 @@ select option { background: #1a1a1a; }
     </div>
 </section>
 
+<!-- ====== 主题情绪追踪 ====== -->
+<section class="section" id="theme-tracker-section" style="margin-top: 60px;">
+    <div class="section-title">VII. 主题情绪追踪 (Composite Valuation Filter)</div>
+    <div style="font-size: 12px; color: #888581; margin-bottom: 16px; line-height: 1.6;">
+        服务复合业务公司估值. 数据来自 <code>themes/heat_today.json</code> + <code>themes/history.csv</code> (theme_tracker.py 每日 8:30 生成).
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div>
+            <label style="font-size: 11px; letter-spacing: 2px; color: #888581; text-transform: uppercase;">选择主题</label>
+            <select id="themeSelect" style="margin-top: 6px; width: 100%; padding: 8px; background: #1c1b1a; color: #d8d4cf; border: 1px solid rgba(255,255,255,0.1); font-family: inherit;">
+                <option value="">— 加载中 —</option>
+            </select>
+            <div id="themeLoadStatus" style="font-size: 11px; color: #888581; margin-top: 8px;"></div>
+        </div>
+        <div>
+            <label style="font-size: 11px; letter-spacing: 2px; color: #888581; text-transform: uppercase;">当前热度</label>
+            <div id="themeHeatScore" style="font-size: 48px; font-family: 'Cormorant Garamond', serif; color: #d4af37; line-height: 1; margin-top: 6px;">—</div>
+            <div id="themeHeatBar" style="height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; margin-top: 8px; overflow: hidden;">
+                <div id="themeHeatBarFill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #a4d4a4, #d4af37, #a85555); transition: width 0.4s;"></div>
+            </div>
+            <div id="themeHeatWarning" style="font-size: 13px; margin-top: 12px; min-height: 20px;"></div>
+        </div>
+    </div>
+    <div style="margin-top: 24px;">
+        <div style="font-size: 11px; letter-spacing: 2px; color: #888581; text-transform: uppercase; margin-bottom: 8px;">热度趋势 (30/60/90d)</div>
+        <div id="themeTrendBox" style="background: #1c1b1a; padding: 16px; border: 1px solid rgba(255,255,255,0.06);">
+            <canvas id="themeTrendChart" width="800" height="160" style="width: 100%; height: 160px;"></canvas>
+            <div id="themeTrendStats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 13px; color: #d8d4cf; margin-top: 12px;"></div>
+        </div>
+    </div>
+    <div id="themeReason" style="margin-top: 16px; font-size: 12px; color: #d8d4cf; font-style: italic;"></div>
+</section>
+
+<!-- ====== 估值溢价测算 ====== -->
+<section class="section" id="premium-calc-section" style="margin-top: 60px;">
+    <div class="section-title">VIII. 估值溢价测算 (AI 镀金检测器)</div>
+    <div style="font-size: 12px; color: #888581; margin-bottom: 16px; line-height: 1.6;">
+        公式: <code>溢价 = 主题热度 × AI 收入占比 × 历史溢价系数</code>. 系数曲线来自 <code>themes/premium_curve.json</code> (research_premium_coefficient.py 拟合, 港股 2 年 AI 概念股回测).
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 20px;">
+        <div>
+            <label style="font-size: 11px; letter-spacing: 2px; color: #888581; text-transform: uppercase;">公司 AI 收入占比 (%)</label>
+            <input type="number" id="aiRevenuePct" min="0" max="100" step="0.5" value="5"
+                   style="margin-top: 6px; width: 100%; padding: 8px; background: #1c1b1a; color: #d8d4cf; border: 1px solid rgba(255,255,255,0.1); font-family: inherit; font-size: 16px;" />
+            <div style="font-size: 11px; color: #888581; margin-top: 6px;">e.g. 华勤 ≈ 5%, 联想 ≈ 15%, 小鹏 ≈ 50%</div>
+        </div>
+        <div>
+            <label style="font-size: 11px; letter-spacing: 2px; color: #888581; text-transform: uppercase;">参照主题</label>
+            <select id="premiumThemeSelect" style="margin-top: 6px; width: 100%; padding: 8px; background: #1c1b1a; color: #d8d4cf; border: 1px solid rgba(255,255,255,0.1); font-family: inherit;">
+                <option value="">— 加载中 —</option>
+            </select>
+            <div id="premiumThemeHeat" style="font-size: 11px; color: #888581; margin-top: 6px;">主题当前热度: —</div>
+        </div>
+    </div>
+    <div style="background: #1c1b1a; padding: 20px; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+            <div>
+                <div style="font-size: 10px; letter-spacing: 2px; color: #888581; text-transform: uppercase; margin-bottom: 6px;">基础溢价系数</div>
+                <div id="premiumBase" style="font-family: 'Cormorant Garamond', serif; font-size: 28px; color: #d8d4cf;">—</div>
+                <div style="font-size: 11px; color: #888581;">来自 premium_curve</div>
+            </div>
+            <div>
+                <div style="font-size: 10px; letter-spacing: 2px; color: #888581; text-transform: uppercase; margin-bottom: 6px;">主题热度修正</div>
+                <div id="premiumHeatFactor" style="font-family: 'Cormorant Garamond', serif; font-size: 28px; color: #d4af37;">—</div>
+                <div style="font-size: 11px; color: #888581;">heat_score / 50</div>
+            </div>
+            <div>
+                <div style="font-size: 10px; letter-spacing: 2px; color: #888581; text-transform: uppercase; margin-bottom: 6px;">期望估值溢价</div>
+                <div id="premiumFinal" style="font-family: 'Cormorant Garamond', serif; font-size: 36px; color: #a4d4a4;">—</div>
+                <div style="font-size: 11px; color: #888581;">vs 同行非 AI peer</div>
+            </div>
+        </div>
+        <div id="premiumInterpret" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 13px; color: #d8d4cf; line-height: 1.7;"></div>
+    </div>
+</section>
+
 <section style="margin-top: 60px;">
     <div class="section-title">阈值参考表 (基于实证回测)</div>
     <div class="threshold-table">
@@ -598,6 +674,241 @@ function render() {
     });
 
 render();
+
+// ============================================================================
+// 主题情绪追踪 + 估值溢价测算 (Phase 7-8)
+// ============================================================================
+const ThemeTracker = (() => {
+    let heatToday = null;     // themes/heat_today.json
+    let history = null;       // themes/history.csv 解析后的 [{date, ai_server: 78, ...}]
+    let curve = null;         // themes/premium_curve.json
+
+    async function loadAll() {
+        try {
+            const r1 = await fetch('themes/heat_today.json');
+            heatToday = r1.ok ? await r1.json() : null;
+        } catch (e) { heatToday = null; }
+        try {
+            const r2 = await fetch('themes/history.csv');
+            if (r2.ok) {
+                const text = await r2.text();
+                history = parseCSV(text);
+            }
+        } catch (e) { history = null; }
+        try {
+            const r3 = await fetch('themes/premium_curve.json');
+            curve = r3.ok ? await r3.json() : null;
+        } catch (e) { curve = null; }
+        renderThemeUI();
+    }
+
+    function parseCSV(text) {
+        const lines = text.trim().split(/\r?\n/);
+        if (lines.length < 2) return null;
+        const headers = lines[0].split(',');
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+            const vals = lines[i].split(',');
+            const row = {};
+            headers.forEach((h, j) => {
+                const v = vals[j];
+                row[h] = (h === 'date') ? v : (v === '' ? null : Number(v));
+            });
+            rows.push(row);
+        }
+        return { headers, rows };
+    }
+
+    function renderThemeUI() {
+        const sel = $('themeSelect');
+        const sel2 = $('premiumThemeSelect');
+        const status = $('themeLoadStatus');
+
+        if (!heatToday || !heatToday.themes) {
+            sel.innerHTML = '<option>无数据 (heat_today.json 未生成)</option>';
+            sel2.innerHTML = '<option>无数据</option>';
+            status.textContent = '提示: 跑 python themes/theme_tracker.py 生成今日数据';
+            status.style.color = '#a85555';
+            return;
+        }
+        const themes = heatToday.themes;
+        const opts = Object.entries(themes).map(([id, t]) =>
+            `<option value="${id}">${t.label || id}  [${t.heat_score ?? '—'}]</option>`).join('');
+        sel.innerHTML = opts;
+        sel2.innerHTML = opts;
+        status.textContent = `as_of: ${heatToday.as_of} · ${Object.keys(themes).length} 主题`;
+        status.style.color = '#888581';
+        // 默认选 AI 服务器
+        if (themes['ai_server']) {
+            sel.value = 'ai_server';
+            sel2.value = 'ai_server';
+        }
+        renderHeatPanel();
+        renderPremiumPanel();
+    }
+
+    function renderHeatPanel() {
+        const id = $('themeSelect').value;
+        if (!id || !heatToday?.themes?.[id]) return;
+        const t = heatToday.themes[id];
+        const score = t.heat_score ?? 0;
+        $('themeHeatScore').textContent = score;
+        $('themeHeatBarFill').style.width = score + '%';
+
+        // 颜色
+        let color = '#a4d4a4';
+        if (score >= 80) color = '#a85555';
+        else if (score >= 60) color = '#d4af37';
+        else if (score < 40) color = '#5a8caa';
+        $('themeHeatScore').style.color = color;
+
+        // 警告
+        const warn = $('themeHeatWarning');
+        if (score > 80) {
+            warn.innerHTML = '⚠ <span style="color:#a85555">主题过热 — 锁定期反转风险高, 谨慎入场</span>';
+        } else if (score < 40) {
+            warn.innerHTML = '★ <span style="color:#a4d4a4">主题谷底 — 可能是基石入场好时机</span>';
+        } else {
+            warn.innerHTML = '<span style="color:#888581">情绪中性</span>';
+        }
+
+        // 趋势
+        renderTrendChart(id);
+
+        // 原因
+        const reason = t.reason ? `Kimi 解读: ${t.reason}` : '';
+        $('themeReason').textContent = reason;
+    }
+
+    function renderTrendChart(id) {
+        const canvas = $('themeTrendChart');
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (!history || !history.headers.includes(id)) {
+            ctx.fillStyle = '#888581';
+            ctx.font = '12px sans-serif';
+            ctx.fillText('暂无历史数据 (需积累 ≥7 天)', 16, h / 2);
+            $('themeTrendStats').innerHTML = '';
+            return;
+        }
+        const series = history.rows.map(r => ({ date: r.date, v: r[id] })).filter(r => r.v != null);
+        const last90 = series.slice(-90);
+        if (last90.length < 2) {
+            ctx.fillStyle = '#888581';
+            ctx.fillText('数据点不足', 16, h / 2);
+            return;
+        }
+
+        // 网格
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        [20, 40, 60, 80].forEach(level => {
+            const y = h - (level / 100) * (h - 30) - 10;
+            ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w, y); ctx.stroke();
+            ctx.fillStyle = '#5a5a5a'; ctx.font = '10px sans-serif';
+            ctx.fillText(level, 8, y + 3);
+        });
+
+        // 折线
+        ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        last90.forEach((p, i) => {
+            const x = 40 + (i / Math.max(1, last90.length - 1)) * (w - 50);
+            const y = h - (p.v / 100) * (h - 30) - 10;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // 阈值带 (80 红, 40 绿)
+        ctx.strokeStyle = 'rgba(168,85,85,0.4)'; ctx.setLineDash([4, 4]);
+        let y80 = h - 0.8 * (h - 30) - 10;
+        ctx.beginPath(); ctx.moveTo(40, y80); ctx.lineTo(w, y80); ctx.stroke();
+        ctx.strokeStyle = 'rgba(164,212,164,0.4)';
+        let y40 = h - 0.4 * (h - 30) - 10;
+        ctx.beginPath(); ctx.moveTo(40, y40); ctx.lineTo(w, y40); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 30/60/90d 平均
+        const avg = (arr) => arr.reduce((s, x) => s + x.v, 0) / arr.length;
+        const a30 = series.slice(-30); const a60 = series.slice(-60); const a90 = series.slice(-90);
+        $('themeTrendStats').innerHTML = `
+            <div>30d 均值: <strong style="color:#d4af37">${a30.length ? avg(a30).toFixed(1) : '—'}</strong> <span style="color:#888581">(n=${a30.length})</span></div>
+            <div>60d 均值: <strong style="color:#d4af37">${a60.length ? avg(a60).toFixed(1) : '—'}</strong> <span style="color:#888581">(n=${a60.length})</span></div>
+            <div>90d 均值: <strong style="color:#d4af37">${a90.length ? avg(a90).toFixed(1) : '—'}</strong> <span style="color:#888581">(n=${a90.length})</span></div>
+        `;
+    }
+
+    function lookupPremium(aiPct) {
+        if (!curve || !curve.params) return null;
+        const { a, b, c } = curve.params;
+        return a * Math.log(1.0 + b * aiPct) + c;
+    }
+
+    function renderPremiumPanel() {
+        const aiPctRaw = parseFloat($('aiRevenuePct').value);
+        if (isNaN(aiPctRaw)) return;
+        const aiPct = Math.max(0, Math.min(100, aiPctRaw)) / 100;
+        const themeId = $('premiumThemeSelect').value;
+        const heat = heatToday?.themes?.[themeId]?.heat_score ?? 50;
+        $('premiumThemeHeat').innerHTML = `主题当前热度: <strong style="color:#d4af37">${heat}</strong> (${heatToday?.themes?.[themeId]?.label || '—'})`;
+
+        const base = lookupPremium(aiPct);
+        if (base === null) {
+            $('premiumBase').textContent = '—';
+            $('premiumHeatFactor').textContent = '—';
+            $('premiumFinal').textContent = '—';
+            $('premiumInterpret').innerHTML = '<span style="color:#a85555">premium_curve.json 未加载</span>';
+            return;
+        }
+        const heatFactor = heat / 50.0;
+        const finalPremium = base * heatFactor;
+
+        $('premiumBase').textContent = (base * 100).toFixed(1) + '%';
+        $('premiumHeatFactor').textContent = '×' + heatFactor.toFixed(2);
+        $('premiumFinal').textContent = (finalPremium * 100).toFixed(0) + '%';
+
+        // 颜色: 高溢价 = 红 (镀金), 中性 = 黄, 低 = 绿
+        let col = '#a4d4a4';
+        if (finalPremium > 0.6) col = '#a85555';
+        else if (finalPremium > 0.3) col = '#d4af37';
+        $('premiumFinal').style.color = col;
+
+        // 解读
+        let warn = '';
+        if (finalPremium > 0.6) {
+            warn = `<span style="color:#a85555">⚠ 高溢价警告</span>: 模型预测市场已为该 AI 故事支付 <strong>${(finalPremium*100).toFixed(0)}%</strong> 溢价 (vs 同行非 AI peer). 但公司实际 AI 收入仅 ${aiPctRaw}%, 镀金风险高 — 锁定期解禁后估值回归概率大.`;
+        } else if (finalPremium > 0.3) {
+            warn = `<span style="color:#d4af37">中等溢价</span>: 主题热度配上 AI 占比, 期望溢价 ${(finalPremium*100).toFixed(0)}%. 在合理区间, 但需配合个股锁定期/基石质量综合判断.`;
+        } else {
+            warn = `<span style="color:#a4d4a4">低溢价</span>: 主题情绪温和或公司 AI 占比有限, 期望溢价仅 ${(finalPremium*100).toFixed(0)}%. 估值层面镀金风险小, 业绩兑现可见即可.`;
+        }
+        const aiAbs = aiPctRaw.toFixed(1);
+        $('premiumInterpret').innerHTML = `
+            ${warn}<br><br>
+            <span style="color:#888581">公式分解:</span>
+            premium = log(1 + ${(curve.params.b).toFixed(1)} × ${(aiPct).toFixed(3)}) × ${curve.params.a.toFixed(2)}
+            = <strong>${(base*100).toFixed(1)}%</strong>;
+            heat_factor = ${heat}/50 = <strong>${heatFactor.toFixed(2)}</strong>;
+            <strong style="color:${col}">final = ${(finalPremium*100).toFixed(0)}%</strong>.<br>
+            <span style="color:#888581">语义:</span> 当前主题 (${heatToday?.themes?.[themeId]?.label || '—'}) 热度 ${heat}, 持有该公司 (${aiAbs}% AI 收入)
+            理论上应给同行 +${(finalPremium*100).toFixed(0)}% 估值. 实际市场溢价超过此值 → 镀金过头 (减持/规避); 低于 → 价值洼地.
+        `;
+    }
+
+    // 事件
+    document.addEventListener('DOMContentLoaded', loadAll);
+    window.addEventListener('load', () => {
+        // 二次保险 (本地 file:// 偶尔慢)
+        if (!heatToday) loadAll();
+    });
+    $('themeSelect')?.addEventListener('change', renderHeatPanel);
+    $('premiumThemeSelect')?.addEventListener('change', renderPremiumPanel);
+    $('aiRevenuePct')?.addEventListener('input', renderPremiumPanel);
+
+    return { loadAll };
+})();
 </script>
 
 </body>

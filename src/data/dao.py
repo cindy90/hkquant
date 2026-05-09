@@ -107,23 +107,96 @@ def add_alias(conn: sqlite3.Connection, *, cornerstone_id: str,
 # 2. 别名解析 - 招股书原文 -> cornerstone_id
 # =============================================================================
 
+import re as _re
+from difflib import SequenceMatcher as _SeqMatcher
+
+# 法人后缀 (按长度从长到短, 避免短词先剥)
+_LEGAL_SUFFIXES = (
+    "有限合伙企业", "私募基金管理有限公司", "私募基金管理", "投资管理有限公司",
+    "国际投资有限公司", "资产管理有限公司", "投资有限公司", "管理有限公司",
+    "有限责任公司", "股份有限公司", "股份合作公司", "有限公司", "(集团)",
+    "（集团）", "private limited", "asset management", "asia pacific",
+    "international", "investment", "investments", "capital", "holdings",
+    "company", "limited", "incorporated", "corporation", "co.,ltd",
+    "co.,ltd.", "co., ltd", "co. ltd", "co. ltd.", "ltd.", "ltd",
+    "inc.", "inc", "llc", "l.p.", "lp", "spv", "spc", "plc",
+    "(spc)", "(spv)", "(hk)", "(香港)", "（香港）", "香港",
+)
+
+# 标点 → 空格
+_PUNCT_RE = _re.compile(r"[()（）.,。， '\"\-/\\&\u2019\u2018]+")
+
+
+def normalize_cs_name(name: str) -> str:
+    """归一化基石原文用于模糊匹配比较.
+
+    步骤: 小写 → 去括号注释 → 剥常见法人后缀 → 标点转空格 → 折叠空白
+    """
+    s = name.strip().lower()
+    if not s:
+        return ""
+    # 去整段括号内容 (中英括号), 但保留括号外文字
+    s = _re.sub(r"\([^)]*\)", " ", s)
+    s = _re.sub(r"（[^）]*）", " ", s)
+    # 标点 → 空格
+    s = _PUNCT_RE.sub(" ", s)
+    # 折叠空白
+    s = _re.sub(r"\s+", " ", s).strip()
+    # 剥后缀 (循环, 因可能有"...有限公司有限合伙企业"嵌套)
+    changed = True
+    while changed:
+        changed = False
+        for suf in _LEGAL_SUFFIXES:
+            if s.endswith(suf):
+                s = s[: -len(suf)].rstrip()
+                changed = True
+                break
+    return s
+
+
+def _tokens(s: str) -> set:
+    """中英混合分词: 英文按空格切; 中文逐字 (BoW 近似)"""
+    out: set = set()
+    for word in s.split():
+        # 含 ASCII 字母数字 → 整词作 token
+        if _re.search(r"[a-z0-9]", word):
+            out.add(word)
+        else:
+            # 纯中文 (或符号) → 逐字
+            for ch in word:
+                if ch.strip():
+                    out.add(ch)
+    return out
+
+
+def _jaccard(a: set, b: set) -> float:
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    union = len(a | b)
+    return inter / union if union else 0.0
+
+
 def resolve_cornerstone_id(conn: sqlite3.Connection,
-                           raw_name: str) -> Optional[Tuple[str, float]]:
+                           raw_name: str,
+                           min_confidence: float = 0.40) -> Optional[Tuple[str, float]]:
     """
     给定招股书原文(可能是任意别名), 返回 (cornerstone_id, confidence) 或 None.
-    
-    匹配策略 (按优先级):
-        1. 精确匹配 (case-insensitive)
-        2. 子串包含: alias 是 raw_name 的子串, 或反之
-        3. 留待人工: 返回 None
-    
-    生产环境应额外接入 LLM 模糊匹配 (例如 embeddings + 阈值)
+
+    匹配策略 (按优先级, 命中即返回):
+        1. 精确匹配 (case-insensitive)               → conf = alias_conf (通常 1.0)
+        2. 归一化精确匹配 (剥后缀 + 标点)             → conf × 0.95
+        3. 子串包含 (alias 在 raw 中, 或反之)         → conf × 0.70 (按长度加权)
+        4. Token Jaccard (中英混合分词)              → conf × jaccard × 0.85
+        5. SequenceMatcher.ratio (字符级编辑距离)    → conf × ratio × 0.70
+
+    返回: confidence < min_confidence 视为未命中 (None)
     """
     raw_lower = raw_name.strip().lower()
     if not raw_lower:
         return None
 
-    # 策略1: 精确
+    # ===== 策略 1: 精确 =====
     row = conn.execute("""
         SELECT cornerstone_id, match_confidence
         FROM cornerstone_aliases
@@ -133,18 +206,60 @@ def resolve_cornerstone_id(conn: sqlite3.Connection,
     if row:
         return row["cornerstone_id"], row["match_confidence"]
 
-    # 策略2: 子串 (alias 包含在 raw 中, 或 raw 包含在 alias 中)
-    rows = conn.execute("""
+    # 拉所有 alias 到内存 (一次遍历, 用于策略 2-5)
+    all_rows = conn.execute("""
         SELECT cornerstone_id, alias_text_lower, match_confidence
         FROM cornerstone_aliases
-        WHERE instr(alias_text_lower, ?) > 0 OR instr(?, alias_text_lower) > 0
-    """, (raw_lower, raw_lower)).fetchall()
+    """).fetchall()
+    if not all_rows:
+        return None
 
-    if rows:
-        # 选最长的匹配, 按置信度加权
-        best = max(rows, key=lambda r: len(r["alias_text_lower"]) * r["match_confidence"])
-        # 子串匹配置信度打折
-        return best["cornerstone_id"], best["match_confidence"] * 0.7
+    raw_norm = normalize_cs_name(raw_name)
+    raw_tokens = _tokens(raw_norm) if raw_norm else _tokens(raw_lower)
+
+    # ===== 策略 2: 归一化精确 =====
+    if raw_norm:
+        for r in all_rows:
+            if normalize_cs_name(r["alias_text_lower"]) == raw_norm:
+                conf = r["match_confidence"] * 0.95
+                if conf >= min_confidence:
+                    return r["cornerstone_id"], conf
+
+    # ===== 策略 3: 子串包含 =====
+    sub_hits = [r for r in all_rows
+                if r["alias_text_lower"] and (
+                    r["alias_text_lower"] in raw_lower
+                    or raw_lower in r["alias_text_lower"]
+                )]
+    if sub_hits:
+        best = max(sub_hits,
+                   key=lambda r: len(r["alias_text_lower"]) * r["match_confidence"])
+        conf = best["match_confidence"] * 0.70
+        if conf >= min_confidence:
+            return best["cornerstone_id"], conf
+
+    # ===== 策略 4: Token Jaccard =====
+    best_j: Tuple[Optional[str], float] = (None, 0.0)
+    for r in all_rows:
+        alias_norm = normalize_cs_name(r["alias_text_lower"])
+        alias_tokens = _tokens(alias_norm) if alias_norm else _tokens(r["alias_text_lower"])
+        j = _jaccard(raw_tokens, alias_tokens)
+        score = j * r["match_confidence"] * 0.85
+        if score > best_j[1]:
+            best_j = (r["cornerstone_id"], score)
+    if best_j[0] and best_j[1] >= min_confidence:
+        return best_j[0], best_j[1]
+
+    # ===== 策略 5: SequenceMatcher (字符编辑距离比) =====
+    best_s: Tuple[Optional[str], float] = (None, 0.0)
+    for r in all_rows:
+        target = normalize_cs_name(r["alias_text_lower"]) or r["alias_text_lower"]
+        ratio = _SeqMatcher(None, raw_norm or raw_lower, target).ratio()
+        score = ratio * r["match_confidence"] * 0.70
+        if score > best_s[1]:
+            best_s = (r["cornerstone_id"], score)
+    if best_s[0] and best_s[1] >= min_confidence:
+        return best_s[0], best_s[1]
 
     return None
 
@@ -196,6 +311,29 @@ def link_cornerstone_to_ipo(conn: sqlite3.Connection, *,
 # =============================================================================
 # 4. as-of-date 派生 (核心: 防 look-ahead)
 # =============================================================================
+
+def list_ipos_in_universe_asof(conn: sqlite3.Connection,
+                               asof: date) -> List[str]:
+    """返回截至 asof 时点曾上市的 IPO 全集 (含已退市), 即"反幸存者偏差"全集.
+
+    口径:
+        - listing_date <= asof  (asof 之前已上市)
+        - 且 (未退市) 或 (退市日 > asof)  → asof 时仍在交易/可观测
+
+    返回: ipo_id 列表, 按 listing_date 升序
+    """
+    rows = conn.execute("""
+        SELECT ipo_id FROM ipo_master
+        WHERE listing_date <= ?
+          AND (
+              COALESCE(is_delisted, 0) = 0
+              OR delisting_date IS NULL
+              OR delisting_date > ?
+          )
+        ORDER BY listing_date
+    """, (asof.isoformat(), asof.isoformat())).fetchall()
+    return [r["ipo_id"] for r in rows]
+
 
 def compute_cornerstone_perf_asof(conn: sqlite3.Connection,
                                   cornerstone_id: str,

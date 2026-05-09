@@ -2,5 +2,24 @@ pandas>=2.0
 numpy>=1.24
 openpyxl>=3.1
 
+# 配置加载 (NACS YAML config; P0)
+pyyaml>=6.0
+
+# HTTP 客户端 (用于 iFinD HTTP REST 端点 + akshare/PDF 下载)
+requests>=2.31
+
+# 港股新闻资讯 (iFinD 无新闻全文 API, 改用 akshare ak.stock_news_em())
+akshare>=1.18
+
 # iFinDPy（同花顺 QuantAPI）不在 PyPI——由 iFinD 客户端的注册工具
 # 写入 site-packages 的 .pth 文件提供。安装步骤见 src/data_sources/ifind/README.md。
+
+# =========================================================================
+# 开发依赖 (P1) — 生产部署可不装, CI/本地开发推荐装
+# 用 pip install -r requirements.txt 会一并装; 想最小化生产依赖可手动剔除
+# =========================================================================
+pytest>=7.0           # 单元 / 集成测试
+pre-commit>=3.5       # git hooks 框架
+# black / ruff / mypy 由 pre-commit 自管 (见 .pre-commit-config.yaml),
+# 想直接命令行用也可以单独装:
+#   pip install black ruff mypy

@@ -1,0 +1,110 @@
+# NACS v8 生产配置 — 与 src/nacs_model.py 原硬编码值完全一致
+#
+# 修改任何参数后:
+#   1. python check_health.py            # 应仍通过
+#   2. python run_v7_backtest.py         # 对比 IC 变化
+#   3. 留 manifest 在 outputs/{run_id}/  以便复现
+#
+# 版本沿革:
+#   v7 -> v8: position_bands 中 RELATIONSHIP 仓位 0.15 → 0.00 (砍死亡区间)
+#             数据支撑: production 60d mean +17%→+37%, win 55%→78%
+
+version: v8
+
+# -----------------------------------------------------------------------------
+# v7 制度门控
+# -----------------------------------------------------------------------------
+# regime_score = 过去 [t-lookback_days, t-min_lag_days] 上市 IPO 的 30 日中位收益
+# 数据支撑: regime>=threshold 子样本主板 60d IC 从 +0.09 → +0.245, t 从 0.26 → 2.41
+regime_gate:
+  threshold: 0.0
+  lookback_days: 120
+  min_lag_days: 30
+  min_sample: 5
+
+# -----------------------------------------------------------------------------
+# v7 簇基石加成 (cluster bonus)
+# -----------------------------------------------------------------------------
+# 同 ultimate_holder ≥threshold 个基石时, Q_ecosystem ×multiplier
+# 数据支撑: cluster≥2 IPO 60d mean +22%, std 40% (vs 无关联 mean +14%, std 68%)
+# 注意: 必须按 threshold 降序排列
+cluster_bonus:
+  - {threshold: 5, multiplier: 1.20}
+  - {threshold: 3, multiplier: 1.15}
+  - {threshold: 2, multiplier: 1.10}
+
+# -----------------------------------------------------------------------------
+# v8 仓位映射 (NACS_adj → position_pct + decision)
+# -----------------------------------------------------------------------------
+# 必须按 min_nacs 降序; 第一个匹配的档位生效
+# v8 关键: RELATIONSHIP 区间 [0.25, 0.35) 仓位归零, 仅保留诊断标签
+position_bands:
+  - {min_nacs: 0.55, position: 1.00, decision: FULL}
+  - {min_nacs: 0.45, position: 0.70, decision: LARGE}
+  - {min_nacs: 0.35, position: 0.40, decision: TRIAL}
+  - {min_nacs: 0.25, position: 0.00, decision: RELATIONSHIP}
+  - {min_nacs: 0.00, position: 0.00, decision: SKIP}
+
+# -----------------------------------------------------------------------------
+# Layer 1 (Q_company) 6 子项权重 — 求和必须 = 1.0
+# -----------------------------------------------------------------------------
+layer1_weights:
+  valuation: 0.25       # PE 折价 + Pre-IPO 最后一轮溢价
+  sponsor: 0.15         # 保荐人画像
+  fundamentals: 0.25    # 基本面 (按章节分流: profitable/biotech/18c)
+  offering: 0.15        # 发行结构 (国际/公开倍数/绿鞋/规模)
+  chapter: 0.10         # 上市章节制度路径
+  market: 0.10          # 市场环境 (HSI 动量/波动/南向)
+
+# -----------------------------------------------------------------------------
+# Layer 2 (Q_ecosystem) 7 子项权重 — 求和必须 = 1.0
+# -----------------------------------------------------------------------------
+layer2_weights:
+  q_weighted: 0.30      # 加权基石质量分
+  coverage: 0.15        # 基石覆盖率
+  hhi: 0.10             # 集中度
+  diversity: 0.10       # 类型多样性 (Shannon 熵)
+  pollution: 0.20       # 关联污染率
+  synergy: 0.10         # 战略协同 (产业资本)
+  zucou: 0.05           # 中资凑数红旗
+
+# -----------------------------------------------------------------------------
+# Layer 3 (R_lockup) 6 子项权重 — 求和必须 = 1.0
+# -----------------------------------------------------------------------------
+layer3_weights:
+  vol: 0.30
+  val_reversal: 0.20
+  overhang: 0.15
+  fundamental: 0.15
+  macro: 0.10
+  peer: 0.10
+
+# -----------------------------------------------------------------------------
+# Layer 1 否决条款
+# -----------------------------------------------------------------------------
+layer1_vetoes:
+  intl_oversub_min: 1.5             # 国际配售 < 此值 → 否决
+  last_round_premium_max: 0.50      # Pre-IPO 溢价 > 此值 → 否决
+  auditor_tier_max_allowed: 2       # 审计师 tier > 此值 → 否决
+  veto_score_cap: 40.0              # 否决后 raw 分压顶值
+
+# -----------------------------------------------------------------------------
+# Layer 2 否决条款
+# -----------------------------------------------------------------------------
+layer2_vetoes:
+  affiliation_pct_max: 0.50         # 关联污染率 > 此值 → 否决
+  affiliation_score_cap: 30.0
+  q_weighted_min: 30.0              # 加权基石质量 < 此值 → 否决
+  q_weighted_score_cap: 40.0
+  small_cs_count_threshold: 3       # 基石数 < 此值且
+  small_cs_max_share: 0.60          # 最大单一占比 > 此值 → 否决
+  small_cs_score_cap: 35.0
+
+# -----------------------------------------------------------------------------
+# compute_nacs 后处理乘子
+# -----------------------------------------------------------------------------
+post_adjustments:
+  chapter_18c: 0.70                 # 18C 章节折扣
+  a_plus_h_short_borrowable: 1.10   # A+H 同名 A 股可融券对冲加成
+  secondary_listing: 0.85           # 第二上市折扣
+  related_party_tx_recent: 0.85     # 控股股东近 12 月重大关联交易折扣

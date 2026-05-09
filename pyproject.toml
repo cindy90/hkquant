@@ -1,0 +1,58 @@
+# NACS 项目工程化配置 (P1)
+# 包含: pytest / black / ruff / mypy 配置
+# 实际依赖见 requirements.txt; 这里只是工具行为约定
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "slow: 慢测试 (默认跑, 用 -m 'not slow' 跳过)",
+    "integration: 端到端集成 (依赖 raw CSV 等外部资源)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    __pycache__
+  | data/raw
+  | outputs
+  | reports
+  | themes
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["data/raw", "outputs", "reports", "themes", "__pycache__"]
+
+[tool.ruff.lint]
+# E/F: pyflakes+pycodestyle, I: isort, UP: pyupgrade, B: bugbear
+select = ["E", "F", "I", "UP", "B"]
+# E501 行长由 black 处理, B008 函数默认值 (dataclass 大量使用)
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]  # 测试 fixture 顺序导入
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_unused_configs = true
+files = ["src"]
+exclude = "tests|outputs|reports|data"

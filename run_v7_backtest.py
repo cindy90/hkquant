@@ -113,12 +113,37 @@ def hydrate_cornerstones(conn, ipo_id, asof):
     return investors, cluster_count
 
 
-def get_financials(conn, sc):
-    """加载 IPO 公司的历年财务"""
-    rows = conn.execute("""
-        SELECT report_year, revenue_cny, gross_margin, net_margin, roe
-        FROM ipo_financials WHERE stock_code=? ORDER BY report_year
-    """, (sc,)).fetchall()
+def get_financials(conn, sc, asof=None):
+    """加载 IPO 公司的历年财务
+
+    P0-#1 修复: 严格防 look-ahead. 仅返回 report_year < asof.year 的财务,
+    因为 IPO 在 pricing_date (= asof) 时, 上一日历年财报通常已审计披露,
+    而当年及之后的年报尚不可知. 旧版本无过滤会让 2022 上市 IPO 读到
+    2023-2025 的数据, 把 IC 虚高.
+
+    Args:
+        sc: stock_code
+        asof: pricing_date (date or ISO str). None -> 兼容旧调用 (不过滤),
+              仅供 legacy 测试使用; 生产路径必须传值.
+    """
+    cutoff_year = None
+    if asof is not None:
+        if isinstance(asof, str):
+            cutoff_year = int(asof[:4])
+        else:
+            cutoff_year = asof.year
+
+    if cutoff_year is not None:
+        rows = conn.execute("""
+            SELECT report_year, revenue_cny, gross_margin, net_margin, roe
+            FROM ipo_financials WHERE stock_code=? AND report_year < ?
+            ORDER BY report_year
+        """, (sc, cutoff_year)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT report_year, revenue_cny, gross_margin, net_margin, roe
+            FROM ipo_financials WHERE stock_code=? ORDER BY report_year
+        """, (sc,)).fetchall()
     if not rows:
         return None
     by = {}
@@ -184,11 +209,23 @@ def build_offering(conn, ipo_id, regime_score, *, use_static_env: bool = False):
         market = MarketEnvironment(**_FALLBACK_MARKET_ENV)
     else:
         market = fetch_market_env_at(conn, asof, allow_ifind=True)
+    # P1-#8 修复: LockupContext 全部 4 字段从 ipo_master 读 (csv 间接计算).
+    #   fundamental_risk_score / pe_vs_history_pct: scripts/fix_p1_lockup_context.py
+    #   overhang_ratio (= pre/post_shares) / peer_lockup_avg_drawdown:
+    #       scripts/fix_p1_lockup_context_v2.py (来自 ifind_share_capital.csv 与 ipo_returns.return_d30)
+    _keys = row.keys()
+    _fund_risk = row["fundamental_risk_score"] if "fundamental_risk_score" in _keys else None
+    _pe_pct = row["pe_vs_history_pct"] if "pe_vs_history_pct" in _keys else None
+    _overhang = row["overhang_ratio"] if "overhang_ratio" in _keys else None
+    _peer_dd = row["peer_lockup_avg_drawdown"] if "peer_lockup_avg_drawdown" in _keys else None
     lockup = LockupContext(
-        lockup_months=row["lockup_months"] or 6, overhang_ratio=1.0,
-        fundamental_risk_score=0.30, peer_lockup_avg_drawdown=0.10, pe_vs_history_pct=0.50,
+        lockup_months=row["lockup_months"] or 6,
+        overhang_ratio=_overhang if _overhang is not None else 1.0,
+        fundamental_risk_score=_fund_risk if _fund_risk is not None else 0.30,
+        peer_lockup_avg_drawdown=_peer_dd if _peer_dd is not None else 0.10,
+        pe_vs_history_pct=_pe_pct if _pe_pct is not None else 0.50,
     )
-    profitable = derive_profitable(get_financials(conn, sc)) if ctype == CompanyType.PROFITABLE else None
+    profitable = derive_profitable(get_financials(conn, sc, asof=asof)) if ctype == CompanyType.PROFITABLE else None
     biotech = BiotechFundamentals(
         core_pipeline_phase="II", pipeline_count_phase2plus=2,
         cash_runway_months=18, bd_deals_count_2y=1
@@ -223,6 +260,120 @@ def build_offering(conn, ipo_id, regime_score, *, use_static_env: bool = False):
         regime_score=regime_score,
         cluster_cornerstone_count=cluster_count,
     )
+
+
+# =============================================================================
+# 并行化: ProcessPoolExecutor worker (P2-C)
+# =============================================================================
+# 关键约束:
+#   - sqlite3 connection 不可跨进程: 每个 worker 必须自开 conn
+#   - worker 必须是 module-level 函数 (可 pickle)
+#   - history 是 list[(date, float)], 可 pickle 跨进程
+#   - NacsConfig 是单例: worker 进程必须重新 set_config(load_config(path))
+
+
+def score_one_ipo(args):
+    """单 IPO 评分 worker (可 pickle, 跨进程调用).
+
+    Args (单 tuple, 便于 executor.map):
+        db_path: str           SQLite 路径
+        ipo_id: str
+        history: list          [(date, return_d30), ...] 全 IPO 历史 (regime 用)
+        use_static_env: bool
+        config_path: str|None  NacsConfig YAML/JSON; None=用默认 v8
+
+    Returns:
+        dict | None | {"_error": "..."}: 评分记录 / 跳过 / 异常
+    """
+    db_path, ipo_id, history, use_static_env, config_path = args
+    try:
+        # worker 进程: 重新加载配置 (单例不会跨进程传递)
+        if config_path:
+            from config import load_config, set_config
+            set_config(load_config(config_path))
+
+        conn = db_connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT ipo_id, stock_code, company_name_zh, listing_date, "
+                "listing_chapter, pricing_date FROM ipo_master WHERE ipo_id=?",
+                (ipo_id,),
+            ).fetchone()
+            if not row:
+                return None
+            ret = conn.execute(
+                "SELECT return_d1_close, return_d30, return_m3, return_m6 "
+                "FROM ipo_returns WHERE ipo_id=?", (ipo_id,)
+            ).fetchone()
+
+            pd_val = row["pricing_date"]
+            asof = pd_val if isinstance(pd_val, date) else \
+                date.fromisoformat(str(pd_val)[:10])
+            regime = compute_regime_score(history, asof)
+
+            offering = build_offering(conn, ipo_id, regime,
+                                      use_static_env=use_static_env)
+            if not offering:
+                return None
+
+            r = compute_nacs(offering)
+            return {
+                'ipo_id': row["ipo_id"], 'stock_code': row["stock_code"],
+                'name': row["company_name_zh"],
+                'listing_date': str(row["listing_date"])[:10] if row["listing_date"] else None,
+                'listing_chapter': row["listing_chapter"],
+                'NACS': r.nacs_adjusted, 'Q_company': r.Q_company,
+                'Q_ecosystem': r.Q_ecosystem, 'R_lockup': r.R_lockup,
+                'decision': r.decision, 'position_pct': r.position_pct,
+                'regime_score': regime,
+                'cluster_count': offering.cluster_cornerstone_count,
+                'r5d': ret["return_d1_close"] if ret else None,
+                'r30d': ret["return_d30"] if ret else None,
+                'r60d': ret["return_m3"] if ret else None,
+                'r180d': ret["return_m6"] if ret else None,
+            }
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"_error": f"{type(e).__name__}: {e}", "_ipo_id": ipo_id}
+
+
+def parallel_score_ipos(db_path, ipo_ids, history, *,
+                        workers: int = 1,
+                        use_static_env: bool = False,
+                        config_path: str | None = None):
+    """并行评分 IPO 列表.
+
+    workers <= 1: 串行 (避免 spawn 开销, 也保证测试可调试)
+    workers >= 2: ProcessPoolExecutor
+
+    返回: (records, errors_counter)
+    """
+    args_list = [(str(db_path), iid, history, use_static_env, config_path)
+                 for iid in ipo_ids]
+    records = []
+    errors = Counter()
+
+    if workers <= 1:
+        results = (score_one_ipo(a) for a in args_list)
+    else:
+        from concurrent.futures import ProcessPoolExecutor
+        ex = ProcessPoolExecutor(max_workers=workers)
+        try:
+            # chunksize: 让每个 worker 一次拿 ~50 个 IPO 而非 1 个 (减少 IPC)
+            chunksize = max(1, len(args_list) // (workers * 4))
+            results = list(ex.map(score_one_ipo, args_list, chunksize=chunksize))
+        finally:
+            ex.shutdown(wait=True)
+
+    for r in results:
+        if r is None:
+            continue
+        if isinstance(r, dict) and "_error" in r:
+            errors[r["_error"].split(":")[0]] += 1
+            continue
+        records.append(r)
+    return records, errors
 
 
 # ===== IC 工具 =====
@@ -260,7 +411,19 @@ def main():
                         help='输出目录 (默认: outputs/)')
     parser.add_argument('--use-static-env', action='store_true',
                         help='使用旧的硬编码 MarketEnvironment 默认值 (baseline 对照组)')
+    parser.add_argument('--config', default=None,
+                        help='NacsConfig YAML/JSON 路径 (默认: 内置 v8 硬编码值, '
+                             '与 configs/nacs_v8.yaml 等价)')
+    parser.add_argument('--workers', type=int, default=1,
+                        help='并行 worker 数 (默认 1=串行; >1 走 ProcessPoolExecutor)')
     args = parser.parse_args()
+
+    # 加载参数化配置 (可选; 不传则用 src/config.py 中默认 = v8 原硬编码)
+    if args.config:
+        from config import load_config, set_config
+        cfg = load_config(args.config)
+        set_config(cfg)
+        print(f"✓ 已加载配置: {args.config} (version={cfg.version})")
 
     db_path = Path(args.db)
     out_dir = Path(args.out)
@@ -301,37 +464,18 @@ def main():
         ORDER BY m.listing_date
     """).fetchall()
 
-    print(f"加载 {len(rows)} 只 IPO 候选, 开始评分...")
+    print(f"加载 {len(rows)} 只 IPO 候选, 开始评分 (workers={args.workers})...")
+    conn.close()  # 主进程关闭, 各 worker 自开 conn
 
-    for row in rows:
-        try:
-            pd_val = row["pricing_date"]
-            asof = pd_val if isinstance(pd_val, date) else date.fromisoformat(str(pd_val)[:10])
-            regime = compute_regime_score(history, asof)
-
-            offering = build_offering(conn, row["ipo_id"], regime,
-                                      use_static_env=args.use_static_env)
-            if not offering:
-                continue
-
-            r = compute_nacs(offering)
-            records.append({
-                'ipo_id': row["ipo_id"], 'stock_code': row["stock_code"],
-                'name': row["company_name_zh"],
-                'listing_date': str(row["listing_date"])[:10] if row["listing_date"] else None,
-                'listing_chapter': row["listing_chapter"],
-                'NACS': r.nacs_adjusted, 'Q_company': r.Q_company,
-                'Q_ecosystem': r.Q_ecosystem, 'R_lockup': r.R_lockup,
-                'decision': r.decision, 'position_pct': r.position_pct,
-                'regime_score': regime,
-                'cluster_count': offering.cluster_cornerstone_count,
-                'r5d': row["return_d1_close"], 'r30d': row["return_d30"],
-                'r60d': row["return_m3"], 'r180d': row["return_m6"],
-            })
-        except Exception as e:
-            errors[type(e).__name__] += 1
-
-    conn.close()
+    ipo_ids = [r["ipo_id"] for r in rows]
+    records, errors = parallel_score_ipos(
+        db_path=db_path,
+        ipo_ids=ipo_ids,
+        history=history,
+        workers=args.workers,
+        use_static_env=args.use_static_env,
+        config_path=args.config,
+    )
     print(f"评分: {len(records)} 只, 失败: {dict(errors) if errors else 0}\n")
 
     df = pd.DataFrame(records)

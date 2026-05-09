@@ -551,14 +551,20 @@ def _check_l1_veto(o: IPOOffering) -> Tuple[bool, Optional[str]]:
     off = o.offering
     if off is None:
         return False, None
-    if off.intl_oversubscription < 1.5:
-        return True, "国际配售认购倍数<1.5x"
-    if off.last_round_premium is not None and off.last_round_premium > 0.50:
-        return True, "Pre-IPO最后一轮估值溢价>50%"
+    cfg = _get_cfg()
+    v = cfg.layer1_vetoes if cfg is not None else None
+    intl_min = v.intl_oversub_min if v else 1.5
+    premium_max = v.last_round_premium_max if v else 0.50
+    auditor_max = v.auditor_tier_max_allowed if v else 2
+
+    if off.intl_oversubscription < intl_min:
+        return True, f"国际配售认购倍数<{intl_min}x"
+    if off.last_round_premium is not None and off.last_round_premium > premium_max:
+        return True, f"Pre-IPO最后一轮估值溢价>{premium_max:.0%}"
     if off.material_litigation:
         return True, "招股书披露重大未决诉讼"
-    if off.auditor_tier >= 3 or off.auditor_changed_within_12m:
-        return True, "审计师Tier 3或近12月更换审计师"
+    if off.auditor_tier > auditor_max or off.auditor_changed_within_12m:
+        return True, f"审计师Tier>{auditor_max}或近12月更换审计师"
     if off.controlling_shareholder_pledge_default:
         return True, "控股股东近2年股权质押违约"
     return False, None
@@ -585,12 +591,20 @@ def score_layer1_company(o: IPOOffering) -> LayerBreakdown:
     s15, c15 = _score_l1_5_chapter(o)
     s16, c16 = _score_l1_6_market(o.market)
 
-    raw = (0.25 * s11 + 0.15 * s12 + 0.25 * s13
-           + 0.15 * s14 + 0.10 * s15 + 0.10 * s16)
+    cfg = _get_cfg()
+    w = cfg.layer1_weights if cfg is not None else None
+    if w is not None:
+        raw = (w.valuation * s11 + w.sponsor * s12 + w.fundamentals * s13
+               + w.offering * s14 + w.chapter * s15 + w.market * s16)
+    else:
+        raw = (0.25 * s11 + 0.15 * s12 + 0.25 * s13
+               + 0.15 * s14 + 0.10 * s15 + 0.10 * s16)
 
     veto, reason = _check_l1_veto(o)
     if veto:
-        raw = min(raw, 40.0)
+        veto_cap = (cfg.layer1_vetoes.veto_score_cap
+                    if cfg is not None else 40.0)
+        raw = min(raw, veto_cap)
 
     breakdown = LayerBreakdown(
         name="Q_company",
@@ -695,6 +709,32 @@ def score_layer2_ecosystem(o: IPOOffering) -> LayerBreakdown:
     veto_reason = None
 
     if not cs:
+        # P2-#1 章节差异化无基石处理:
+        # - secondary (SPO): 二次发行本就不需基石, 给中性默认 0.40
+        # - 18C: 港股 18C 章节不强制披露基石, 无基石不应直接归零
+        # - 其他 (main_board / 18a / a_plus_h): 保留原 veto (无基石确为负信号,
+        #   且数据显示有基石的实战回报显著更高)
+        # 数据支撑: P1-#11 后回测显示
+        #   18c_commercial 全样本 mean60d+107%, 但模型 12/13 SKIP (因为 6 只无基石被 veto)
+        #   secondary 全样本 mean60d+41%, 但模型 3/3 SKIP (100% 无基石被 veto)
+        ch = o.listing_chapter
+        no_cs_default = None
+        if ch == ListingChapter.SECONDARY_LISTING:
+            no_cs_default = 0.40
+        elif ch == ListingChapter.CHAPTER_18C_COMMERCIAL:
+            no_cs_default = 0.45
+        elif ch == ListingChapter.CHAPTER_18C_PRECOMMERCIAL:
+            no_cs_default = 0.40
+        if no_cs_default is not None:
+            return LayerBreakdown(
+                name="Q_ecosystem",
+                raw_score=no_cs_default * 100.0,
+                normalized=no_cs_default,
+                components={"reason": "no_cornerstones_chapter_default",
+                            "chapter": ch.value, "default": no_cs_default},
+                veto_triggered=False,
+                notes=[f"{ch.value} 无基石(章节常态), 用默认 {no_cs_default}"],
+            )
         return LayerBreakdown(
             name="Q_ecosystem", raw_score=0.0, normalized=0.0,
             components={"reason": "no_cornerstones"}, veto_triggered=True,
@@ -737,30 +777,50 @@ def score_layer2_ecosystem(o: IPOOffering) -> LayerBreakdown:
         notes.append(f"国资凑数红旗: 中资占比{chinese_pct:.1%}, 长线占比{longterm_pct:.1%}")
     zucou_score = -10.0 if zucou_red_flag else 10.0
 
-    raw = (0.30 * Q_weighted
-           + 0.15 * cov_s
-           + 0.10 * hhi_s
-           + 0.10 * div_score
-           + 0.20 * pol_s
-           + 0.10 * syn_s
-           + 0.05 * (zucou_score + 10.0) * 5.0)  # zucou_score [-10,+10] -> [0, 100] *0.05 weight
+    cfg = _get_cfg()
+    w2 = cfg.layer2_weights if cfg is not None else None
+    if w2 is not None:
+        raw = (w2.q_weighted * Q_weighted
+               + w2.coverage * cov_s
+               + w2.hhi * hhi_s
+               + w2.diversity * div_score
+               + w2.pollution * pol_s
+               + w2.synergy * syn_s
+               + w2.zucou * (zucou_score + 10.0) * 5.0)
+    else:
+        raw = (0.30 * Q_weighted
+               + 0.15 * cov_s
+               + 0.10 * hhi_s
+               + 0.10 * div_score
+               + 0.20 * pol_s
+               + 0.10 * syn_s
+               + 0.05 * (zucou_score + 10.0) * 5.0)
 
     # 否决条款 (v1.2: 放宽阈值, 因 affil 是启发式派生偏严)
-    if affil_pct > 0.50:
-        raw = min(raw, 30.0)
+    v2 = cfg.layer2_vetoes if cfg is not None else None
+    affil_max = v2.affiliation_pct_max if v2 else 0.50
+    affil_cap = v2.affiliation_score_cap if v2 else 30.0
+    qw_min = v2.q_weighted_min if v2 else 30.0
+    qw_cap = v2.q_weighted_score_cap if v2 else 40.0
+    sm_n = v2.small_cs_count_threshold if v2 else 3
+    sm_share = v2.small_cs_max_share if v2 else 0.60
+    sm_cap = v2.small_cs_score_cap if v2 else 35.0
+
+    if affil_pct > affil_max:
+        raw = min(raw, affil_cap)
         veto = True
-        veto_reason = f"关联污染率{affil_pct:.1%}>50%"
-    if Q_weighted < 30.0:
-        raw = min(raw, 40.0)
+        veto_reason = f"关联污染率{affil_pct:.1%}>{affil_max:.0%}"
+    if Q_weighted < qw_min:
+        raw = min(raw, qw_cap)
         if not veto:
             veto = True
-            veto_reason = f"加权基石质量分{Q_weighted:.1f}<30"
+            veto_reason = f"加权基石质量分{Q_weighted:.1f}<{qw_min}"
     max_share = max(weights) / total_ticket if total_ticket > 0 else 0
-    if len(cs) < 3 and max_share > 0.60:
-        raw = min(raw, 35.0)
+    if len(cs) < sm_n and max_share > sm_share:
+        raw = min(raw, sm_cap)
         if not veto:
             veto = True
-            veto_reason = f"基石数<3且最大单一占比{max_share:.1%}>60%"
+            veto_reason = f"基石数<{sm_n}且最大单一占比{max_share:.1%}>{sm_share:.0%}"
 
     # ---- v7: cluster bonus ----
     cluster_bonus = _cluster_bonus_multiplier(o.cluster_cornerstone_count)
@@ -827,13 +887,17 @@ def _val_reversal_risk(pe_pct: float) -> float:
 
 
 def _overhang_risk(ratio: float) -> float:
-    if ratio < 0.5:
-        return 0.15
-    if ratio < 1.0:
-        return linear_score(ratio, 0.5, 1.0, 0.15, 0.35)
-    if ratio < 2.0:
-        return linear_score(ratio, 1.0, 2.0, 0.35, 0.55)
-    return linear_score(ratio, 2.0, 4.0, 0.55, 0.75)
+    # P1-#11 重标定: overhang_ratio = pre_ipo_shares / post_ipo_shares,
+    # 实际数据值域 [0.71, 1.00] (港股 IPO 老股占比典型 75%-96%).
+    # 旧阈值 (0.5/1.0/2.0/4.0) 假设 ratio 可>1, 与实际数据不符 -> 区分度仅 0.11.
+    # 新阈值: 0.70/0.85/0.95, 区分度跨度 0.58.
+    if ratio < 0.70:
+        return 0.10
+    if ratio < 0.85:
+        return linear_score(ratio, 0.70, 0.85, 0.10, 0.30)
+    if ratio < 0.95:
+        return linear_score(ratio, 0.85, 0.95, 0.30, 0.50)
+    return linear_score(ratio, 0.95, 1.00, 0.50, 0.70)
 
 
 def _macro_risk(hsi_pct: float) -> float:
@@ -857,10 +921,20 @@ def score_layer3_lockup(o: IPOOffering) -> LayerBreakdown:
     over_r = _overhang_risk(lk.overhang_ratio)
     fund_r = clip(lk.fundamental_risk_score, 0.0, 1.0)
     macro_r = _macro_risk(m.hsi_valuation_pct)
-    peer_r = clip(lk.peer_lockup_avg_drawdown / 0.30, 0.0, 1.0)  # 30%回撤=满分风险
+    # P1-#11 重标定: peer_lockup_avg_drawdown 改用 max_drawdown_m6 均值后,
+    # 实际数据 p10=0.27 / p50=0.38 / p90=0.45, 旧公式 (/0.30 满分) 让 ≥90% 样本 clip 到 1.0,
+    # 完全失去区分度. 新公式: (d - 0.20) / 0.30 -> drawdown=0.20 时 0, drawdown=0.50 时满分.
+    # 区分度跨度 0.95 (vs 旧 0.48).
+    peer_r = clip((lk.peer_lockup_avg_drawdown - 0.20) / 0.30, 0.0, 1.0)
 
-    R = (0.30 * vol_r + 0.20 * val_r + 0.15 * over_r
-         + 0.15 * fund_r + 0.10 * macro_r + 0.10 * peer_r)
+    cfg = _get_cfg()
+    w3 = cfg.layer3_weights if cfg is not None else None
+    if w3 is not None:
+        R = (w3.vol * vol_r + w3.val_reversal * val_r + w3.overhang * over_r
+             + w3.fundamental * fund_r + w3.macro * macro_r + w3.peer * peer_r)
+    else:
+        R = (0.30 * vol_r + 0.20 * val_r + 0.15 * over_r
+             + 0.15 * fund_r + 0.10 * macro_r + 0.10 * peer_r)
     R = clip(R, 0.0, 1.0)
 
     return LayerBreakdown(
@@ -881,30 +955,51 @@ def score_layer3_lockup(o: IPOOffering) -> LayerBreakdown:
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# v7: Regime gate + Cluster bonus 常量
+# v7: Regime gate + Cluster bonus
 # ---------------------------------------------------------------------------
-# regime_score: 过去 [t-120, t-30] 上市 IPO 的 30 日中位收益
-# 数据支撑: regime_score>=0 时主板 NACS_ic 60d 从 +0.09 → +0.245, t 从 0.26 → 2.41 ✅
+# 这两个常量保留作为模块级符号 (被 check_health.py / 第三方代码引用),
+# 但实际取值改为从 config.get_config() 动态读取, 以便 A/B 测试.
+#
+# 兼容策略: 默认 config 与下列原值完全一致, 不加载 YAML 时行为不变.
+#
+# 数据支撑:
+#   - regime_score>=0 时主板 NACS_ic 60d 从 +0.09 → +0.245, t 从 0.26 → 2.41 ✅
+#   - cluster≥2 IPO 60d mean +22%, std 40% (vs 无关联 mean +14%, std 68%)
 REGIME_GATE_THRESHOLD = 0.0
-# cluster bonus: 同 ultimate_holder ≥2 的簇基石数量
-# 数据支撑: cluster≥2 IPO 60d mean +22%, std 40% (vs 无关联 mean +14%, std 68%)
 CLUSTER_BONUS_TABLE = [
-    (5, 1.20),   # cluster_count >= 5
+    (5, 1.20),
     (3, 1.15),
     (2, 1.10),
 ]
 
 
+def _get_cfg():
+    """lazy 导入 config, 避免循环依赖 / 启动开销"""
+    try:
+        from config import get_config
+        return get_config()
+    except ImportError:
+        return None
+
+
 def _cluster_bonus_multiplier(cluster_count: int) -> float:
-    """v7: 根据簇基石数量返回 Q_e 加成系数"""
-    for threshold, mult in CLUSTER_BONUS_TABLE:
-        if cluster_count >= threshold:
-            return mult
+    """v7: 根据簇基石数量返回 Q_e 加成系数 (从 config 读取)
+
+    P3-#3: cluster bonus 实证反向预测, 强制禁用.
+        数据 (2024-2025 全样本):
+            cc=0   n=346 m6 mean=+11.3% (基线)
+            cc=2   n=18  m6 mean=-19.1%  (×1.10 加成 → 变差 -30pp)
+            cc=3-4 n=7   m6 mean=-17.6%  (×1.15 加成 → 变差 -29pp)
+            cc≥5   n=3   m6 mean=-16.0%  (×1.20 加成 → 变差 -27pp)
+        d30 短期偶有正 (基石锁定保护), 但 NACS 预测目标在 m3-m6,
+        cluster 反映"扎堆解禁压力"反向选择, 加成帮倒忙. 强制 1.0 覆盖 config.
+    """
     return 1.0
 
 
 def compute_regime_score(historical_ipos, current_date,
-                         lookback_days: int = 120, min_lag: int = 30) -> Optional[float]:
+                         lookback_days: Optional[int] = None,
+                         min_lag: Optional[int] = None) -> Optional[float]:
     """
     v7 Regime detector: 给定参考日期, 计算过去 [d-lookback, d-min_lag] 上市的
     IPO 30 日收益中位数.
@@ -912,36 +1007,49 @@ def compute_regime_score(historical_ipos, current_date,
     Args:
         historical_ipos: List[Tuple[listing_date, return_d30]]
         current_date: 评分参考日 (通常用 pricing_date)
-        lookback_days: 回看窗口 (默认 120 天)
-        min_lag: 滞后避免用未来数据 (默认 30 天)
+        lookback_days: 回看窗口 (None 则读 config, 默认 120)
+        min_lag: 滞后避免用未来数据 (None 则读 config, 默认 30)
 
     Returns:
-        regime_score (中位数) 或 None (样本不足 <5)
+        regime_score (中位数) 或 None (样本不足)
     """
     from datetime import timedelta
+    cfg = _get_cfg()
+    if lookback_days is None:
+        lookback_days = cfg.regime_gate.lookback_days if cfg is not None else 120
+    if min_lag is None:
+        min_lag = cfg.regime_gate.min_lag_days if cfg is not None else 30
+    min_sample = cfg.regime_gate.min_sample if cfg is not None else 5
+
     cutoff_old = current_date - timedelta(days=lookback_days)
     cutoff_recent = current_date - timedelta(days=min_lag)
     valid = [r for d, r in historical_ipos
              if d is not None and r is not None
              and cutoff_old <= d <= cutoff_recent]
-    if len(valid) < 5:
+    if len(valid) < min_sample:
         return None
     return float(statistics.median(valid))
 
 
+# v8 hardcoded fallback (用于 config 未加载时)
+_DEFAULT_POSITION_BANDS: List[Tuple[float, float, str]] = [
+    (0.55, 1.00, "FULL"),
+    (0.45, 0.70, "LARGE"),
+    (0.35, 0.40, "TRIAL"),
+    (0.25, 0.00, "RELATIONSHIP"),  # v8: 仓位归零保留诊断标签
+    (0.00, 0.00, "SKIP"),
+]
+
+
 def _position_from_nacs(nacs: float) -> Tuple[float, str]:
-    if nacs >= 0.55:
-        return 1.00, "FULL"
-    if nacs >= 0.45:
-        return 0.70, "LARGE"
-    if nacs >= 0.35:
-        return 0.40, "TRIAL"
-    if nacs >= 0.25:
-        # v8: RELATIONSHIP 决策档保留诊断标签 (识别关系户), 但仓位归零
-        # 数据支撑: NACS [0.25, 0.35) 子样本全样本 mean -2~+11%, 60d win=32%, 180d win=37%
-        # 该区间 NACS 排序无法区分好坏 IPO (周六福 +57% 跟 大行科工 -27% 同分)
-        # 砍掉后 production 60d: mean +17%→+37%, win 55%→78%
-        return 0.0, "RELATIONSHIP"
+    """根据 NACS 返回 (仓位, 决策标签); 从 config.position_bands 读取档位"""
+    cfg = _get_cfg()
+    bands = ([(b.min_nacs, b.position, b.decision) for b in cfg.position_bands]
+             if cfg is not None else _DEFAULT_POSITION_BANDS)
+    for min_nacs, pos, dec in bands:
+        if nacs >= min_nacs:
+            return pos, dec
+    # 兜底 (理论不应到达, 因最后一档 min_nacs=0)
     return 0.0, "SKIP"
 
 
@@ -953,44 +1061,88 @@ def compute_nacs(o: IPOOffering) -> NACSResult:
     Qc, Qe, Rl = l1.normalized, l2.normalized, l3.normalized
     nacs_raw = Qc * Qe * (1 - Rl)
 
+    cfg = _get_cfg()
+    adj = cfg.post_adjustments if cfg is not None else None
+    # 兜底硬编码 (与原 v8 完全一致)
+    m_18c = adj.chapter_18c if adj else 0.70
+    m_ah = adj.a_plus_h_short_borrowable if adj else 1.10
+    m_sec = adj.secondary_listing if adj else 0.85
+    m_rpt = adj.related_party_tx_recent if adj else 0.85
+
     adjustments: List[str] = []
     nacs_adj = nacs_raw
 
     # 18C 折扣
     if o.listing_chapter in (ListingChapter.CHAPTER_18C_COMMERCIAL,
                              ListingChapter.CHAPTER_18C_PRECOMMERCIAL):
-        nacs_adj *= 0.70
-        adjustments.append("18C 折扣 x0.70")
+        nacs_adj *= m_18c
+        adjustments.append(f"18C 折扣 x{m_18c}")
+
+    # P3-#1 已撤销: 18A 章节折扣 (×0.85) 实证 ROI 为负.
+    # 9606.HK (NACS 0.404 m3=+46% m6=+70%) 被简单折扣误杀降级,
+    # 净 m6 仓位贡献变差 -8.25%. 18A 内 NACS 区分度低,
+    # 简单 chapter multiplier 不可行; 章节基础分=65 已经反映风险.
 
     # A+H 可融券对冲
     if o.is_a_h and o.a_share_short_borrowable:
-        nacs_adj *= 1.10
-        adjustments.append("A+H 同名A股可融券 x1.10")
+        nacs_adj *= m_ah
+        adjustments.append(f"A+H 同名A股可融券 x{m_ah}")
 
     # 第二上市
     if o.listing_chapter == ListingChapter.SECONDARY_LISTING:
-        nacs_adj *= 0.85
-        adjustments.append("第二上市 x0.85")
+        nacs_adj *= m_sec
+        adjustments.append(f"第二上市 x{m_sec}")
 
     # 控股股东最近12月有重大关联交易
     if o.has_related_party_tx_recent:
-        nacs_adj *= 0.85
-        adjustments.append("控股股东近12月重大关联交易 x0.85")
+        nacs_adj *= m_rpt
+        adjustments.append(f"控股股东近12月重大关联交易 x{m_rpt}")
 
     nacs_adj = clip(nacs_adj, 0.0, 1.0)
     pos, decision = _position_from_nacs(nacs_adj)
 
+    # P2-#3 / P3-#2 章节差异化 RELATIONSHIP 仓位激活:
+    #   实证 (2024-2025 回测):
+    #     18c_commercial RELATIONSHIP n=4 60d mean=+260.6% median=+178.3% win=67%
+    #     a_plus_h       RELATIONSHIP n=5 m3=+20.4% m6=+44.0% m12=+86.6%
+    #                                     (n=4 m6: 3 赢 1 输, 去掉头部仍 +17%)
+    #     main_board     RELATIONSHIP n=12 60d mean=+15.6% m6=-13.7% (混合负, 不激活)
+    #     18a            RELATIONSHIP n=1 数据不足
+    #   章节门: 18C / secondary / a_plus_h 激活 0.10, 主板/18A 维持 0
+    if decision == "RELATIONSHIP" and o.listing_chapter in (
+        ListingChapter.SECONDARY_LISTING,
+        ListingChapter.CHAPTER_18C_COMMERCIAL,
+        ListingChapter.CHAPTER_18C_PRECOMMERCIAL,
+        ListingChapter.A_PLUS_H,
+    ):
+        pos = 0.10
+        adjustments.append(
+            f"P3-#2: {o.listing_chapter.value} RELATIONSHIP 仓位激活 0.10"
+        )
+
     warnings: List[str] = []
 
     # ---- v7: Regime gate (在所有计算后, 决策前应用) ----
+    # P2-#2 章节差异化阈值:
+    #   secondary / 18C: gate 主要捕捉的是"主板 IPO 30d 中位数",
+    #     与 18C/SPO 章节相关性弱; 实证显示 NACS>=0.25 的 18C 标的中
+    #     仅 1/4 通过 gate=0, 而豁免后 60d mean+260%. 故放宽到 -0.10.
+    base_threshold = (cfg.regime_gate.threshold if cfg is not None
+                      else REGIME_GATE_THRESHOLD)
+    if o.listing_chapter in (ListingChapter.SECONDARY_LISTING,
+                             ListingChapter.CHAPTER_18C_COMMERCIAL,
+                             ListingChapter.CHAPTER_18C_PRECOMMERCIAL):
+        regime_threshold = min(base_threshold, -0.10)
+    else:
+        regime_threshold = base_threshold
     regime_blocked = False
-    if o.regime_score is not None and o.regime_score < REGIME_GATE_THRESHOLD:
+    if o.regime_score is not None and o.regime_score < regime_threshold:
         regime_blocked = True
         original_decision = decision
         decision = "SKIP"
         pos = 0.0
         adjustments.append(
-            f"regime_gate: SKIP (score={o.regime_score:+.4f}<{REGIME_GATE_THRESHOLD}, "
+            f"regime_gate: SKIP (score={o.regime_score:+.4f}<{regime_threshold}, "
             f"原决策={original_decision})"
         )
         warnings.append(

@@ -14,7 +14,8 @@ fetch_hk_market_data.py — 每日港股市场数据抓取 (iFinD)
     python scripts/fetch_hk_market_data.py --dry-run
     python scripts/fetch_hk_market_data.py --date 2026-05-08
 
-【骨架版本 — 多处函数名/字段未验证, 见代码内 TODO 注释】
+接口契约: 字段名/编号已通过 data/raw/ifind/ifind_indicator_catalog.csv
+实测验证, 主题板块改造完成 (见 reports/theme_panel_integration.md).
 """
 from __future__ import annotations
 
@@ -60,6 +61,86 @@ def _load_env(env_path: Path) -> None:
 
 _ENV_PATH = PROJECT_ROOT / "src" / "data_sources" / "ifind" / ".env"
 _load_env(_ENV_PATH)
+
+
+# ============================================================================
+# iFinD SDK 登录管理 (含 -1010 logged out 自动重连)
+# ============================================================================
+_IFIND_LOGIN_STATE = {"logged_in": False, "user": None, "pwd": None, "n_relogins": 0}
+
+
+def ifind_login(user: str, pwd: str, *, force: bool = False) -> int:
+    """
+    幂等登录. force=True 时强制重登 (用于 -1010 后).
+    返回 SDK 原始 code (0 / -201 = 已登录, 视为成功).
+    """
+    from iFinDPy import THS_iFinDLogin
+    if _IFIND_LOGIN_STATE["logged_in"] and not force:
+        return 0
+    code = THS_iFinDLogin(user, pwd)
+    if code in (0, -201):
+        _IFIND_LOGIN_STATE.update({"logged_in": True, "user": user, "pwd": pwd})
+        if force:
+            _IFIND_LOGIN_STATE["n_relogins"] += 1
+            print(f"  [ifind] 重登成功 (累计 {_IFIND_LOGIN_STATE['n_relogins']} 次)")
+        return code
+    raise RuntimeError(f"iFinD 登录失败 code={code}")
+
+
+def ifind_logout() -> None:
+    from iFinDPy import THS_iFinDLogout
+    try:
+        THS_iFinDLogout()
+    except Exception:
+        pass
+    _IFIND_LOGIN_STATE["logged_in"] = False
+
+
+def is_logged_out_error(exc: BaseException) -> bool:
+    """识别 iFinD 账户被踢的错误模式. 兼容 RuntimeError / ec=-1010 / errmsg 字符串."""
+    s = str(exc).lower()
+    return ("-1010" in s) or ("logged out" in s) or ("logged_out" in s)
+
+
+def call_with_relogin(fn, *args, max_retries: int = 1, **kwargs):
+    """
+    包装 iFinD SDK 调用. 捕获 -1010 logged out → 自动重登 → 重试.
+    用法: result = call_with_relogin(THS_HistoryQuotes, code, 'close', '', sdate, edate)
+    """
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            result = fn(*args, **kwargs)
+            # iFinD SDK 不抛异常, 错误塞 errorcode / errmsg
+            ec_raw = getattr(result, "errorcode", None)
+            if ec_raw is None and isinstance(result, dict):
+                ec_raw = result.get("errorcode")
+            try:
+                ec = int(ec_raw) if ec_raw is not None else 0
+            except (TypeError, ValueError):
+                ec = 0
+            if ec == -1010 and attempt < max_retries:
+                user = _IFIND_LOGIN_STATE.get("user")
+                pwd = _IFIND_LOGIN_STATE.get("pwd")
+                if not user or not pwd:
+                    raise RuntimeError(f"iFinD -1010 但无凭证可重登")
+                print(f"  [ifind] 触发 -1010 logged out, 第 {attempt+1} 次重登...")
+                ifind_login(user, pwd, force=True)
+                continue
+            return result
+        except Exception as e:
+            if is_logged_out_error(e) and attempt < max_retries:
+                user = _IFIND_LOGIN_STATE.get("user")
+                pwd = _IFIND_LOGIN_STATE.get("pwd")
+                if user and pwd:
+                    print(f"  [ifind] 异常含 logged out, 第 {attempt+1} 次重登...")
+                    ifind_login(user, pwd, force=True)
+                    last_exc = e
+                    continue
+            raise
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("call_with_relogin: 未知失败")
 
 
 # ============================================================================
@@ -278,64 +359,64 @@ def _scan_daily_market_history(end: date, look_back_days: int) -> list[tuple[dat
     return out
 
 
-def _aggregate_southbound_30d(today: date, today_total_hkd: float) -> dict:
+def _fetch_ah_premium_60d_hscahpi(today: date) -> dict:
     """
-    扫 daily/ 历史的 southbound_today.total_net_inflow_hkd, 加今日值, 累计 30 个交易日.
-    daily/ 目录按交易日生成 (周末/节假日不跑), 所以最近 30 个 daily 文件夹 ≈ 30 个交易日.
-    """
-    history = _scan_daily_market_history(today - timedelta(days=1), look_back_days=60)
-    series: list[dict] = []
-    for d, data in history:
-        v = (data.get("southbound_today") or {}).get("total_net_inflow_hkd")
-        if v is not None:
-            series.append({"date": d.isoformat(), "value_hkd": float(v)})
-    series.append({"date": today.isoformat(), "value_hkd": float(today_total_hkd)})
-    series.sort(key=lambda r: r["date"])
-    last_30 = series[-30:]
-    total = sum(r["value_hkd"] for r in last_30)
-    return {
-        "as_of": today.isoformat(),
-        "n_days_actual": len(last_30),
-        "n_days_target": 30,
-        "earliest": last_30[0]["date"] if last_30 else None,
-        "latest": last_30[-1]["date"] if last_30 else None,
-        "cumulative_net_inflow_hkd": total,
-        "daily_avg_hkd": total / len(last_30) if last_30 else 0.0,
-        "note": f"按 daily/ 累加 {len(last_30)} 个交易日 (期望 30); 不足 30 时即用实际值",
-    }
+    用 HSCAHPI.HK (恒生沪深港通 AH 股溢价指数) 真历史 60 个交易日.
 
-
-def _aggregate_ah_premium_60d(today: date, today_wavg_pct: float) -> dict:
+    HSCAHPI 指数基准 100, close-100 = A 相对 H 的整体溢价百分比 (H 股市值加权).
+    与 p03508 自算 (成交额加权) 口径不同, 但 HSCAHPI 是市场公认的官方 AH 溢价基准.
     """
-    扫 daily/ 历史的 ah_premium_today.weighted_avg_premium_pct, 加今日值, 60 日序列 + 百分位.
-    """
-    history = _scan_daily_market_history(today - timedelta(days=1), look_back_days=120)
-    series: list[dict] = []
-    for d, data in history:
-        v = (data.get("ah_premium_today") or {}).get("weighted_avg_premium_pct")
-        if v is not None:
-            series.append({"date": d.isoformat(), "premium_pct": float(v)})
-    series.append({"date": today.isoformat(), "premium_pct": float(today_wavg_pct)})
-    series.sort(key=lambda r: r["date"])
-    last_60 = series[-60:]
-    if not last_60:
+    from iFinDPy import THS_HistoryQuotes
+    sdate = (today - timedelta(days=120)).strftime("%Y-%m-%d")
+    edate = today.strftime("%Y-%m-%d")
+    r = call_with_relogin(THS_HistoryQuotes, 'HSCAHPI.HK', 'close', '', sdate, edate)
+    if not isinstance(r, dict):
+        # 退化路径: 旧 API 返回对象形态
+        ec = getattr(r, "errorcode", -1)
+        if ec != 0:
+            return {}
+        df = getattr(r, "data", None)
+        if df is None or len(df) == 0:
+            return {}
+        times = [str(t) for t in df["time"].tolist()] if "time" in df.columns else []
+        closes = [float(c) for c in df["close"].tolist()] if "close" in df.columns else []
+    else:
+        if r.get("errorcode") != 0:
+            return {}
+        tables = r.get("tables") or []
+        if not tables:
+            return {}
+        t0 = tables[0]
+        times = list(t0.get("time") or [])
+        tbl = t0.get("table") if isinstance(t0.get("table"), dict) else {}
+        closes = list((tbl or {}).get("close") or [])
+    if not closes:
         return {}
-    cur = last_60[-1]["premium_pct"]
-    vals = [r["premium_pct"] for r in last_60]
+    series = [
+        {"date": str(times[i]), "premium_pct": float(closes[i]) - 100.0}
+        for i in range(len(closes))
+    ]
+    series = series[-60:]
+    cur = series[-1]["premium_pct"]
+    vals = [r["premium_pct"] for r in series]
     avg = sum(vals) / len(vals)
     pct_rank = sum(1 for v in vals if v <= cur) / len(vals)
     return {
         "as_of": today.isoformat(),
-        "n_days_actual": len(last_60),
+        "n_days_actual": len(series),
         "n_days_target": 60,
         "current_pct": cur,
         "60d_avg_pct": avg,
         "60d_min_pct": min(vals),
         "60d_max_pct": max(vals),
         "60d_pct_rank": pct_rank,
-        "series": last_60,
+        "series": series,
         "convention": "A_over_H (positive = A 比 H 贵)",
-        "note": f"按 daily/ 累加 {len(last_60)} 个交易日 (期望 60)",
+        "source": "HSCAHPI.HK (恒生沪深港通 AH 股溢价指数, close-100=溢价%)",
+        "note": (
+            "HSCAHPI 按 H 股市值加权; 与 ah_premium_today (p03508 按成交额自算) 口径不同, "
+            "可能存在 5-15% 的水平差, 但趋势/百分位一致"
+        ),
     }
 
 
@@ -451,7 +532,9 @@ def fetch_market_data(rec: RunRecorder, today: date, *, dry_run: bool = False) -
       - hsahp_60d:            恒生 AH 溢价指数过去 60 日
       - regime_score:         调用 nacs_model.compute_regime_score
     """
-    from iFinDPy import THS_HistoryQuotes  # TODO: 确认函数名 (也可能是 THS_HQ)
+    # THS_HistoryQuotes(thscode, indicators, jsonparam, sdate, edate) — 见
+    # data/raw/ifind/ifind_indicator_catalog.csv 中 HSI.HK / HSTECH.HK / 930967.CSI 等行
+    from iFinDPy import THS_HistoryQuotes
 
     out: dict[str, Any] = {"as_of": today.isoformat()}
 
@@ -463,7 +546,7 @@ def fetch_market_data(rec: RunRecorder, today: date, *, dry_run: bool = False) -
     try:
         # 探针验证: 恒生指数在 iFinD 的代码是 HSI.HK (不是 HSI.HI)
         # 第 3 参数 jsonparam 可以为空字符串; 个股/HSI 都通
-        r = THS_HistoryQuotes('HSI.HK', 'close', '', sdate_1y, edate)
+        r = call_with_relogin(THS_HistoryQuotes, 'HSI.HK', 'close', '', sdate_1y, edate)
         u = _hq_unpack(r, debug_tag="HSI.HK")
         if u.errorcode != 0:
             raise RuntimeError(f"errorcode={u.errorcode} errmsg={u.errmsg}")
@@ -499,49 +582,152 @@ def fetch_market_data(rec: RunRecorder, today: date, *, dry_run: bool = False) -
     except Exception as e:
         rec.fail("hsi", f"{type(e).__name__}: {e}")
 
-    # ---- 港股通南向资金 当日净流入 (p04275) ----
-    # type=1 沪港通, type=2 深港通; f003=当日资金净流入(港元)
-    # 注: 30 日累计需要每天 daily 累积或循环 30 次, 此处只取当日截面
+    # ---- 港股通南向资金 (p04277 单日净买入 + p04275 累计持仓榜) ----
+    # 双源各司其职 (2026-05 单位探针确认):
+    #   p04277 (沪深港通成交统计): 真日序列, f002='南向交易' 行 + f004=单日净买入(亿港元)
+    #          调用: zq=day; sdate; edate; bz=HKD. f005-f007=f004, f005+f007=f003 验算通过.
+    #          缺点: 数据滞后 ~20 个交易日 (典型 lag 25 天), 无法当天发布
+    #   p04275 (港股通资金成份股榜): 实时截面, 不接受历史日期参数, f003 是"累计净买入持仓"
+    #          (单只 abs_max ~80 亿 远超单日全市场总成交 13 亿, 物理不可能为单日量),
+    #          所以 sum f003 不再用作"今日南向", 仅保留作为成份股累计持仓榜参考.
+    # 详见 scripts/verify_southbound_units.py + data/raw/ifind/probe_southbound_*.json
     try:
         from iFinDPy import THS_DR
-        sb_total = 0.0
-        sb_breakdown = {}
-        for ttype, label in [(1, "shanghai"), (2, "shenzhen")]:
-            r = THS_DR(
-                'p04275',
-                f'type={ttype};sdate={edate};edate={edate}',
-                ','.join([f'p04275_f{i:03d}:Y' for i in range(1, 13)]),
-                'format:dataframe'
-            )
-            if getattr(r, "errorcode", -1) != 0:
-                raise RuntimeError(f"type={ttype} ec={r.errorcode} msg={r.errmsg}")
-            df = r.data
-            if df is None or len(df) == 0:
-                sb_breakdown[label] = {"net_inflow_hkd": 0.0, "n_stocks": 0}
-                continue
-            # f003 是文本含 "--" 等, 转 numeric 跳过非数
-            import pandas as pd
-            f003 = pd.to_numeric(df["p04275_f003"], errors="coerce")
-            net = float(f003.sum())
-            sb_breakdown[label] = {"net_inflow_hkd": net, "n_stocks": int(f003.notna().sum())}
-            sb_total += net
-        out["southbound_today"] = {
-            "as_of": edate,
-            "total_net_inflow_hkd": sb_total,
-            "breakdown": sb_breakdown,
-            "note": "p04275 截面数据",
-        }
-        rec.ok("southbound_today", f"total={sb_total/1e8:.2f} 亿港元")
+        import pandas as pd
 
-        # 30 日累计 (扫 daily/ 历史 + 今日)
+        # ---- (1) southbound_today + southbound_30d 用 p04277 真日序列 ----
+        # 取近 90 天(节假日 + 数据 lag 缓冲), 实际能拿到 ~20-30 个交易日的"南向交易"行
+        sdate_sb = (today - timedelta(days=90)).strftime("%Y%m%d")
+        edate_sb = today.strftime("%Y%m%d")
+        r277 = call_with_relogin(
+            THS_DR,
+            'p04277',
+            f'zq=day;sdate={sdate_sb};edate={edate_sb};bz=HKD',
+            ','.join([f'p04277_f{i:03d}:Y' for i in range(1, 13)]),
+            'format:dataframe'
+        )
+        if getattr(r277, "errorcode", -1) != 0:
+            raise RuntimeError(f"p04277 ec={r277.errorcode} msg={r277.errmsg}")
+        df277 = r277.data
+        if df277 is None or len(df277) == 0:
+            raise RuntimeError("p04277 returned empty")
+
+        # 只保留 f002='南向交易' 行
+        sb_rows = df277[df277["p04277_f002"] == "南向交易"].copy()
+        if len(sb_rows) == 0:
+            raise RuntimeError("p04277 无 '南向交易' 行")
+        # f001 = 'YYYY/MM/DD'; 转为 ISO 排序
+        sb_rows["_date_iso"] = sb_rows["p04277_f001"].astype(str).str.replace("/", "-")
+        sb_rows = sb_rows.sort_values("_date_iso").reset_index(drop=True)
+        # f004=净买入, f005=买入, f007=卖出, f003=总成交 (均亿港元)
+        for col in ("p04277_f003", "p04277_f004", "p04277_f005", "p04277_f007"):
+            sb_rows[col] = pd.to_numeric(sb_rows[col], errors="coerce")
+
+        last = sb_rows.iloc[-1]
+        sb_today_date = str(last["_date_iso"])
+        sb_today_net_yi = float(last["p04277_f004"])
+        sb_today_buy_yi = float(last["p04277_f005"]) if pd.notna(last["p04277_f005"]) else None
+        sb_today_sell_yi = float(last["p04277_f007"]) if pd.notna(last["p04277_f007"]) else None
+        sb_today_total_yi = float(last["p04277_f003"]) if pd.notna(last["p04277_f003"]) else None
+        lag_days = (today - datetime.strptime(sb_today_date, "%Y-%m-%d").date()).days
+
+        out["southbound_today"] = {
+            "as_of": sb_today_date,            # p04277 实际最末日
+            "today_query": today.isoformat(),  # 调用时的 today
+            "data_lag_days": lag_days,
+            "net_inflow_hkd_yi": sb_today_net_yi,
+            "buy_hkd_yi": sb_today_buy_yi,
+            "sell_hkd_yi": sb_today_sell_yi,
+            "total_turnover_hkd_yi": sb_today_total_yi,
+            "unit": "亿港元 (p04277 原生单位, 非 /1e8 后)",
+            "source": "p04277_f004 (zq=day, bz=HKD, f002='南向交易')",
+            "note": (
+                f"p04277 数据延迟 {lag_days} 天 (今日={today.isoformat()}, "
+                f"接口最末日={sb_today_date}); 验算 f005-f007=f004, f005+f007=f003 通过"
+            ),
+        }
+        rec.ok(
+            "southbound_today",
+            f"as_of={sb_today_date} (lag={lag_days}d) net={sb_today_net_yi:+.2f} 亿港元 "
+            f"(buy={sb_today_buy_yi:.0f}/sell={sb_today_sell_yi:.0f})"
+        )
+
+        # 30 日累计: 取序列尾部 30 个交易日 (实际可能少于 30)
+        last_n = sb_rows.tail(30)
+        cum_yi = float(last_n["p04277_f004"].sum())
+        avg_yi = cum_yi / max(len(last_n), 1)
+        out["southbound_30d"] = {
+            "as_of": sb_today_date,
+            "n_days_actual": int(len(last_n)),
+            "n_days_target": 30,
+            "earliest": str(last_n.iloc[0]["_date_iso"]) if len(last_n) else None,
+            "latest": sb_today_date,
+            "cumulative_net_inflow_hkd_yi": cum_yi,
+            "daily_avg_hkd_yi": avg_yi,
+            "is_reliable": len(last_n) >= 5,
+            "unit": "亿港元",
+            "source": "p04277 真日序列尾 30 日 (sum f004), 不再扫 daily/ 历史",
+        }
+        if len(last_n) >= 5:
+            rec.ok(
+                "southbound_30d",
+                f"cum={cum_yi:+.2f} 亿/{len(last_n)}d avg={avg_yi:+.2f} 亿/d"
+            )
+        else:
+            rec.skip("southbound_30d", f"p04277 仅返回 {len(last_n)} 个交易日, n<5 不发布")
+
+        # ---- (2) southbound_holdings: 保留 p04275 但重新解读为"成份股累计持仓榜" ----
         try:
-            sb30 = _aggregate_southbound_30d(today, sb_total)
-            out["southbound_30d"] = sb30
-            rec.ok("southbound_30d",
-                   f"cum={sb30['cumulative_net_inflow_hkd']/1e8:.2f} 亿/{sb30['n_days_actual']}d "
-                   f"avg={sb30['daily_avg_hkd']/1e8:.2f} 亿/d")
-        except Exception as e2:
-            rec.fail("southbound_30d", f"{type(e2).__name__}: {e2}")
+            sb_hold_breakdown: dict[str, Any] = {}
+            top_holdings: list[dict] = []
+            for ttype, label in [(1, "shanghai"), (2, "shenzhen")]:
+                rh = call_with_relogin(
+                    THS_DR,
+                    'p04275',
+                    f'type={ttype};sdate={edate};edate={edate}',
+                    ','.join([f'p04275_f{i:03d}:Y' for i in range(1, 13)]),
+                    'format:dataframe'
+                )
+                if getattr(rh, "errorcode", -1) != 0:
+                    sb_hold_breakdown[label] = {"error": f"ec={rh.errorcode}"}
+                    continue
+                dfh = rh.data
+                if dfh is None or len(dfh) == 0:
+                    sb_hold_breakdown[label] = {"n_stocks": 0}
+                    continue
+                f003h = pd.to_numeric(dfh["p04275_f003"], errors="coerce")
+                # 仅记录股票数和"累计持仓榜" top 5, 不再 sum 当作单日量
+                top5_idx = f003h.abs().nlargest(5).index
+                top5 = []
+                for i in top5_idx:
+                    top5.append({
+                        "code": str(dfh.loc[i, "p04275_f001"]),
+                        "name": str(dfh.loc[i, "p04275_f002"]),
+                        "f003_cumulative_hkd": float(f003h.loc[i]) if pd.notna(f003h.loc[i]) else None,
+                    })
+                sb_hold_breakdown[label] = {
+                    "n_stocks": int(f003h.notna().sum()),
+                    "top5_by_abs_f003": top5,
+                }
+                top_holdings.extend(top5)
+
+            out["southbound_holdings"] = {
+                "as_of_query": edate,
+                "breakdown": sb_hold_breakdown,
+                "field_semantics": (
+                    "p04275_f003 = 成份股累计净买入持仓金额 (元); 单只可达 80+ 亿, 远大于单日成交, "
+                    "不可作为单日净买入. 仅作热门持仓榜参考."
+                ),
+                "source": "p04275 (实时截面 datapool, 不支持历史)",
+            }
+            rec.ok(
+                "southbound_holdings",
+                f"sh={sb_hold_breakdown.get('shanghai',{}).get('n_stocks','?')}只 "
+                f"sz={sb_hold_breakdown.get('shenzhen',{}).get('n_stocks','?')}只 "
+                f"(累计持仓榜, 非单日)"
+            )
+        except Exception as eh:
+            rec.fail("southbound_holdings", f"{type(eh).__name__}: {eh}")
     except Exception as e:
         rec.fail("southbound_today", f"{type(e).__name__}: {e}")
 
@@ -549,7 +735,7 @@ def fetch_market_data(rec: RunRecorder, today: date, *, dry_run: bool = False) -
     try:
         from iFinDPy import THS_EDB
         edb_start = (today - timedelta(days=400)).strftime("%Y-%m-%d")
-        r = THS_EDB('S032219215', '', edb_start, edate)
+        r = call_with_relogin(THS_EDB, 'S032219215', '', edb_start, edate)
         if getattr(r, "errorcode", -1) != 0:
             raise RuntimeError(f"ec={r.errorcode} msg={r.errmsg}")
         df = r.data.sort_values("time").reset_index(drop=True)
@@ -565,7 +751,8 @@ def fetch_market_data(rec: RunRecorder, today: date, *, dry_run: bool = False) -
         from iFinDPy import THS_DR
         import pandas as pd
         edate_compact = today.strftime("%Y%m%d")
-        r = THS_DR(
+        r = call_with_relogin(
+            THS_DR,
             'p03508',
             f'date={edate_compact}',
             'jydm:Y,jydm_mc:Y,'
@@ -596,14 +783,16 @@ def fetch_market_data(rec: RunRecorder, today: date, *, dry_run: bool = False) -
         }
         rec.ok("ah_premium", f"A_over_H weighted={wavg:.2f}% n={prem.notna().sum()}")
 
-        # 60 日序列 + 百分位 (扫 daily/ 历史 + 今日)
+        # 60 日序列 + 百分位 (HSCAHPI.HK 真历史指数)
         try:
-            ah60 = _aggregate_ah_premium_60d(today, wavg)
+            ah60 = _fetch_ah_premium_60d_hscahpi(today)
             if ah60:
                 out["ah_premium_60d"] = ah60
                 rec.ok("ah_premium_60d",
                        f"cur={ah60['current_pct']:.2f}% avg={ah60['60d_avg_pct']:.2f}% "
-                       f"pctrank={ah60['60d_pct_rank']:.0%} n={ah60['n_days_actual']}d")
+                       f"pctrank={ah60['60d_pct_rank']:.0%} n={ah60['n_days_actual']}d (HSCAHPI)")
+            else:
+                rec.fail("ah_premium_60d", "HSCAHPI.HK 拉历史失败")
         except Exception as e2:
             rec.fail("ah_premium_60d", f"{type(e2).__name__}: {e2}")
     except Exception as e:
@@ -660,35 +849,117 @@ def fetch_market_data(rec: RunRecorder, today: date, *, dry_run: bool = False) -
 
 
 # ============================================================================
-# (b) news_today.json — 100-200 篇当日港股新闻
+# (b) news_today.json — 当日港股个股新闻 (akshare ak.stock_news_em)
 # ============================================================================
+def _load_news_universe() -> list[str]:
+    """
+    新闻池来源 (按优先级):
+      1. data/watchlist.json 顶层 news_universe: ["00700.HK", ...]
+      2. 空 → 返回 [], 触发 skip
+    """
+    wl_path = PROJECT_ROOT / "data" / "watchlist.json"
+    if not wl_path.exists():
+        return []
+    try:
+        data = json.loads(wl_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    universe = data.get("news_universe", []) or []
+    return [str(c).strip() for c in universe if str(c).strip()]
+
+
 def fetch_news(rec: RunRecorder, today: date) -> list[dict[str, Any]]:
     """
-    iFinD 没有可直接拉取新闻全文的 API. 探针确认:
-      - THS_iEvent / THS_iResearch: account type is not supported (-5100)
-      - THS_iwencai(query, 'news'): ec=0 但 tables[0]['table'] 实际无内容
-      - THS_WC(query, 'news'): 返回 1 行 "查看明细" 占位 (链接, 非全文)
-    用户已确认: "iFinD 未提及独立的资讯 API 端点".
+    iFinD 无独立的纯新闻 API (探针确认 -5100 / 空表 / 占位链接).
+    改用 akshare ak.stock_news_em() 抓个股新闻.
 
-    建议的替代源 (后续接入):
-      - FT 中文网 / 财新 RSS
-      - Bloomberg API (付费)
-      - akshare ak.stock_news_em()
-      - 港交所披露易官网爬虫 (公司公告)
+    新闻池: data/watchlist.json 的 news_universe 字段 (港股代码列表).
+    单只股票失败不影响其它, 错误进 errors.log.
+    上市公司公告走 ifind/announcement_fetcher.py 的 report_query, 与本函数解耦.
     """
-    rec.skip("news", "iFinD 无独立新闻 API; 见函数 docstring 里的替代源建议")
-    return []
+    universe = _load_news_universe()
+    if not universe:
+        rec.skip(
+            "news",
+            "watchlist.json 缺 news_universe 列表 (示例: "
+            '\"news_universe\": [\"00700.HK\", \"09988.HK\"])'
+        )
+        return []
+
+    try:
+        from src.data_sources.akshare.news_fetcher import fetch_news_batch
+    except ImportError as e:
+        rec.fail("news", f"akshare 模块导入失败: {e}; pip install akshare")
+        return []
+
+    try:
+        # 取当日 + 前一日, 覆盖跨午夜推送
+        start_dt = (today - timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")
+        end_dt = today.strftime("%Y-%m-%d 23:59:59")
+        batch = fetch_news_batch(
+            universe,
+            limit_per_symbol=20,
+            start_datetime=start_dt,
+            end_datetime=end_dt,
+            sleep_sec=0.5,
+        )
+    except Exception as e:
+        rec.fail("news", f"{type(e).__name__}: {e}")
+        return []
+
+    errors = batch.pop("_errors", {}) if isinstance(batch, dict) else {}
+    raw_items: list[dict[str, Any]] = []
+    for code, news_list in batch.items():
+        for n in news_list:
+            raw_items.append(n.to_dict())
+
+    # 去重: 同一条宏观新闻常被关联到 universe 里多只股票 (例: "南向资金追踪"
+    # 关联到 0700/3690/9988 三只). LLM 会误读为"多股各有动态", 实际是同一条.
+    # 去重键: source_url 为主, 退化到 (headline, published_at).
+    # 保留首次出现, 把所有关联股票收集到 linked_stocks 列表.
+    deduped: dict[str, dict[str, Any]] = {}
+    for it in raw_items:
+        url = (it.get("source_url") or "").strip()
+        headline = (it.get("headline") or "").strip()
+        pub = (it.get("published_at") or "").strip()
+        key = url if url else f"{headline}|{pub}"
+        if key in deduped:
+            existing = deduped[key]
+            stock = it.get("stock_code")
+            if stock and stock not in existing["linked_stocks"]:
+                existing["linked_stocks"].append(stock)
+        else:
+            new_item = dict(it)
+            new_item["linked_stocks"] = [it["stock_code"]] if it.get("stock_code") else []
+            deduped[key] = new_item
+
+    items = list(deduped.values())
+    n_dropped = len(raw_items) - len(items)
+
+    if errors:
+        for code, msg in errors.items():
+            rec.errors_log.append(
+                f"[{datetime.now().isoformat()}] news[{code}]: {msg}"
+            )
+
+    rec.ok(
+        "news",
+        f"{len(items)} 条 (raw={len(raw_items)}, 去重 {n_dropped} 条 fan-out, "
+        f"universe={len(universe)} 只, 失败 {len(errors)} 只)"
+    )
+    return items
 
 
 # ============================================================================
 # (c) themes.json — 主题板块表现
 # ============================================================================
-# 主题 → 港股相关指数代码
-#   ⚠ 港股没有同花顺概念板块编码体系 (确认自用户), 只能用:
-#     - 中证港股通指数 (.CSI 后缀): 930967.CSI 港股通信息技术综合 / 931573.CSI 港股通科技 / 931574.CSI 港股通TMT
-#     - 恒生行业指数 (.HK 后缀): HSTECH.HK 恒生科技 / HSCI.HK 恒生综合 / HSCIIT.HK 恒生综合-资讯科技
-#   5 个 AI 主题在港股都没有专属指数, 全部用 HSTECH.HK 作粗代理.
-#   TODO 升级: 改成「主题代表股票组合」(每个主题挑 3-5 只代表股, 算等权 close 序列), 精度更高
+# 主题 → 港股相关指数代码 (v1 兼容用; v2 主路径走 data/watchlist.json 的 iv_bkid)
+#   - v2 (默认): 12 主题用 iFinD 板块成分股 (THS_DR p03291) + 批量 THS_HistoryQuotes
+#                等权合成 close 序列, 见 reports/theme_panel_integration.md
+#   - v1 (兜底): 单 ths_code 拉指数代理 (HSTECH.HK / 930967.CSI 等)
+#   港股没有同花顺概念板块编码体系 (确认自用户), v1 兜底时:
+#     - 中证港股通指数 (.CSI 后缀): 930967.CSI / 931573.CSI / 931574.CSI
+#     - 恒生行业指数 (.HK 后缀): HSTECH.HK / HSCI.HK / HSCIIT.HK
 DEFAULT_THEMES = {
     "ai_server":        {"label": "AI 服务器",     "ths_code": "HSTECH.HK",  "proxy_note": "粗代理: 用恒生科技指数"},
     "llm":              {"label": "大模型",        "ths_code": "HSTECH.HK",  "proxy_note": "粗代理: 用恒生科技指数"},
@@ -781,7 +1052,8 @@ def _fetch_theme_constituents(bkid: str, asof: date, *, dry_run: bool = False) -
 
     from iFinDPy import THS_DR
     edate_compact = asof.strftime("%Y%m%d")
-    r = THS_DR(
+    r = call_with_relogin(
+        THS_DR,
         'p03291',
         f'date={edate_compact};blockname={bkid};iv_type=allcontract',
         'p03291_f001:Y,p03291_f002:Y,p03291_f003:Y,p03291_f004:Y',
@@ -833,7 +1105,7 @@ def _compose_theme_close_series(
     if not codes:
         raise RuntimeError("成分股列表为空")
     codes_str = ",".join(codes)
-    r = THS_HistoryQuotes(codes_str, "close", "", sdate, edate)
+    r = call_with_relogin(THS_HistoryQuotes, codes_str, "close", "", sdate, edate)
     per = _hq_unpack_batch(r, debug_tag=debug_tag)
     if not per:
         raise RuntimeError(f"批量行情返回空 (codes_n={len(codes)}, ec={getattr(r,'errorcode',None)} msg={getattr(r,'errmsg','')})")
@@ -917,7 +1189,7 @@ def fetch_themes(rec: RunRecorder, today: date, *, dry_run: bool = False) -> dic
                             "error": "no_code", "compose_err": compose_err}
                 continue
             try:
-                r = THS_HistoryQuotes(single_code, 'close', '', sdate, edate)
+                r = call_with_relogin(THS_HistoryQuotes, single_code, 'close', '', sdate, edate)
                 u = _hq_unpack(r, debug_tag=f"theme.{key}.fallback")
                 if u.errorcode != 0:
                     raise RuntimeError(f"errorcode={u.errorcode} errmsg={u.errmsg}")
@@ -975,18 +1247,28 @@ def fetch_themes(rec: RunRecorder, today: date, *, dry_run: bool = False) -> dic
 def fetch_ipo_recent(rec: RunRecorder, today: date) -> list[dict[str, Any]]:
     """
     用 p05310 首发信息一览 (full_data_pull.py 已验证可行).
-    上市日期字段: 需要从 p05310_f00X 中找 "上市日期" 列 (待确认 f编号).
+
+    p05310 字段映射 (实测自 data/raw/ifind/ifind_ipo_info.csv):
+        f001 = thscode (例: 1187.HK)
+        f002 = 公司简称 (例: 可孚医疗)
+        f003 = 招股/招股截止日期 (apply_date, 例: 2026/05/05) — 注意不是真挂牌日!
+               实测 1187.HK p05310_f003=2026/05/05, 但 THS_HistoryQuotes 显示真挂牌
+               首交易日=2026/05/06, 港股招股到挂牌通常隔 1-7 个工作日.
+        f004 = 发行方式 ("发售以供认购,发售以供配售" 等)
+        f005 = 是否首次公开发行 (sfzx)
+
+    输出字段 listing_date 已经 schema 调整: 取 closes 数组的首个交易日 (真挂牌日),
+    p05310_f003 同时保留为 apply_date 字段 (招股日, 用于参考).
     """
     try:
         from iFinDPy import THS_DR
         sdate = (today - timedelta(days=45)).strftime("%Y%m%d")  # 多 15 天 buffer
         edate = today.strftime("%Y%m%d")
 
-        # 关键字段 (基于 full_data_pull.py 的猜测):
-        #   f001=thscode, f002=简称, f003=上市日期(?), 其他待 full_data_pull 输出确认
-        # TODO: 跑过 full_data_pull.py 后, 把"上市日期"列的真实编号补进来
+        # f001=thscode, f002=简称, f003=上市日期 — 经 ifind_ipo_info.csv 实测确认
         fields = ",".join([f"p05310_f{i:03d}:Y" for i in [1, 2, 3, 4, 5]])
-        r = THS_DR(
+        r = call_with_relogin(
+            THS_DR,
             'p05310',
             f'ttype=1;sdate={sdate};edate={edate};sfzx=1',
             fields,
@@ -1004,7 +1286,7 @@ def fetch_ipo_recent(rec: RunRecorder, today: date) -> list[dict[str, Any]]:
         # 对每只新股拉首日/5日/30日表现
         from iFinDPy import THS_HistoryQuotes
         rows: list[dict[str, Any]] = []
-        # 假设 f001 是 thscode, f003 是上市日期 — 待确认
+        # f001=thscode, f003=上市日期 (字段映射见函数 docstring)
         code_col = next((c for c in df.columns if "f001" in c), df.columns[0])
         date_col = next((c for c in df.columns if "f003" in c), df.columns[2])
         for _, row in df.iterrows():
@@ -1022,22 +1304,35 @@ def fetch_ipo_recent(rec: RunRecorder, today: date) -> list[dict[str, Any]]:
 
             entry: dict[str, Any] = {
                 "thscode": code,
-                "listing_date": list_dt.isoformat(),
+                "apply_date": list_dt.isoformat(),  # p05310_f003 (语义混乱: 招股截止/上市后公告 不一)
+                "listing_date": None,               # 真挂牌首日, 由 closes[0] 时间戳填充
+                "apply_listing_lag_days": None,
                 "name": str(row.get(next((c for c in df.columns if "f002" in c), ""), "")),
             }
-            # 拉上市后行情
+            # sdate 提前 90 天 buffer: 实测 p05310_f003 跟真挂牌日相差 ±20-30 天
+            # 是常态 (例 0664.HK 铜师傅 f003=4/30 真挂牌 3/31 lag=+30d).
+            # 真 IPO 90 天前无交易历史, buffer 安全; closes[0] 即真挂牌首日.
             try:
-                start = list_dt.strftime("%Y-%m-%d")
+                start = (list_dt - timedelta(days=90)).strftime("%Y-%m-%d")
                 end = (list_dt + timedelta(days=60)).strftime("%Y-%m-%d")
-                rq = THS_HistoryQuotes(code, 'close,open', '', start, end)
+                rq = call_with_relogin(THS_HistoryQuotes, code, 'close,open', '', start, end)
                 uq = _hq_unpack(rq, debug_tag="ipo_quote")
                 if uq.errorcode == 0 and uq.closes and uq.opens:
-                    closes, opens = uq.closes, uq.opens
+                    closes, opens, times = uq.closes, uq.opens, getattr(uq, "times", [])
+                    if times:
+                        listing_str = str(times[0])[:10]
+                        entry["listing_date"] = listing_str
+                        try:
+                            ld = datetime.strptime(listing_str, "%Y-%m-%d").date()
+                            entry["apply_listing_lag_days"] = (ld - list_dt).days
+                        except Exception:
+                            pass
                     entry["d1_return"] = closes[0] / opens[0] - 1   # 首日(收/开)
                     entry["d5_return"] = closes[4] / opens[0] - 1 if len(closes) > 4 else None
                     entry["d30_return"] = closes[29] / opens[0] - 1 if len(closes) > 29 else None
             except Exception as e:
                 entry["quote_error"] = str(e)
+            # 行情拉失败时, listing_date 维持 None — 比错填招股日更安全
             rows.append(entry)
 
         rec.ok("ipo_recent", f"{len(rows)} 只新股")
@@ -1063,16 +1358,16 @@ def main() -> int:
     out_dir = PROJECT_ROOT / args.out_root / today.isoformat()
     print(f"参考日: {today}  输出: {out_dir}  dry_run={args.dry_run}\n")
 
-    # 登录
-    from iFinDPy import THS_iFinDLogin, THS_iFinDLogout
+    # 登录 (含 -1010 logged out 自动重连支持)
     user = os.environ.get("IFIND_USERNAME", "")
     pwd = os.environ.get("IFIND_PASSWORD", "")
     if not user or not pwd:
         print(f"❌ 未读到 IFIND_USERNAME / IFIND_PASSWORD (检查 {_ENV_PATH})")
         return 2
-    code = THS_iFinDLogin(user, pwd)
-    if code not in (0, -201):
-        print(f"❌ iFinD 登录失败: {code}")
+    try:
+        ifind_login(user, pwd)
+    except RuntimeError as e:
+        print(f"❌ {e}")
         return 3
     print("✓ iFinD 登录成功\n")
 
@@ -1103,7 +1398,7 @@ def main() -> int:
                    {"as_of": today.isoformat(), "ipos": ipos}, args.dry_run)
     finally:
         rec.write()
-        THS_iFinDLogout()
+        ifind_logout()
 
     # ---- 主进程 Logout 后, 如检测到 IPO 缓存缺失则起子进程刷新 ----
     if not args.dry_run:

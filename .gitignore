@@ -28,11 +28,16 @@ outputs/
 # --- 每日抓数产物 (fetch_hk_market_data.py) ---
 daily/
 
-# --- 数据库 (可重建) ---
+# --- 数据库 (默认忽略，但保留主库与里程碑备份) ---
 *.db
 *.sqlite
 *.sqlite3
+!data/nacs_real.db
+!data/nacs_real.db.bak_*
 
 # --- 临时数据 ---
 *.tmp
 *.bak
+
+# --- 个人持仓清单（隐私）---
+data/watchlist.json

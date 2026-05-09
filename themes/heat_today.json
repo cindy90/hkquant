@@ -1,0 +1,253 @@
+{
+  "as_of": "2026-05-08",
+  "themes": {
+    "ai_server": {
+      "theme_id": "ai_server",
+      "label": "AI 服务器 / 数据中心",
+      "composition_n_constituents": 33,
+      "index_source": "pipeline_composed",
+      "ret_5d": 0.03621348860206974,
+      "ret_20d": 0.09324272841267756,
+      "ret_60d": 0.0473119683704073,
+      "index_used": "compose(011007_308847, n=33/33)",
+      "pe_ttm_avg": 35.47901183498675,
+      "pe_ttm_per_company": {
+        "00992.HK": 13.476393167191,
+        "00763.HK": 25.639994874177,
+        "06088.HK": 54.597869417607,
+        "00285.HK": 19.613651315094,
+        "01415.HK": 18.124889833886,
+        "01347.HK": null,
+        "00981.HK": 110.22169488849,
+        "06618.HK": 24.439802408163,
+        "01810.HK": 17.717798775286
+      },
+      "research": {
+        "n_reports": 0,
+        "avg_rating_score": null,
+        "n_buy": 0,
+        "n_neutral": 0,
+        "n_sell": 0
+      },
+      "heat_score": 72,
+      "reason": "5/20/60日涨幅全正, 20日涨9.3%动能强劲; PE 35.5x偏高但未极端; 研报数据缺失无法验证情绪, 按动量给热门档",
+      "warning": "null",
+      "source": "kimi"
+    },
+    "llm": {
+      "theme_id": "llm",
+      "label": "大模型 / 生成式 AI",
+      "composition_n_constituents": 37,
+      "index_source": "pipeline_composed",
+      "ret_5d": 0.0509907563797134,
+      "ret_20d": 0.006508683075031163,
+      "ret_60d": 0.0857635679445441,
+      "index_used": "compose(011007_305848, n=37/37)",
+      "pe_ttm_avg": 23.4807717978304,
+      "pe_ttm_per_company": {
+        "00700.HK": 17.175812686123,
+        "09988.HK": 25.720838788918,
+        "03690.HK": null,
+        "09618.HK": 15.285102302341,
+        "01024.HK": 11.109222949866,
+        "09888.HK": 63.537312532481,
+        "02013.HK": null,
+        "09961.HK": 8.0563415272534
+      },
+      "research": {
+        "n_reports": 0,
+        "avg_rating_score": null,
+        "n_buy": 0,
+        "n_neutral": 0,
+        "n_sell": 0
+      },
+      "heat_score": 65,
+      "reason": "5日涨5.1%短期活跃，60日涨8.6%有趋势但20日几乎横盘，PE 23.5x中等，研报真空期无情绪锚定，偏热但未过热。",
+      "warning": null,
+      "source": "kimi"
+    },
+    "ai_application": {
+      "theme_id": "ai_application",
+      "label": "AI 应用 / Agent",
+      "index_source": "fallback_quote",
+      "ret_5d": 0.047516894804693566,
+      "ret_20d": 0.05830345087905231,
+      "ret_60d": -0.049129404223283935,
+      "index_used": "HSTECH.HK",
+      "pe_ttm_avg": 95.0733029589368,
+      "pe_ttm_per_company": {
+        "00268.HK": 320.57898231427,
+        "00772.HK": null,
+        "02013.HK": null,
+        "06618.HK": 24.439802408163,
+        "01797.HK": 77.576526269887,
+        "01357.HK": 37.112673697588,
+        "03888.HK": 15.658530104776
+      },
+      "research": {
+        "n_reports": 0,
+        "avg_rating_score": null,
+        "n_buy": 0,
+        "n_neutral": 0,
+        "n_sell": 0
+      },
+      "heat_score": 55,
+      "reason": "短期反弹但中期仍跌,PE高达95倍无研报覆盖,多空僵持",
+      "warning": null,
+      "source": "kimi"
+    },
+    "humanoid_robot": {
+      "theme_id": "humanoid_robot",
+      "label": "人形机器人",
+      "composition_n_constituents": 33,
+      "index_source": "pipeline_composed",
+      "ret_5d": 0.033892921645039875,
+      "ret_20d": 0.023581788710197893,
+      "ret_60d": -0.017323778313245164,
+      "index_used": "compose(011007_309172, n=33/33)",
+      "pe_ttm_avg": 19.475771369894172,
+      "pe_ttm_per_company": {
+        "02338.HK": 28.25322045124,
+        "01211.HK": 29.520533152906,
+        "02382.HK": 14.312386095314,
+        "02018.HK": 16.726899177176,
+        "00285.HK": 19.613651315094,
+        "01478.HK": 6.5161793586172,
+        "06865.HK": 21.387530038912
+      },
+      "research": {
+        "n_reports": 0,
+        "avg_rating_score": null,
+        "n_buy": 0,
+        "n_neutral": 0,
+        "n_sell": 0
+      },
+      "heat_score": 55,
+      "reason": "短期反弹但中期仍弱,无研报覆盖,PE中性偏合理,多空僵持",
+      "warning": null,
+      "source": "kimi"
+    },
+    "semi_localization": {
+      "theme_id": "semi_localization",
+      "label": "半导体国产化",
+      "composition_n_constituents": 12,
+      "index_source": "pipeline_composed",
+      "ret_5d": 0.13619309309655958,
+      "ret_20d": 0.16715526348684406,
+      "ret_60d": 0.3366882166091987,
+      "index_used": "compose(011007_309171, n=12/12)",
+      "pe_ttm_avg": 62.45086231405853,
+      "pe_ttm_per_company": {
+        "00981.HK": 110.22169488849,
+        "01347.HK": null,
+        "06088.HK": 54.597869417607,
+        "01385.HK": 124.45564085147,
+        "00522.HK": 65.819449093,
+        "01478.HK": 6.5161793586172,
+        "06036.HK": 13.094340275167
+      },
+      "research": {
+        "n_reports": 0,
+        "avg_rating_score": null,
+        "n_buy": 0,
+        "n_neutral": 0,
+        "n_sell": 0
+      },
+      "heat_score": 75,
+      "reason": "60日涨33.6%动能强劲,PE 62x偏高但无研报覆盖,情绪靠动量驱动",
+      "warning": "null",
+      "source": "kimi"
+    },
+    "ai_driving": {
+      "theme_id": "ai_driving",
+      "label": "智能驾驶 / Robotaxi",
+      "composition_n_constituents": 23,
+      "index_source": "pipeline_composed",
+      "ret_5d": 0.05051518239417807,
+      "ret_20d": 0.04213264709320019,
+      "ret_60d": -0.01790453889206567,
+      "index_used": "compose(011007_305874, n=23/23)",
+      "pe_ttm_avg": 61.291218688416805,
+      "pe_ttm_per_company": {
+        "09868.HK": null,
+        "02015.HK": 121.09894617452,
+        "09866.HK": null,
+        "01211.HK": 29.520533152906,
+        "00175.HK": 14.166528225888,
+        "02338.HK": 28.25322045124,
+        "09863.HK": 113.41686543753
+      },
+      "research": {
+        "n_reports": 0,
+        "avg_rating_score": null,
+        "n_buy": 0,
+        "n_neutral": 0,
+        "n_sell": 0
+      },
+      "heat_score": 55,
+      "reason": "5日涨5%短期活跃但60日仍跌1.8%，PE 61倍偏高却无研报覆盖，多空模糊",
+      "warning": null,
+      "source": "kimi"
+    },
+    "innovative_drug": {
+      "theme_id": "innovative_drug",
+      "label": "创新药 / AI 制药",
+      "index_source": "fallback_quote",
+      "ret_5d": 0.02825620056584688,
+      "ret_20d": 0.02310612481827934,
+      "ret_60d": -0.030187788054897413,
+      "index_used": "HSCI.HK",
+      "pe_ttm_avg": 32.6238832455229,
+      "pe_ttm_per_company": {
+        "01099.HK": 7.1814835227435,
+        "01093.HK": 21.867397720482,
+        "02269.HK": 24.755629667424,
+        "00241.HK": 35.966333233182,
+        "06160.HK": 73.348572083783,
+        "02616.HK": null,
+        "06185.HK": null,
+        "01952.HK": null
+      },
+      "research": {
+        "n_reports": 0,
+        "avg_rating_score": null,
+        "n_buy": 0,
+        "n_neutral": 0,
+        "n_sell": 0
+      },
+      "heat_score": 45,
+      "reason": "5日微涨但60日仍跌3%，PE 32.6倍中等，无研报覆盖显冷清，多空胶着。",
+      "warning": null,
+      "source": "kimi"
+    },
+    "new_energy": {
+      "theme_id": "new_energy",
+      "label": "新能源 / 储能",
+      "index_source": "fallback_quote",
+      "ret_5d": 0.02825620056584688,
+      "ret_20d": 0.02310612481827934,
+      "ret_60d": -0.030187788054897413,
+      "index_used": "HSCI.HK",
+      "pe_ttm_avg": 22.603740144168835,
+      "pe_ttm_per_company": {
+        "03750.HK": 33.856095329981,
+        "01211.HK": 29.520533152906,
+        "00916.HK": 11.291247754267,
+        "00968.HK": 30.459203637223,
+        "02208.HK": 21.637321461893,
+        "00257.HK": 8.858039528743
+      },
+      "research": {
+        "n_reports": 0,
+        "avg_rating_score": null,
+        "n_buy": 0,
+        "n_neutral": 0,
+        "n_sell": 0
+      },
+      "heat_score": 45,
+      "reason": "短期微涨但中期仍跌，PE 22.6倍中等偏低，研报完全静默无覆盖，多空信息真空。",
+      "warning": "null",
+      "source": "kimi"
+    }
+  }
+}
