@@ -222,13 +222,26 @@ def _explain_l1_5(o: IPOOffering) -> str:
     return " | ".join(parts)
 
 
-def _explain_l1_6(m: MarketEnvironment) -> str:
-    """市场环境 (L1.6)"""
-    return (f"HSI 60d 收益 {m.hsi_60d_return:+.1%} (tanh, 占 20) · "
+def _explain_l1_6(m: MarketEnvironment,
+                  components: Optional[Dict[str, Any]] = None) -> str:
+    """市场环境 (L1.6); components 含 theme_heat_modifier 时附加说明 (P0.1)"""
+    base = (f"HSI 60d 收益 {m.hsi_60d_return:+.1%} (tanh, 占 20) · "
             f"波动率分位 {m.hsi_60d_vol_pct_rank:.0%} 反向 (占 20) · "
             f"近 30d IPO 平均 d30 {m.hk_ipo_30d_avg_d30:+.1%} (tanh, 占 25) · "
             f"破发率 {m.hk_ipo_30d_breakage_rate:.0%} 反向 (占 20) · "
             f"南向资金 {m.southbound_30d_net_normalized:+.2f} (tanh, 占 15)")
+    # P0.1: 主题情绪 modifier 附加说明
+    # score_layer1_company 给 sub-components 加前缀 '_', 这里两种 key 都查
+    if components:
+        mod = (components.get("_theme_heat_modifier",
+                              components.get("theme_heat_modifier", 0.0)))
+        score = (components.get("_theme_heat_score",
+                                components.get("theme_heat_score", 0.0)))
+        if mod != 0.0:
+            verdict = "overheated" if score >= 80 else "trough"
+            base += (f" · 主题热度 {int(score)}/100 ({verdict}) "
+                     f"→ modifier {mod:+.1f}")
+    return base
 
 
 def explain_layer1_components(o: IPOOffering,
@@ -246,7 +259,7 @@ def explain_layer1_components(o: IPOOffering,
     if "L1.5_chapter" in components:
         reasons["L1.5_chapter"] = _explain_l1_5(o)
     if "L1.6_market" in components:
-        reasons["L1.6_market"] = _explain_l1_6(o.market)
+        reasons["L1.6_market"] = _explain_l1_6(o.market, components)
     return reasons
 
 

@@ -233,6 +233,10 @@ class IPOOffering:
     regime_score: Optional[float] = None        # pricing_date 时点的市场制度分 (None=不启用门控)
     cluster_cornerstone_count: int = 0          # 同一 ultimate_holder ≥2 的簇基石总数
 
+    # P0.1 新增: 主题情绪 (从 themes/heat_today.json 注入; None=不分类/无数据, 不影响打分)
+    theme_id: Optional[str] = None              # classify_deal_to_theme 输出 (审计用)
+    theme_heat_score: Optional[int] = None      # 0-100, _score_l1_6_market modifier 输入
+
 
 # =============================================================================
 # 3. 输出数据类
@@ -545,16 +549,43 @@ def _score_l1_5_chapter(o: IPOOffering) -> Tuple[float, Dict[str, float]]:
 
 
 # 5.6 市场环境 (权重 10)
-def _score_l1_6_market(m: MarketEnvironment) -> Tuple[float, Dict[str, float]]:
+def _score_l1_6_market(m: MarketEnvironment,
+                       theme_heat_score: Optional[int] = None
+                       ) -> Tuple[float, Dict[str, float]]:
+    """
+    Args:
+        m: panel-level 市场环境
+        theme_heat_score: P0.1 (deal-level): 主题情绪 0-100; None 时不参与
+    """
     momentum = tanh_score(m.hsi_60d_return, scale=0.10) / 100.0 * 20.0
     low_vol = (1 - m.hsi_60d_vol_pct_rank) * 20.0
     ipo_avg = tanh_score(m.hk_ipo_30d_avg_d30, scale=0.05) / 100.0 * 25.0
     ipo_brk = (1 - m.hk_ipo_30d_breakage_rate) * 20.0
     south = tanh_score(m.southbound_30d_net_normalized, scale=0.5) / 100.0 * 15.0
     total = momentum + low_vol + ipo_avg + ipo_brk + south
+
+    # P0.1: 主题情绪 modifier (config 阈值)
+    theme_heat_mod = 0.0
+    if theme_heat_score is not None:
+        cfg = _get_cfg()
+        th = cfg.layer1_market_theme_heat if cfg is not None else None
+        enabled = th.enabled if th is not None else True
+        over_thresh = th.overheated_threshold if th is not None else 80
+        over_penalty = th.overheated_penalty if th is not None else -5.0
+        trough_thresh = th.trough_threshold if th is not None else 40
+        trough_bonus = th.trough_bonus if th is not None else 3.0
+        if enabled:
+            if theme_heat_score >= over_thresh:
+                theme_heat_mod = over_penalty
+            elif theme_heat_score < trough_thresh:
+                theme_heat_mod = trough_bonus
+    total += theme_heat_mod
+
     return clip(total, 0.0, 100.0), {
         "momentum": momentum, "low_vol": low_vol, "ipo_30d_avg": ipo_avg,
         "ipo_30d_brk": ipo_brk, "southbound": south,
+        "theme_heat_modifier": theme_heat_mod,
+        "theme_heat_score": float(theme_heat_score) if theme_heat_score is not None else 0.0,
     }
 
 
@@ -601,7 +632,7 @@ def score_layer1_company(o: IPOOffering) -> LayerBreakdown:
     s12, c12 = _score_l1_2_sponsor(o.sponsor)
     s14, c14 = _score_l1_4_offering(o.offering)
     s15, c15 = _score_l1_5_chapter(o)
-    s16, c16 = _score_l1_6_market(o.market)
+    s16, c16 = _score_l1_6_market(o.market, theme_heat_score=o.theme_heat_score)
 
     cfg = _get_cfg()
     w = cfg.layer1_weights if cfg is not None else None

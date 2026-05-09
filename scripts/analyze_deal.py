@@ -106,8 +106,13 @@ def _scenario_prices(row) -> List[Tuple[str, float]]:
 
 
 def _evaluate_deal(conn, *, stock_code: str, asof: date,
-                   scenarios: List[Tuple[str, float]]) -> List[Dict]:
-    """对一只 deal 在每个 scenario 跑一次 NACS, 返回 list of result dict."""
+                   scenarios: List[Tuple[str, float]],
+                   themes_bundle: Optional[Dict] = None) -> List[Dict]:
+    """对一只 deal 在每个 scenario 跑一次 NACS, 返回 list of result dict.
+
+    P0.1: themes_bundle 非 None 时, classify deal → 注入 theme_heat_score
+          到 IPOOffering, 让 _score_l1_6_market modifier 生效.
+    """
     from run_v7_backtest import build_offering, hydrate_cornerstones, get_financials, derive_profitable
     from nacs_model import (
         compute_nacs, ListingChapter, CompanyType,
@@ -129,6 +134,31 @@ def _evaluate_deal(conn, *, stock_code: str, asof: date,
                                    use_static_env=False)
     if not offering_base:
         raise SystemExit(f"❌ build_offering 返回 None for {stock_code}")
+
+    # P0.1: classify + 注入 theme_heat_score (需在 compute_nacs 前完成)
+    if themes_bundle is not None:
+        from reports.themes_data import classify_deal_to_theme
+        defs_data, _ = themes_bundle.get("theme_definitions") or (None, None)
+        heat_data, _ = themes_bundle.get("heat_today") or (None, None)
+        ipo_concepts_for_classify = [
+            r[0] for r in conn.execute(
+                "SELECT concept_name FROM ipo_concepts WHERE stock_code = ?",
+                (stock_code,)
+            )
+        ]
+        cr = classify_deal_to_theme(
+            stock_code=stock_code,
+            gics_l2=row["gics_l2"],
+            ipo_concept_names=ipo_concepts_for_classify,
+            company_name=row["company_name_zh"],
+            theme_definitions=defs_data,
+        )
+        if cr.theme_id:
+            offering_base.theme_id = cr.theme_id
+            if heat_data and cr.theme_id in heat_data.get("themes", {}):
+                offering_base.theme_heat_score = (
+                    heat_data["themes"][cr.theme_id].get("heat_score")
+                )
 
     # 找参考价 (用于 low/high 时按比例调整 pe_at_offer)
     # 优先用 final price; 否则用区间中点
@@ -390,7 +420,8 @@ def main() -> int:
                                   all_scen[0])]
             try:
                 results = _evaluate_deal(conn, stock_code=code,
-                                         asof=asof, scenarios=scenarios)
+                                         asof=asof, scenarios=scenarios,
+                                         themes_bundle=themes_bundle)
             except SystemExit as e:
                 print(str(e), file=sys.stderr)
                 continue

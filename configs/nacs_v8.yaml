@@ -108,3 +108,21 @@ post_adjustments:
   a_plus_h_short_borrowable: 1.10   # A+H 同名 A 股可融券对冲加成
   secondary_listing: 0.85           # 第二上市折扣
   related_party_tx_recent: 0.85     # 控股股东近 12 月重大关联交易折扣
+
+# -----------------------------------------------------------------------------
+# L1.6 主题情绪 modifier (P0.1, 接 themes/heat_today.json)
+# -----------------------------------------------------------------------------
+# deal 经 classify_deal_to_theme 命中主题后, 把当日 heat_score 注入 IPOOffering;
+# _score_l1_6_market 在 5 项市场环境基础上加这个 modifier.
+#
+# 阈值参考 nacs_checklist v3 的实证规则:
+#   heat ≥80 → overheated, 锁定期反转风险
+#   heat <40 → trough, 主题谷底入场窗口
+#
+# 调试: 设 enabled=false 临时禁用, 不需重启即可 A/B 对比
+layer1_market_theme_heat:
+  enabled: true
+  overheated_threshold: 80          # heat ≥ → 罚分
+  overheated_penalty: -5.0
+  trough_threshold: 40              # heat < → 加分
+  trough_bonus: 3.0

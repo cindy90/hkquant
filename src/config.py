@@ -122,6 +122,27 @@ class PostAdjustments:
     related_party_tx_recent: float = 0.85
 
 
+@dataclass
+class Layer1MarketThemeHeat:
+    """L1.6 主题情绪 modifier (P0.1).
+
+    deal 在 themes/heat_today.json 里的 heat_score (0-100) 触发:
+        heat ≥ overheated_threshold → L1.6 score += overheated_penalty (负值)
+        heat < trough_threshold     → L1.6 score += trough_bonus       (正值)
+        中间不动
+
+    数据来源: themes/theme_tracker.py 每日 8:30 cron 跑 → heat_today.json,
+    classifier 在 build_offering 时把 heat_score 注入 IPOOffering.theme_heat_score.
+
+    禁用: enabled=false 或 heat_score=None → 跳过, 不影响打分.
+    """
+    enabled: bool = True
+    overheated_threshold: int = 80     # heat ≥ → 罚分
+    overheated_penalty: float = -5.0
+    trough_threshold: int = 40         # heat < → 加分
+    trough_bonus: float = 3.0
+
+
 # =============================================================================
 # 顶层配置
 # =============================================================================
@@ -148,6 +169,9 @@ class NacsConfig:
     layer1_vetoes: Layer1Vetoes = field(default_factory=Layer1Vetoes)
     layer2_vetoes: Layer2Vetoes = field(default_factory=Layer2Vetoes)
     post_adjustments: PostAdjustments = field(default_factory=PostAdjustments)
+    layer1_market_theme_heat: Layer1MarketThemeHeat = field(
+        default_factory=Layer1MarketThemeHeat
+    )
 
     # ---------------- I/O ----------------
 
@@ -179,6 +203,10 @@ class NacsConfig:
             kwargs["layer2_vetoes"] = Layer2Vetoes(**data["layer2_vetoes"])
         if "post_adjustments" in data:
             kwargs["post_adjustments"] = PostAdjustments(**data["post_adjustments"])
+        if "layer1_market_theme_heat" in data:
+            kwargs["layer1_market_theme_heat"] = Layer1MarketThemeHeat(
+                **data["layer1_market_theme_heat"]
+            )
         return cls(**kwargs)
 
     def to_dict(self) -> Dict[str, Any]:
