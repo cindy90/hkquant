@@ -19,7 +19,7 @@
 ├── check_health.py              数据 + 模型健康检查 (5 单测)
 ├── run_v7_backtest.py           完整 v8 回测 (含 production 实战报告, < 1 秒)
 ├── build_perf_cache.py          基石性能缓存预填充 (使回测 50x 加速)
-├── nacs_checklist_tool.html     交互式决策清单工具 (浏览器打开)
+├── nacs_checklist_tool.html     ⚠ quick estimator (v3.2 规则硬编码; 决策权威以 scripts/analyze_deal.py 为准)
 │
 ├── src/
 │   ├── nacs_model.py            v8 模型核心 (40KB)
@@ -89,9 +89,36 @@ python run_v7_backtest.py
 python build_perf_cache.py --clear-existing  # 重建缓存, ~4 秒
 ```
 
-### 4. 决策清单工具
+### 4. 单 deal 评估 (权威)
 
-直接在浏览器打开 `nacs_checklist_tool.html`，输入新 IPO 数据交互评分。
+```bash
+# 已聆讯且已录入 data/deals/<stock>.yaml 的 deal:
+python scripts/analyze_deal.py --stock-code 1187.HK \
+    --html outputs/1187.html
+
+# 多 deal 横评:
+python scripts/analyze_deal.py --stock-codes "1187.HK,2493.HK,3296.HK" \
+    --compare --html outputs/compare.html
+
+# 跑后用浏览器打开 HTML; 实时调用 nacs_model.compute_nacs(), 跟 configs/nacs_v8.yaml 同步.
+# 输出含 thesis (drivers/risks/base_rate) + L1/L2/L3 子项 reason + similar listed peers.
+```
+
+### 5. 浏览器即时估算工具 (quick estimator, 非权威)
+
+`nacs_checklist_tool.html` 是一个**手填表单 + 浏览器即时打分**工具, 用于 deal 数据
+还没入库时的 quick-and-dirty 估算. 同时是当前**唯一的主题情绪追踪 + AI 镀金溢价测算 UI**
+(VII / VIII 区).
+
+```bash
+python -m http.server 8080
+# 访问 http://localhost:8080/nacs_checklist_tool.html
+```
+
+⚠ **该工具的 I-VI 决策区是 v3.2 实证规则的 JS 硬编码**, 跟 `nacs_model.py` 当前 v8
+配置存在版本差. **deal 数据已入库时, 决策权威以 `analyze_deal.py` 为准**, 不以此工具为准.
+VII/VIII (主题情绪 + AI 溢价) 是本工具独有, 计划按 `docs/roadmap_thesis_themes.md`
+迁移到 `analyze_deal --html` 的 thesis 段.
 
 ---
 

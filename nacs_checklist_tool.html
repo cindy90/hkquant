@@ -113,8 +113,43 @@ select option { background: #1a1a1a; }
     </div>
 </header>
 
+<!-- ================================================================== -->
+<!-- 决策权威性 banner — 2026-05-09 加, 防止"双权威"风险                -->
+<!-- ================================================================== -->
+<section style="margin-bottom: 30px; padding: 18px 22px;
+                background: rgba(212, 175, 55, 0.06);
+                border-left: 3px solid #d4af37; border-radius: 4px;
+                font-family: 'IBM Plex Sans', sans-serif;">
+    <div style="font-size: 11px; letter-spacing: 2px; color: #d4af37;
+                text-transform: uppercase; margin-bottom: 8px;">
+        ⚠ 决策权威性说明
+    </div>
+    <div style="font-size: 13px; line-height: 1.6; color: #d8d4cf;">
+        本工具的 I–VI 决策区是
+        <strong style="color: #e8e6e3;">v3.2 实证规则的浏览器即时计算</strong>,
+        作为 deal 数据未入库时的 quick estimator. 决策权威以
+        <code style="color: #d4af37; background: rgba(0,0,0,0.3);
+                     padding: 2px 6px; border-radius: 2px;">
+            python scripts/analyze_deal.py --stock-code &lt;code&gt;
+        </code>
+        为准 — 后者实时调用 <code>nacs_model.compute_nacs()</code> +
+        <code>configs/nacs_v8.yaml</code> 当前阈值, 跟模型迭代零延迟同步.
+        当 deal 已入库 (<code>status='prospectus'/'pricing'/'listed'</code>)
+        时本工具结果可能与权威结果**不一致** (规则版本差).
+    </div>
+    <div style="font-size: 12px; line-height: 1.5; color: #888581;
+                margin-top: 10px;">
+        VII (主题情绪) 和 VIII (估值溢价) 是本工具
+        <strong style="color: #d8d4cf;">独有功能</strong>,
+        与 <code>themes/heat_today.json</code> +
+        <code>themes/premium_curve.json</code> 直连; 后续将整合到
+        <code>analyze_deal --html</code> 的 thesis 段, 见
+        <code>docs/roadmap_thesis_themes.md</code>.
+    </div>
+</section>
+
 <section class="section">
-    <div class="section-title">I. IPO 基本信息</div>
+    <div class="section-title">I. IPO 基本信息 <span style="font-size: 11px; color: #888581; letter-spacing: 1.5px; font-family: 'IBM Plex Mono', monospace; text-transform: uppercase; margin-left: 12px;">— quick estimator (v3.2 rules · non-authoritative)</span></div>
     <div class="grid-2">
         <div>
             <label class="field-label">上市章节</label>
