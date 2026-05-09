@@ -7,7 +7,7 @@ probe_theme_constituents.py — 探测 iFinD 板块成分股查询接口 (Step 2
     Step 2 需要走「成分股 → 等权合成 close 序列」路径.
 
     本脚本探测哪个 iFinD 接口能拉「板块 ID → 成分股代码列表」,
-    跑通后输出 data/theme_constituents_probe.json, 供 Step 2 决策.
+    跑通后输出 data/dict/themes/constituents_probe.json, 供 Step 2 决策.
 
 候选接口 (按概率排序, 跑一个成功就停):
     1. THS_DataPool('block', 'date:YYYY-MM-DD;blockname:<iv_bkid>;blocktype:thscode',
@@ -23,7 +23,7 @@ probe_theme_constituents.py — 探测 iFinD 板块成分股查询接口 (Step 2
     python scripts/probe_theme_constituents.py --probe-all   (扫所有 watchlist)
 
 输出:
-    data/theme_constituents_probe.json    -- 哪个接口跑通了, 拉到多少成分股
+    data/dict/themes/constituents_probe.json    -- 哪个接口跑通了, 拉到多少成分股
 """
 from __future__ import annotations
 
@@ -296,7 +296,7 @@ def main() -> int:
     finally:
         THS_iFinDLogout()
 
-    out_path = PROJECT_ROOT / "data" / "theme_constituents_probe.json"
+    out_path = PROJECT_ROOT / "data" / "dict" / "themes" / "constituents_probe.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
         json.dumps({

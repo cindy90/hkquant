@@ -7,7 +7,7 @@ verify_p03291.py — 用用户给的精确格式验证 THS_DR('p03291', ...) 能
            'p03291_f001:Y,p03291_f002:Y,p03291_f003:Y,p03291_f004:Y',
            'format:dataframe')
 
-跑一遍, 把每个字段语义打印出来, 写到 data/theme_constituents_probe.json
+跑一遍, 把每个字段语义打印出来, 写到 data/dict/themes/constituents_probe.json
 """
 from __future__ import annotations
 
@@ -128,7 +128,8 @@ def main() -> int:
     finally:
         THS_iFinDLogout()
 
-    out = PROJECT_ROOT / "data" / "theme_constituents_probe.json"
+    out = PROJECT_ROOT / "data" / "dict" / "themes" / "constituents_probe.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
         json.dumps(
             {

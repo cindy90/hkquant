@@ -63,11 +63,11 @@ def main():
     print(f"\n[OK] 写入 {out_dir / 'themes.json'}")
 
     # 检查成分股缓存
-    cache_path = PROJECT_ROOT / "data" / "theme_constituents_cache.json"
+    cache_path = PROJECT_ROOT / "data" / "dict" / "themes" / "constituents_cache.json"
     if cache_path.exists():
         cache = json.loads(cache_path.read_text(encoding="utf-8"))
         n_entries = len(cache.get("constituents", {}))
-        print(f"[OK] theme_constituents_cache.json — {n_entries} 个 (bkid, month) 缓存")
+        print(f"[OK] {cache_path.relative_to(PROJECT_ROOT)} — {n_entries} 个 (bkid, month) 缓存")
 
     return 0 if composed_n > 0 else 1
 

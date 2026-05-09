@@ -1004,7 +1004,7 @@ def _resolve_theme_quote_code(meta: dict) -> tuple[Optional[str], Optional[str],
 # ----------------------------------------------------------------------------
 # Step 2 — 成分股月度缓存 + 等权合成主题 close 序列
 # ----------------------------------------------------------------------------
-_CONSTITUENTS_CACHE_PATH = PROJECT_ROOT / "data" / "theme_constituents_cache.json"
+_CONSTITUENTS_CACHE_PATH = PROJECT_ROOT / "data" / "dict" / "themes" / "constituents_cache.json"
 
 
 def _load_constituents_cache() -> dict:
@@ -1029,7 +1029,7 @@ def _save_constituents_cache(cache: dict, dry_run: bool = False) -> None:
 def _fetch_theme_constituents(bkid: str, asof: date, *, dry_run: bool = False) -> list[str]:
     """
     用 THS_DR('p03291', ...) 拉板块成分股 (Step 2 winner 接口, 用户确认).
-    月度缓存到 data/theme_constituents_cache.json — 同 (bkid, YYYY-MM) 一个月只查 1 次.
+    月度缓存到 data/dict/themes/constituents_cache.json — 同 (bkid, YYYY-MM) 一个月只查 1 次.
 
     返回港股 ths_code 列表 (e.g. ['0085.HK', '0522.HK', ...]).
     失败抛 RuntimeError.

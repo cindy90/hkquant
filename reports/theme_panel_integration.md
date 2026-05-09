@@ -81,7 +81,7 @@ THS_DR('p03291',
 
 `scripts/fetch_hk_market_data.py`:
 - 新增 `_hq_unpack_batch(result)` — 解多 code `THS_HistoryQuotes`(每个 thscode 一个 table)
-- 新增 `_load/_save_constituents_cache()` — 月度缓存到 `data/theme_constituents_cache.json`
+- 新增 `_load/_save_constituents_cache()` — 月度缓存到 `data/dict/themes/constituents_cache.json`
 - 新增 `_fetch_theme_constituents(bkid, asof)` — 调 p03291, 取 f002 列, 过滤 `.HK`, 月度缓存
 - 新增 `_compose_theme_close_series(codes, sdate, edate)` — 1 次批量 `THS_HistoryQuotes` 拉所有 codes 的 close,
   每只按首个有效 close 归一化为 1, 用 pandas DataFrame 对齐时间, ffill 后等权 mean
