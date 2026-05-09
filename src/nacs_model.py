@@ -147,6 +147,9 @@ class BiotechFundamentals:
     pipeline_count_phase2plus: int = 0
     cash_runway_months: Optional[float] = None
     bd_deals_count_2y: int = 0
+    # P1.3: 18A 子领域 (innovative_drug/medical_device/cell_gene/diagnostics);
+    # None=未分类, 走 multiplier=1.0 (向后兼容)
+    subdomain: Optional[str] = None
 
 
 @dataclass
@@ -507,9 +510,23 @@ def _score_l1_3_biotech(b: BiotechFundamentals) -> Tuple[float, Dict[str, float]
     runway = clip((b.cash_runway_months or 0.0) / 24.0, 0.0, 1.0) * 25
     bd = clip(b.bd_deals_count_2y / 2.0, 0.0, 1.0) * 20
     total = phase + pipe + runway + bd
+
+    # P1.3: 18A 子领域 multiplier
+    cfg = _get_cfg()
+    sd = cfg.layer1_biotech_subdomain if cfg is not None else None
+    enabled = sd.enabled if sd is not None else True
+    sub_label = b.subdomain if b.subdomain else "unknown"
+    sub_mult = 1.0
+    if enabled and b.subdomain:
+        mults = sd.multipliers if sd is not None else {}
+        sub_mult = mults.get(b.subdomain, 1.0)
+    total *= sub_mult
+
     return clip(total, 0.0, 100.0), {
         "phase_score": phase, "pipeline_score": pipe,
         "runway_score": runway, "bd_score": bd,
+        "subdomain": sub_label,
+        "subdomain_multiplier": sub_mult,
     }
 
 

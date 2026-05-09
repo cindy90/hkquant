@@ -168,16 +168,34 @@ def _explain_l1_3_profitable(
     return base
 
 
-def _explain_l1_3_biotech(b: BiotechFundamentals) -> str:
-    """18A 生物医药 (L1.3)"""
+def _explain_l1_3_biotech(
+    b: BiotechFundamentals,
+    components: Optional[Dict[str, Any]] = None,
+) -> str:
+    """18A 生物医药 (L1.3); P1.3 后附 subdomain multiplier"""
     phase_label = {"Pre": "Pre-临床", "I": "I期", "II": "II期",
                    "III": "III期", "Approved": "已获批"}.get(
         b.core_pipeline_phase, b.core_pipeline_phase)
-    return (f"核心管线 {phase_label} (Pre→10/I→30/II→60/III→85/批准→100, 占 35) · "
+    base = (f"核心管线 {phase_label} (Pre→10/I→30/II→60/III→85/批准→100, 占 35) · "
             f"II期+ 管线数 {b.pipeline_count_phase2plus} (满 3 封顶, 占 20) · "
             f"现金跑道 {b.cash_runway_months or 0:.0f} 月 "
             f"(满 24 封顶, 占 25) · BD 交易 2y {b.bd_deals_count_2y} 项 "
             f"(满 2 封顶, 占 20)")
+    # P1.3: 子领域 multiplier
+    if components:
+        sub = components.get("_subdomain",
+                             components.get("subdomain", "unknown"))
+        mult = components.get("_subdomain_multiplier",
+                              components.get("subdomain_multiplier", 1.0))
+        if mult != 1.0:
+            sub_zh = {
+                "innovative_drug": "创新药",
+                "medical_device": "医疗器械",
+                "cell_gene": "细胞基因",
+                "diagnostics": "诊断/IVD",
+            }.get(sub, sub)
+            base += f" · 18A 子领域 {sub_zh} → multiplier ×{mult:.2f}"
+    return base
 
 
 def _explain_l1_3_18c(t: TechC18Fundamentals) -> str:
@@ -203,7 +221,8 @@ def _explain_l1_3(
             else "ProfitableFundamentals 缺失")
     if o.company_type == CompanyType.BIOTECH_18A:
         return "[18A] " + (
-            _explain_l1_3_biotech(o.biotech) if o.biotech else "BiotechFundamentals 缺失")
+            _explain_l1_3_biotech(o.biotech, components) if o.biotech
+            else "BiotechFundamentals 缺失")
     return "[18C] " + (
         _explain_l1_3_18c(o.tech18c) if o.tech18c else "TechC18Fundamentals 缺失")
 

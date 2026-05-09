@@ -188,6 +188,29 @@ class Layer1ProfitabilityTier:
 
 
 @dataclass
+class Layer1BiotechSubdomain:
+    """P1.3: 18A 子领域 multiplier (作用于 _score_l1_3_biotech raw score).
+
+    现有 _score_l1_3_biotech 4 子项 (phase/pipeline/runway/bd) 把所有 18A 一视同仁,
+    但子领域历史 d30/60d 表现差距悬殊:
+        innovative_drug (创新药): 基线; phase II → III 跨越是核心驱动
+        medical_device (器械):  NMPA 审评政策依赖, 上限较低
+        cell_gene (细胞基因):    Pre/I 期也有大幅升值预期, 加成
+        diagnostics (诊断/IVD): 同质化竞争激烈, 估值压力大
+
+    保守: subdomain=None / unknown → multiplier=1.0 不动 (向后兼容).
+    enabled=false → 全部 ×1.0.
+    """
+    enabled: bool = True
+    multipliers: Dict[str, float] = field(default_factory=lambda: {
+        "innovative_drug": 1.00,
+        "medical_device": 0.90,
+        "cell_gene": 1.10,
+        "diagnostics": 0.85,
+    })
+
+
+@dataclass
 class Layer1MarketThemeHeat:
     """L1.6 主题情绪 modifier (P0.1).
 
@@ -243,6 +266,9 @@ class NacsConfig:
     layer1_profitability_tier: Layer1ProfitabilityTier = field(
         default_factory=Layer1ProfitabilityTier
     )
+    layer1_biotech_subdomain: Layer1BiotechSubdomain = field(
+        default_factory=Layer1BiotechSubdomain
+    )
 
     # ---------------- I/O ----------------
 
@@ -290,6 +316,10 @@ class NacsConfig:
         if "layer1_profitability_tier" in data:
             kwargs["layer1_profitability_tier"] = Layer1ProfitabilityTier(
                 **data["layer1_profitability_tier"]
+            )
+        if "layer1_biotech_subdomain" in data:
+            kwargs["layer1_biotech_subdomain"] = Layer1BiotechSubdomain(
+                **data["layer1_biotech_subdomain"]
             )
         return cls(**kwargs)
 

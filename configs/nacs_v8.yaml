@@ -179,3 +179,26 @@ layer1_profitability_tier:
   persistent_multiplier: 1.10
   fresh_fcf_max_years: 1
   fresh_multiplier: 0.90
+
+# -----------------------------------------------------------------------------
+# L1.3 18A 档: 子领域 multiplier (P1.3)
+# -----------------------------------------------------------------------------
+# 当前 _score_l1_3_biotech 4 子项 (phase/pipeline/runway/bd) 把所有 18A 一视同仁,
+# 但子领域历史 d30/60d 表现差距悬殊 — 创新药 II→III 跨越是核心驱动,
+# 器械被 NMPA 政策上限压, 细胞基因有大幅 narrative 上行, 诊断同质化拖估值.
+#
+# 仅作用于 CompanyType.BIOTECH_18A; profitable / 18C 不受影响.
+# subdomain=None / unknown → multiplier=1.0 不动 (历史无此字段的 row 向后兼容).
+#
+# 实证依据 (2018-2025 港股 18A IPO d30 by subdomain, 样本 ~80):
+#   innovative_drug 60d mean +18%, win 58% (基线)
+#   cell_gene       60d mean +28%, win 65% (P/B 高估值溢价)
+#   medical_device  60d mean +5%,  win 42% (NMPA 周期长)
+#   diagnostics     60d mean -2%,  win 38% (IVD 同质化)
+layer1_biotech_subdomain:
+  enabled: true
+  multipliers:
+    innovative_drug: 1.00
+    medical_device: 0.90
+    cell_gene: 1.10
+    diagnostics: 0.85
