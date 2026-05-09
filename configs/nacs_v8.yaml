@@ -108,6 +108,22 @@ post_adjustments:
   a_plus_h_short_borrowable: 1.10   # A+H 同名 A 股可融券对冲加成
   secondary_listing: 0.85           # 第二上市折扣
   related_party_tx_recent: 0.85     # 控股股东近 12 月重大关联交易折扣
+  # P0.2: AI 镀金 post-adjustment
+  # 触发条件: theme_id ∈ ai_themes 且 ai_revenue_pct < threshold
+  # 设计依据: nacs_checklist v3 VIII 区 "AI 镀金检测器" — 防止"贴 AI 标签
+  # 但实际 AI 业务<10%"的 IPO 拿过高仓位 (典型情况: 公司主营硬件/制造,
+  # 招股书把 AI 概念放头版以拉高估值)
+  ai_gilding:
+    enabled: true
+    ai_themes:                      # 视为"AI 镀金风险" 的主题集
+      - ai_server
+      - llm
+      - ai_application
+      - humanoid_robot
+      - ai_driving
+      - semi_localization
+    threshold: 0.10                 # AI 收入占比 < 10% 触发
+    multiplier: 0.85
 
 # -----------------------------------------------------------------------------
 # L1.6 主题情绪 modifier (P0.1, 接 themes/heat_today.json)

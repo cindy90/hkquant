@@ -107,11 +107,15 @@ def _scenario_prices(row) -> List[Tuple[str, float]]:
 
 def _evaluate_deal(conn, *, stock_code: str, asof: date,
                    scenarios: List[Tuple[str, float]],
-                   themes_bundle: Optional[Dict] = None) -> List[Dict]:
+                   themes_bundle: Optional[Dict] = None,
+                   ai_revenue_pct_override: Optional[float] = None
+                   ) -> List[Dict]:
     """对一只 deal 在每个 scenario 跑一次 NACS, 返回 list of result dict.
 
     P0.1: themes_bundle 非 None 时, classify deal → 注入 theme_heat_score
           到 IPOOffering, 让 _score_l1_6_market modifier 生效.
+    P0.2: ai_revenue_pct (CLI override / deal YAML / ai_revenue_manual)
+          注入 IPOOffering, 让 AI 镀金 post-adjustment 生效.
     """
     from run_v7_backtest import build_offering, hydrate_cornerstones, get_financials, derive_profitable
     from nacs_model import (
@@ -159,6 +163,22 @@ def _evaluate_deal(conn, *, stock_code: str, asof: date,
                 offering_base.theme_heat_score = (
                     heat_data["themes"][cr.theme_id].get("heat_score")
                 )
+
+        # P0.2: ai_revenue_pct 三层优先 (CLI > deal YAML > ai_revenue_manual)
+        # CLI/YAML 在 main() 里收集到 ai_pct_per_code, 用 ai_revenue_pct_override
+        # 传入; 否则从 ai_revenue_manual lookup (跟 thesis._resolve_ai_revenue_pct 同源)
+        if ai_revenue_pct_override is not None:
+            offering_base.ai_revenue_pct = float(ai_revenue_pct_override)
+        else:
+            manual_data, _ = themes_bundle.get("ai_revenue_manual") or (None, None)
+            if manual_data:
+                # 跟 themes_data._canon 一致的代码规范化
+                canon = stock_code.upper().strip()
+                if "." in canon:
+                    num, suffix = canon.split(".", 1)
+                    canon = f"{num.lstrip('0') or '0'}.{suffix}"
+                if canon in manual_data:
+                    offering_base.ai_revenue_pct = float(manual_data[canon])
 
     # 找参考价 (用于 low/high 时按比例调整 pe_at_offer)
     # 优先用 final price; 否则用区间中点
@@ -419,9 +439,17 @@ def main() -> int:
                                    if s[0] in ("mid", "final")),
                                   all_scen[0])]
             try:
-                results = _evaluate_deal(conn, stock_code=code,
-                                         asof=asof, scenarios=scenarios,
-                                         themes_bundle=themes_bundle)
+                # P0.2: 把 CLI/YAML 里的 ai_revenue_pct override 传进去
+                ai_pct_for_eval = (
+                    args.ai_revenue_pct
+                    if args.ai_revenue_pct is not None
+                    else ai_pct_per_code.get(code)
+                )
+                results = _evaluate_deal(
+                    conn, stock_code=code, asof=asof,
+                    scenarios=scenarios, themes_bundle=themes_bundle,
+                    ai_revenue_pct_override=ai_pct_for_eval,
+                )
             except SystemExit as e:
                 print(str(e), file=sys.stderr)
                 continue

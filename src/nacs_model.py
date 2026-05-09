@@ -237,6 +237,9 @@ class IPOOffering:
     theme_id: Optional[str] = None              # classify_deal_to_theme 输出 (审计用)
     theme_heat_score: Optional[int] = None      # 0-100, _score_l1_6_market modifier 输入
 
+    # P0.2 新增: AI 镀金检测 (theme∈AI_THEMES + ai_revenue_pct<threshold → ×0.85)
+    ai_revenue_pct: Optional[float] = None      # 0-1; 来自 deal YAML 或 ai_revenue_manual.json
+
 
 # =============================================================================
 # 3. 输出数据类
@@ -1140,6 +1143,18 @@ def compute_nacs(o: IPOOffering) -> NACSResult:
     if o.has_related_party_tx_recent:
         nacs_adj *= m_rpt
         adjustments.append(f"控股股东近12月重大关联交易 x{m_rpt}")
+
+    # P0.2: AI 镀金检测 (theme ∈ AI_THEMES + ai_revenue_pct < threshold → ×multiplier)
+    ag = adj.ai_gilding if adj is not None else None
+    if (ag is not None and getattr(ag, "enabled", True)
+            and o.theme_id in (ag.ai_themes or [])
+            and o.ai_revenue_pct is not None
+            and o.ai_revenue_pct < ag.threshold):
+        nacs_adj *= ag.multiplier
+        adjustments.append(
+            f"AI 镀金折扣 x{ag.multiplier} "
+            f"(theme={o.theme_id}, AI 收入 {o.ai_revenue_pct:.0%} < {ag.threshold:.0%})"
+        )
 
     nacs_adj = clip(nacs_adj, 0.0, 1.0)
     pos, decision = _position_from_nacs(nacs_adj)

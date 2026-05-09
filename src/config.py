@@ -114,12 +114,34 @@ class Layer2Vetoes:
 
 
 @dataclass
+class AiGildingAdjustment:
+    """P0.2: AI 镀金 post-adjustment.
+
+    deal 同时满足:
+      - theme_id ∈ ai_themes (AI 主题集合)
+      - ai_revenue_pct < threshold (实际 AI 业务收入占比低)
+    → NACS_adj × multiplier (默认 0.85, 跟其它折扣一致)
+
+    设计目的: 防止"贴 AI 标签但实际 AI 业务很小"的镀金 IPO 拿过高仓位.
+    跟 nacs_checklist v3 的 VIII 区"AI 镀金检测器"对齐.
+    """
+    enabled: bool = True
+    ai_themes: List[str] = field(default_factory=lambda: [
+        "ai_server", "llm", "ai_application",
+        "humanoid_robot", "ai_driving", "semi_localization",
+    ])
+    threshold: float = 0.10                 # AI 收入占比 < 10% 算镀金
+    multiplier: float = 0.85
+
+
+@dataclass
 class PostAdjustments:
     """compute_nacs 后处理乘子链"""
     chapter_18c: float = 0.70
     a_plus_h_short_borrowable: float = 1.10
     secondary_listing: float = 0.85
     related_party_tx_recent: float = 0.85
+    ai_gilding: AiGildingAdjustment = field(default_factory=AiGildingAdjustment)
 
 
 @dataclass
@@ -202,7 +224,12 @@ class NacsConfig:
         if "layer2_vetoes" in data:
             kwargs["layer2_vetoes"] = Layer2Vetoes(**data["layer2_vetoes"])
         if "post_adjustments" in data:
-            kwargs["post_adjustments"] = PostAdjustments(**data["post_adjustments"])
+            pa_data = dict(data["post_adjustments"])
+            ag_data = pa_data.pop("ai_gilding", None)
+            pa = PostAdjustments(**pa_data)
+            if ag_data is not None:
+                pa.ai_gilding = AiGildingAdjustment(**ag_data)
+            kwargs["post_adjustments"] = pa
         if "layer1_market_theme_heat" in data:
             kwargs["layer1_market_theme_heat"] = Layer1MarketThemeHeat(
                 **data["layer1_market_theme_heat"]
