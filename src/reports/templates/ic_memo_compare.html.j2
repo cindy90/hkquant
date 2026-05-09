@@ -23,6 +23,50 @@
   </div>
 </header>
 
+{# ====== 各 deal Thesis 摘要 (顶部) ====== #}
+{% if theses %}
+{% for code, t in theses.items() %}
+<section class="thesis">
+  <p class="headline">
+    <code>{{ code }}</code> &nbsp;·&nbsp; {{ t.headline }}
+  </p>
+  {% if t.drivers or t.risks %}
+  <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+    {% if t.drivers %}
+    <div class="group" style="flex: 1; min-width: 280px;">
+      <h4>主驱动 ({{ t.drivers | length }})</h4>
+      <ul class="bullets">
+        {% for d in t.drivers[:5] %}
+        <li class="driver"><strong>{{ d.name }}</strong>{% if d.score is not none %} ({{ d.score | num(0) }}){% endif %}</li>
+        {% endfor %}
+        {% if t.drivers | length > 5 %}<li><small style="color: var(--text-muted);">… +{{ t.drivers | length - 5 }} more</small></li>{% endif %}
+      </ul>
+    </div>
+    {% endif %}
+    {% if t.risks %}
+    <div class="group" style="flex: 1; min-width: 280px;">
+      <h4>主风险 ({{ t.risks | length }})</h4>
+      <ul class="bullets">
+        {% for r in t.risks[:5] %}
+        <li class="risk"><strong>{{ r.name }}</strong>{% if r.score is not none %} ({{ r.score | num(2) }}){% endif %}</li>
+        {% endfor %}
+        {% if t.risks | length > 5 %}<li><small style="color: var(--text-muted);">… +{{ t.risks | length - 5 }} more</small></li>{% endif %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if t.base_rate and t.base_rate.m6_median is not none %}
+  <div class="base-rate">
+    类比 m6 中位 <span class="{{ t.base_rate.m6_median | ret_class }}">{{ t.base_rate.m6_median | pct }}</span>
+    · {{ "%.0f%%"|format(t.base_rate.m6_winrate * 100) }} winrate (n={{ t.base_rate.n_m6_due }})
+    · verdict: <strong>{{ t.base_rate.verdict }}</strong>
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+{% endif %}
+
 {# ====== 主对比表 ====== #}
 <article class="card">
   <h3>横向对比 (mid scenario)</h3>

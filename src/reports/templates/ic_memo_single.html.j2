@@ -47,6 +47,77 @@
   </span>
 </div>
 
+{# ====== Investment thesis (顶部综合段) ====== #}
+{% if thesis %}
+<section class="thesis">
+  <p class="headline">{{ thesis.headline }}</p>
+
+  {% if thesis.drivers %}
+  <div class="group">
+    <h4>主驱动 ({{ thesis.drivers | length }})</h4>
+    <ul class="bullets">
+      {% for d in thesis.drivers %}
+      <li class="driver">
+        <strong>{{ d.name }}</strong>
+        {% if d.score is not none %} (score {{ d.score | num(1) }}){% endif %}
+        {% if d.reason %}<span class="reason-detail">{{ d.reason }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if thesis.risks %}
+  <div class="group">
+    <h4>主风险 ({{ thesis.risks | length }})</h4>
+    <ul class="bullets">
+      {% for r in thesis.risks %}
+      <li class="risk">
+        <strong>{{ r.name }}</strong>
+        {% if r.score is not none %} (score {{ r.score | num(2) }}){% endif %}
+        {% if r.reason %}<span class="reason-detail">{{ r.reason }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if thesis.base_rate %}
+  <div class="base-rate">
+    <strong>类比组实证 (panel listed peers, last 24m)</strong>:
+    n={{ thesis.base_rate.n_total }} 只
+    {% if thesis.base_rate.d30_median is not none %}
+      · d30 中位 <span class="{{ thesis.base_rate.d30_median | ret_class }}">{{ thesis.base_rate.d30_median | pct }}</span>
+      ({{ "%.0f%%"|format(thesis.base_rate.d30_winrate * 100) }} winrate)
+    {% endif %}
+    {% if thesis.base_rate.m6_median is not none %}
+      · m6 中位 <span class="{{ thesis.base_rate.m6_median | ret_class }}">{{ thesis.base_rate.m6_median | pct }}</span>
+      ({{ "%.0f%%"|format(thesis.base_rate.m6_winrate * 100) }} winrate)
+    {% endif %}
+    · verdict: <strong>{{ thesis.base_rate.verdict }}</strong>
+  </div>
+  {% endif %}
+
+  {% if thesis.panel_context and thesis.panel_context.regime_label %}
+  <div class="base-rate" style="margin-top: 0.4rem;">
+    <strong>当下市场情绪</strong>: {{ thesis.panel_context.regime_label }}
+    {% if thesis.panel_context.regime_score is not none %}
+      (regime_score = {{ thesis.panel_context.regime_score | num(3) }})
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+{# ====== Decision rationale (公式拆解 + band 映射) ====== #}
+{% if rec_main.decision_rationale %}
+<details open>
+  <summary>Decision rationale (公式拆解 + band 映射)</summary>
+  <div class="rationale-block">{% for line in rec_main.decision_rationale %}{{ line }}
+{% endfor %}</div>
+</details>
+{% endif %}
+
 {# 三因子分解 #}
 <article class="card">
   <h3>三因子分解</h3>
@@ -115,10 +186,14 @@
 {# ====== Adjustments / Warnings ====== #}
 {% if rec_main.adjustments_applied %}
 <article class="card">
-  <h3>v7 调整 (Adjustments)</h3>
-  <ul style="margin: 0; padding-left: 1.25rem;">
+  <h3>调整 (Adjustments)</h3>
+  <ul class="adjustments">
     {% for adj in rec_main.adjustments_applied %}
-    <li>{{ adj }}</li>
+    <li>
+      <strong>{{ adj }}</strong>
+      {% set expl = rec_main.adjustment_explanations[loop.index0] %}
+      {% if expl and expl != adj %}<span class="why">{{ expl }}</span>{% endif %}
+    </li>
     {% endfor %}
   </ul>
 </article>
@@ -135,17 +210,26 @@
 </div>
 {% endif %}
 
-{# ====== L1 / L2 / L3 子项 (折叠) ====== #}
+{# ====== L1 / L2 / L3 子项 (折叠), 每子项下显示 reason ====== #}
 <details>
   <summary>L1 子项: 公司基本面 (raw {{ rec_main.layer1.raw_score | num(2) }} / 100)</summary>
   <table class="numeric compact">
     <tbody>
       {% for k, v in rec_main.layer1.components.items() %}
-      <tr>
-        <td>{{ k }}</td>
-        <td class="num">{{ v | num(2) }}</td>
-      </tr>
+        <tr>
+          <td><strong>{{ k }}</strong></td>
+          <td class="num">{{ v | num(2) }}</td>
+        </tr>
+        {% if rec_main.layer1.reasons[k] %}
+        <tr class="with-reason"><td colspan="2" class="reason">{{ rec_main.layer1.reasons[k] }}</td></tr>
+        {% endif %}
       {% endfor %}
+      {% if rec_main.layer1.reasons["_veto"] %}
+      <tr class="with-reason"><td colspan="2" class="reason"
+          style="background: var(--warn-bg); color: var(--warn-text);">
+        ⚠ {{ rec_main.layer1.reasons["_veto"] }}
+      </td></tr>
+      {% endif %}
     </tbody>
   </table>
 </details>
@@ -155,11 +239,20 @@
   <table class="numeric compact">
     <tbody>
       {% for k, v in rec_main.layer2.components.items() %}
-      <tr>
-        <td>{{ k }}</td>
-        <td class="num">{% if v is number %}{{ v | num(4) }}{% else %}{{ v }}{% endif %}</td>
-      </tr>
+        <tr>
+          <td><strong>{{ k }}</strong></td>
+          <td class="num">{% if v is number %}{{ v | num(4) }}{% else %}{{ v }}{% endif %}</td>
+        </tr>
+        {% if rec_main.layer2.reasons[k] %}
+        <tr class="with-reason"><td colspan="2" class="reason">{{ rec_main.layer2.reasons[k] }}</td></tr>
+        {% endif %}
       {% endfor %}
+      {% if rec_main.layer2.reasons["_veto"] %}
+      <tr class="with-reason"><td colspan="2" class="reason"
+          style="background: var(--warn-bg); color: var(--warn-text);">
+        ⚠ {{ rec_main.layer2.reasons["_veto"] }}
+      </td></tr>
+      {% endif %}
     </tbody>
   </table>
 </details>
@@ -169,10 +262,13 @@
   <table class="numeric compact">
     <tbody>
       {% for k, v in rec_main.layer3.components.items() %}
-      <tr>
-        <td>{{ k }}</td>
-        <td class="num">{% if v is number %}{{ v | num(4) }}{% else %}{{ v }}{% endif %}</td>
-      </tr>
+        <tr>
+          <td><strong>{{ k }}</strong></td>
+          <td class="num">{% if v is number %}{{ v | num(4) }}{% else %}{{ v }}{% endif %}</td>
+        </tr>
+        {% if rec_main.layer3.reasons[k] %}
+        <tr class="with-reason"><td colspan="2" class="reason">{{ rec_main.layer3.reasons[k] }}</td></tr>
+        {% endif %}
       {% endfor %}
     </tbody>
   </table>

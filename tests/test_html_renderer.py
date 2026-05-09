@@ -359,3 +359,110 @@ def test_no_external_resources_loaded(make_ipo):
     # 不引 CDN
     assert "cdn." not in html
     assert "googleapis.com" not in html
+
+
+# =============================================================================
+# Level 1+2+3 rationale 渲染 (新加)
+# =============================================================================
+
+class TestRationaleSection:
+    def test_thesis_section_present(self, make_ipo):
+        """memo 顶部应有 Thesis 段 (headline + drivers/risks)"""
+        from reports.html_renderer import render_single_deal
+        records = _build_records(make_ipo)
+        html = render_single_deal(records, _build_snap(), date(2026, 5, 9), [])
+        assert 'class="thesis"' in html
+        # headline 必有"建议"二字
+        assert "建议" in html
+
+    def test_decision_rationale_block_present(self, make_ipo):
+        """公式拆解 + band 映射应在文档里"""
+        from reports.html_renderer import render_single_deal
+        records = _build_records(make_ipo)
+        html = render_single_deal(records, _build_snap(), date(2026, 5, 9), [])
+        # 公式
+        assert "Q_company × Q_ecosystem × (1 - R_lockup)" in html
+        # band 表
+        assert "完整 band 表" in html
+
+    def test_l1_per_component_reasons_rendered(self, make_ipo):
+        """L1 子项下的 reason 文本应出现"""
+        from reports.html_renderer import render_single_deal
+        records = _build_records(make_ipo)
+        html = render_single_deal(records, _build_snap(), date(2026, 5, 9), [])
+        # 每个 L1.x 子项后的 reason class
+        assert html.count('class="reason"') >= 6  # 至少 6 个 L1 子项 reason
+
+    def test_l3_overhang_reason_explains_band(self, make_ipo):
+        """L3 overhang reason 应包含具体阈值带"""
+        from reports.html_renderer import render_single_deal
+        records = _build_records(make_ipo)
+        html = render_single_deal(records, _build_snap(), date(2026, 5, 9), [])
+        # overhang 阈值带短语
+        assert "overhang_ratio" in html
+        # 具体的 band 标记
+        assert "解禁" in html or "0.85" in html or "0.95" in html
+
+    def test_adjustment_explanation_rendered(self, make_ipo):
+        """触发 A+H 调整时, adjustment 列表应该带 'why' 解释"""
+        from reports.html_renderer import render_single_deal
+        ipo = make_ipo()
+        ipo.is_a_h = True
+        ipo.a_share_short_borrowable = True
+        # 重新构造 records (using updated ipo)
+        from nacs_model import compute_nacs
+
+        class MockRow:
+            def __init__(self, d): self._d = d
+            def __getitem__(self, k): return self._d.get(k)
+            def keys(self): return list(self._d.keys())
+
+        row = MockRow({
+            "stock_code": "0001.HK", "company_name_zh": "测",
+            "status": "prospectus",
+            "listing_chapter": "main_board_profitable",
+            "gics_l2": None,
+            "listing_date": "2026-09-15",
+            "expected_listing_date": "2026-09-15",
+        })
+        result = compute_nacs(ipo)
+        records = [{
+            "stock_code": "0001.HK", "ipo_id": "HK_001",
+            "row": row, "scenario": "mid", "price": 9.0,
+            "offering": ipo, "result": result,
+        }]
+        html = render_single_deal(records, _build_snap(), date(2026, 5, 9), [])
+        # adjustment list class
+        assert 'class="adjustments"' in html
+        # adjustment 解释 (对冲 / A 股)
+        assert "对冲" in html or "A 股" in html
+
+    def test_compare_includes_per_deal_thesis(self, make_ipo):
+        """compare 模板每只 deal 都有 thesis headline"""
+        from reports.html_renderer import render_compare
+        deals = {
+            "0001.HK": _build_records(make_ipo),
+            "0002.HK": _build_records(make_ipo),
+        }
+        html = render_compare(deals, _build_snap(), {"0001.HK": [], "0002.HK": []})
+        # 每只 stock 应该至少出现一个 thesis section
+        assert html.count('class="thesis"') >= 2
+
+    def test_base_rate_section_when_similar_cases_have_returns(self, make_ipo):
+        from reports.html_renderer import render_single_deal
+        records = _build_records(make_ipo)
+        sims = [
+            {"stock_code": "S1.HK", "name": "Sim1", "listing_date": "2024-01-01",
+             "match_dims": ["chapter", "gics_l2"],
+             "actual_d30": 0.10, "actual_m6": 0.20, "similarity_score": 1.0},
+            {"stock_code": "S2.HK", "name": "Sim2", "listing_date": "2024-04-01",
+             "match_dims": ["chapter"],
+             "actual_d30": 0.05, "actual_m6": 0.15, "similarity_score": 0.5},
+            {"stock_code": "S3.HK", "name": "Sim3", "listing_date": "2024-08-01",
+             "match_dims": ["chapter", "gics_l2"],
+             "actual_d30": 0.08, "actual_m6": 0.25, "similarity_score": 1.0},
+        ]
+        html = render_single_deal(records, _build_snap(), date(2026, 5, 9), sims)
+        assert "类比组实证" in html
+        # verdict 词
+        assert "favorable" in html or "neutral" in html or "cautious" in html

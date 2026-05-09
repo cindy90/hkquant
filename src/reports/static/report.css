@@ -274,6 +274,108 @@ pre {
   margin: 0;
 }
 
+/* ===== Thesis card (顶部投资逻辑综合) ===== */
+.thesis {
+  border-left: 4px solid var(--accent);
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  background: var(--bg-card);
+  border-radius: 0 6px 6px 0;
+}
+.thesis .headline {
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0 0 0.75rem 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+.thesis .group {
+  margin: 0.75rem 0;
+}
+.thesis .group h4 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem 0;
+  font-weight: 600;
+}
+.thesis ul.bullets {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.thesis ul.bullets li {
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+}
+.thesis ul.bullets li.driver::before {
+  content: "✓ ";
+  color: var(--positive);
+  font-weight: 600;
+}
+.thesis ul.bullets li.risk::before {
+  content: "⚠ ";
+  color: var(--negative);
+}
+.thesis .reason-detail {
+  display: block;
+  margin-left: 1.5rem;
+  margin-top: 0.125rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.thesis .base-rate {
+  background: var(--bg-subtle);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  margin-top: 0.5rem;
+}
+
+/* ===== Decision rationale block (公式拆解) ===== */
+.rationale-block {
+  background: var(--bg-subtle);
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin: 0.5rem 0;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ===== Per-component reason (每个 L1/L2/L3 子项下面的小字解释) ===== */
+tr.with-reason td.reason {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0.75rem 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-style: normal;
+  line-height: 1.45;
+}
+
+/* ===== Adjustment list with explanations ===== */
+ul.adjustments {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+ul.adjustments li {
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--border);
+}
+ul.adjustments li:last-child { border-bottom: none; }
+ul.adjustments li strong { color: var(--text); }
+ul.adjustments li .why {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-top: 0.125rem;
+}
+
 /* ===== Footer ===== */
 footer.memo-footer {
   margin-top: 2.5rem;

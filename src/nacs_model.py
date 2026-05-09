@@ -248,6 +248,8 @@ class LayerBreakdown:
     veto_triggered: bool = False
     veto_reason: Optional[str] = None
     notes: List[str] = field(default_factory=list)
+    # 每个子项的人类可读"为什么这么打分" (key 与 components 同名, 值为 sentence)
+    reasons: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -269,6 +271,9 @@ class NACSResult:
     adjustments_applied: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
+    # 决策链路解释 (compute_nacs 末尾填; 模板按行展示)
+    decision_rationale: List[str] = field(default_factory=list)
+
     def to_dict(self) -> dict:
         return {
             "company": self.company_name,
@@ -282,6 +287,7 @@ class NACSResult:
             "decision": self.decision,
             "adjustments": list(self.adjustments_applied),
             "warnings": list(self.warnings),
+            "decision_rationale": list(self.decision_rationale),
         }
 
 
@@ -1164,6 +1170,33 @@ def compute_nacs(o: IPOOffering) -> NACSResult:
     warnings.extend(l2.notes)
     warnings.extend(l3.notes)
 
+    # ===== Rationale (IC memo 用; 本身不影响打分) =====
+    try:
+        from nacs_rationale import (
+            explain_layer1_components, explain_layer2_components,
+            explain_layer3_components, explain_l1_veto, explain_l2_veto,
+            explain_decision_band, explain_formula,
+        )
+        l1.reasons = explain_layer1_components(o, l1.components)
+        if l1.veto_triggered:
+            l1.reasons["_veto"] = explain_l1_veto(l1.veto_reason) or l1.veto_reason
+        l2.reasons = explain_layer2_components(o, l2.components)
+        if l2.veto_triggered:
+            l2.reasons["_veto"] = explain_l2_veto(l2.veto_reason) or l2.veto_reason
+        l3.reasons = explain_layer3_components(o, l3.components)
+        decision_rationale = explain_formula(Qc, Qe, Rl, nacs_raw, nacs_adj, adjustments)
+        decision_rationale.append("")
+        decision_rationale.append(explain_decision_band(nacs_adj, pos, decision))
+        if regime_blocked:
+            decision_rationale.append(
+                f"⚠ Regime gate 阻断: regime_score={o.regime_score:+.4f} "
+                f"< {regime_threshold} → 强制 SKIP (覆盖原决策)"
+            )
+    except Exception as e:
+        # rationale 渲染失败不应影响主打分; 记到 warnings
+        warnings.append(f"rationale 渲染失败: {type(e).__name__}: {e}")
+        decision_rationale = []
+
     return NACSResult(
         company_name=o.company_name,
         stock_code=o.stock_code,
@@ -1172,6 +1205,7 @@ def compute_nacs(o: IPOOffering) -> NACSResult:
         position_pct=pos, decision=decision,
         layer1=l1, layer2=l2, layer3=l3,
         adjustments_applied=adjustments,
+        decision_rationale=decision_rationale,
         warnings=warnings,
     )
 

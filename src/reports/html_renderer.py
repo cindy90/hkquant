@@ -171,6 +171,15 @@ def render_single_deal(records: List[Dict[str, Any]],
     """
     if not records:
         raise ValueError("records cannot be empty")
+
+    # 主 record (mid/final) 用于综合 thesis
+    from reports.thesis import synthesize_thesis
+    main = next((r for r in records if r["scenario"] in ("mid", "final")),
+                records[0])
+    thesis = synthesize_thesis(
+        main["result"], panel_snap=snap, similar_cases=similar_cases,
+    )
+
     env = _get_env()
     tpl = env.get_template("ic_memo_single.html.j2")
     return tpl.render(
@@ -179,6 +188,7 @@ def render_single_deal(records: List[Dict[str, Any]],
         snap=_simplify_snap(snap),
         asof=asof,
         similar_cases=similar_cases,
+        thesis=thesis,
         title=title or _make_title(records[0]),
         generated_at=datetime.now(),
     )
@@ -190,17 +200,28 @@ def render_compare(deals_results: Dict[str, List[Dict[str, Any]]],
                    *,
                    title: Optional[str] = None) -> str:
     """渲染多 deal 横评 IC memo."""
+    from reports.thesis import synthesize_thesis
     env = _get_env()
     tpl = env.get_template("ic_memo_compare.html.j2")
     simplified = {
         code: [_simplify_record(r) for r in recs]
         for code, recs in deals_results.items()
     }
+    # 每只 deal 的 thesis (用 mid/final 那一档)
+    theses = {}
+    for code, recs in deals_results.items():
+        main = next((r for r in recs if r["scenario"] in ("mid", "final")),
+                    recs[0])
+        theses[code] = synthesize_thesis(
+            main["result"], panel_snap=snap,
+            similar_cases=similar_per_deal.get(code, []),
+        )
     return tpl.render(
         css=_load_css(),
         deals=simplified,
         snap=_simplify_snap(snap),
         similar_per_deal=similar_per_deal,
+        theses=theses,
         title=title or f"IC Compare ({len(deals_results)} deals)",
         generated_at=datetime.now(),
     )
@@ -267,16 +288,25 @@ def _simplify_record(rec: Dict[str, Any]) -> Dict[str, Any]:
         "layer1": {
             "raw_score": r.layer1.raw_score,
             "components": l1_public,
+            "reasons": dict(r.layer1.reasons or {}),
         },
         "layer2": {
             "raw_score": r.layer2.raw_score,
             "components": l2_public,
+            "reasons": dict(r.layer2.reasons or {}),
         },
         "layer3": {
             "components": l3,
+            "reasons": dict(r.layer3.reasons or {}),
         },
         "adjustments_applied": list(r.adjustments_applied or []),
         "warnings": list(r.warnings or []),
+        "decision_rationale": list(r.decision_rationale or []),
+        # 调整解释 (单条 → 解读)
+        "adjustment_explanations": [
+            __import__("nacs_rationale").explain_adjustment(adj)
+            for adj in (r.adjustments_applied or [])
+        ],
         # offering 输入快照 (audit)
         "offering_inputs": _to_jsonable(offering),
     }

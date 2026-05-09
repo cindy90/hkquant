@@ -405,4 +405,34 @@ python scripts/case_review.py --stock-code 1187.HK \
 - **审计快照**: Inputs snapshot (折叠) 含完整 IPOOffering JSON, 复盘可还原
 
 实现: `src/reports/html_renderer.py` + `src/reports/templates/*.html.j2` (Jinja2),
-样式: `src/reports/static/report.css` (~300 行原创, 无第三方框架).
+样式: `src/reports/static/report.css` (~400 行原创, 无第三方框架).
+
+### 11.8 Rationale + Thesis (memo "为什么这么打分")
+HTML memo 现在不只是数字, 还有完整的"为什么":
+
+**Decision rationale** (顶部, 默认展开): 把
+`NACS_adj = Q_c × Q_e × (1 - R_l) × adjustments` 公式拆解, 显示当时三因子的
+具体值, 每个 adjustment 的乘数和触发条件, 以及 NACS 落入哪个 band → 决策.
+
+**Investment thesis** (顶部, 跟决策卡片紧邻):
+- `headline`: "建议 LARGE (70%): NACS_adj=0.4969, 9 项强驱动 / 1 项主风险, 类比组实战正面"
+- 主驱动列表 (≥75 子项 + cluster bonus 等): 每条带 score 和 reason 详情
+- 主风险列表 (≤45 L1/L2 子项 + ≥0.40 L3 子项): 同上
+- 类比组实证: similar_cases 的 d30/m6 中位 + winrate + verdict (favorable/neutral/cautious)
+- 当下市场情绪: panel.regime_score 解读
+
+**Per-component reasons** (折叠在 L1/L2/L3 详情下, 每子项一行):
+形如 `PE_at_offer=22.6 vs peer_median=170.0 → 折让 +86.7%; 命中 [≥30% 折让 → 满分 100]`,
+显式给出阈值带 + 计算依据, 投委会能从 "L1.1=84" 一直追到底层公式.
+
+**Adjustment explanations**: 每个 adjustment (A+H/18C/regime gate 等) 都附一句
+触发条件 / 业务含义.
+
+实现:
+- `src/nacs_rationale.py`: 跟 `_score_l*_*` 函数一一对应的 explain 函数,
+  阈值表与 nacs_model 同源
+- `src/reports/thesis.py`: 纯规则模板的 driver/risk/base-rate 综合器
+  (不调 LLM, 100% 可重复 / 可审计)
+- `compute_nacs` 末尾自动调 explain 把 reasons 填进 LayerBreakdown.reasons /
+  NACSResult.decision_rationale, 不影响打分逻辑
+- 模板 `ic_memo_single.html.j2` / `ic_memo_compare.html.j2` 渲染 rationale 段
