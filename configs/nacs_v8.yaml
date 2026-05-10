@@ -230,3 +230,31 @@ layer1_biotech_subdomain:
     medical_device: 0.90
     cell_gene: 1.10
     diagnostics: 0.85
+
+# -----------------------------------------------------------------------------
+# L1.1 18C 估值: P/S + PS/G + last_round_premium 加权 (P3.2)
+# -----------------------------------------------------------------------------
+# 旧版: 18C L1.1 走 last_round_premium 单项, 但 ipo_master 全表 NULL → 100% 走
+# 60.0 中性, 实际无信号. 新版按可用信号 renormalize 加权:
+#   P/S       = mkt_cap / revenue_latest_hkd, 跟 ps_peer_median (panel by_theme
+#               中位) 比折溢价
+#   PS/G      = (P/S) / (revenue_growth_yoy × 100), 用增速归一化跨主题鲁棒
+#   last_round = OCR 招股书后激活; 现状缺失就剔出权重不参与
+#
+# PS/G 阈值参考 SaaS / 高增长 IPO 业内惯用:
+#   ≤0.5 便宜 (满分)  · 0.5-1.0 合理 → 100→70 线性
+#   1.0-2.0 偏贵 → 70→40           · 2.0-3.0 贵 → 40→0
+#   > 3.0 泡沫 → 0
+# 全 disabled → 退回旧 last_round_premium 单项 (绿灯回滚)
+layer1_valuation_18c:
+  enabled: true
+  weight_ps: 0.30
+  weight_psg: 0.40
+  weight_lrp: 0.30
+  psg_excellent_max: 0.5
+  psg_fair_max: 1.0
+  psg_rich_max: 2.0
+  psg_bubble_max: 3.0
+  ps_strong_discount: 0.30
+  ps_max_premium: 0.20
+  fallback_neutral: 60.0

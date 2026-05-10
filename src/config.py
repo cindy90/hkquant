@@ -224,6 +224,43 @@ class Layer1OfferingMktCap:
 
 
 @dataclass
+class Layer1Valuation18C:
+    """P3.2: 18C 估值合理性 (L1.1 替换原 last_round_premium 单项).
+
+    背景: 18C 公司多数无盈利 → PE/PS 路径中 PE 不可比, 但已商业化档有营收 →
+    P/S (mkt_cap / revenue) + PS/G (P/S 用增速归一化) 是 SaaS / 半导体 / 机器人
+    主流估值锚点. last_round_premium 现因 ipo_master 全表 NULL 失效, 暂保留作为
+    OCR 补全后的辅助权重.
+
+    评分组件:
+        ps_score      — P/S 相对 ps_peer_median 折溢价 (跟 _score_pe_discount 同模式)
+        psg_score     — PS/G 绝对档位 (≤0.5 满分 → 3.0+ 0 分; 跨主题鲁棒)
+        lrp_score     — last_round_premium 折溢价 (现状=None 走 60 中性, OCR 补后激活)
+
+    缺数据降级 (按字段可用性 renormalize 权重):
+        ps_at_offer 需 (mkt_cap_at_offer_hkd, revenue_latest_hkd) 都有
+        ps_score 需 ps_at_offer + ps_peer_median 都有
+        psg_score 需 ps_at_offer + revenue_growth_yoy>0
+        lrp_score 需 last_round_premium 已知
+        三个全无 → 走 60.0 中性 (跟旧行为兼容)
+    """
+    enabled: bool = True
+    weight_ps: float = 0.30        # 相对 P/S 折溢价
+    weight_psg: float = 0.40       # PS/G 绝对档
+    weight_lrp: float = 0.30       # last_round_premium (现状 NULL 走中性, OCR 后激活)
+    # PS/G 绝对档位 (跟 SaaS / 高增长 IPO 估值惯用阈值对齐)
+    psg_excellent_max: float = 0.5     # ≤ 此 → 100
+    psg_fair_max: float = 1.0          # ≤ 此 → 100→70 线性
+    psg_rich_max: float = 2.0          # ≤ 此 → 70→40 线性
+    psg_bubble_max: float = 3.0        # ≤ 此 → 40→0 线性, 超过 → 0
+    # P/S 相对档位 (跟 _score_pe_discount 同口径; "discount" 这里指比 peer 便宜)
+    ps_strong_discount: float = 0.30    # ≥30% 折让 → 100
+    ps_max_premium: float = 0.20        # ≥20% 溢价 → 0
+    # 全部缺失时的中性默认
+    fallback_neutral: float = 60.0
+
+
+@dataclass
 class Layer1ProfitabilityTier:
     """P1.2: 主板已盈利档基本面 (L1.3) 盈利质量 tier multiplier.
 
@@ -327,6 +364,9 @@ class NacsConfig:
     layer1_profitability_tier: Layer1ProfitabilityTier = field(
         default_factory=Layer1ProfitabilityTier
     )
+    layer1_valuation_18c: Layer1Valuation18C = field(
+        default_factory=Layer1Valuation18C
+    )
     layer1_biotech_subdomain: Layer1BiotechSubdomain = field(
         default_factory=Layer1BiotechSubdomain
     )
@@ -387,6 +427,10 @@ class NacsConfig:
         if "layer1_biotech_subdomain" in data:
             kwargs["layer1_biotech_subdomain"] = Layer1BiotechSubdomain(
                 **data["layer1_biotech_subdomain"]
+            )
+        if "layer1_valuation_18c" in data:
+            kwargs["layer1_valuation_18c"] = Layer1Valuation18C(
+                **data["layer1_valuation_18c"]
             )
         return cls(**kwargs)
 

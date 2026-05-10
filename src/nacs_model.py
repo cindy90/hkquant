@@ -178,6 +178,8 @@ class OfferingStructure:
     controlling_shareholder_pledge_default: bool = False
     # P1.1: 总市值 (post_ipo_shares × offer_price_hkd); None=未知 → modifier 跳过
     mkt_cap_at_offer_hkd: Optional[float] = None
+    # P3.2: P/S peer median (来自 panel by_theme aggregates); None=无 peer 可比
+    ps_peer_median: Optional[float] = None
 
 
 @dataclass
@@ -422,14 +424,145 @@ def _score_last_round_premium(last_round_premium: Optional[float]) -> float:
     return 0.0
 
 
-def _score_l1_1_valuation(o: OfferingStructure,
-                          ctype: CompanyType) -> Tuple[float, Dict[str, float]]:
-    if ctype == CompanyType.TECH_18C:
-        # 18C用 last_round_premium 单项 (PE/PS不可比)
+def _score_ps_discount(ps_at_offer: Optional[float],
+                       ps_peer: Optional[float],
+                       *, strong_discount: float = 0.30,
+                       max_premium: float = 0.20) -> Optional[float]:
+    """P3.2: P/S 相对 peer median 折溢价 (跟 _score_pe_discount 同口径)"""
+    if ps_at_offer is None or ps_peer is None or ps_peer <= 0 or ps_at_offer <= 0:
+        return None
+    discount = (ps_peer - ps_at_offer) / ps_peer
+    if discount >= strong_discount:
+        return 100.0
+    if discount >= 0.0:
+        return linear_score(discount, 0.0, strong_discount, 50.0, 100.0)
+    if discount >= -max_premium:
+        return linear_score(discount, -max_premium, 0.0, 0.0, 50.0)
+    return 0.0
+
+
+def _score_psg_band(psg: Optional[float],
+                    *, excellent_max: float = 0.5,
+                    fair_max: float = 1.0,
+                    rich_max: float = 2.0,
+                    bubble_max: float = 3.0) -> Optional[float]:
+    """P3.2: PS/G 绝对档位评分 (PS/G ≤ 0.5 满分; > 3.0 零分)
+
+    PS/G = (mkt_cap / revenue) / (revenue_growth_yoy × 100), 增速归一化后跨主题鲁棒.
+    阈值默认对齐 SaaS / 高增长 IPO 业内惯用 (≤1 便宜, 1-2 合理, 2-3 偏贵, >3 泡沫).
+    """
+    if psg is None or psg < 0:
+        return None
+    if psg <= excellent_max:
+        return 100.0
+    if psg <= fair_max:
+        return linear_score(psg, excellent_max, fair_max, 100.0, 70.0)
+    if psg <= rich_max:
+        return linear_score(psg, fair_max, rich_max, 70.0, 40.0)
+    if psg <= bubble_max:
+        return linear_score(psg, rich_max, bubble_max, 40.0, 0.0)
+    return 0.0
+
+
+def _score_l1_1_18c(o: OfferingStructure,
+                    t: TechC18Fundamentals) -> Tuple[float, Dict[str, float]]:
+    """P3.2: 18C 估值 (P/S + PS/G + last_round_premium 加权; 信号缺失自动 renormalize).
+
+    旧版只取 last_round_premium (现状 NULL 走 60 中性, 实际无信号).
+    新版优先 PS/G 绝对档 (跨主题鲁棒) + P/S 相对 peer (主题内可比) +
+    last_round_premium 留位等 OCR 数据.
+    """
+    cfg = _get_cfg()
+    vc = cfg.layer1_valuation_18c if cfg is not None else None
+    enabled = vc.enabled if vc is not None else True
+
+    components: Dict[str, float] = {}
+
+    # 输入: P/S = mkt_cap / revenue (商业化档才有 revenue)
+    ps_at_offer: Optional[float] = None
+    if (o.mkt_cap_at_offer_hkd is not None
+            and t.revenue_latest_hkd is not None
+            and t.revenue_latest_hkd > 0):
+        ps_at_offer = o.mkt_cap_at_offer_hkd / t.revenue_latest_hkd
+        components["ps_at_offer"] = ps_at_offer
+
+    # 三个组件评分 (各自 None 表示信号不可用)
+    if vc is not None:
+        ps_score = _score_ps_discount(
+            ps_at_offer, o.ps_peer_median,
+            strong_discount=vc.ps_strong_discount,
+            max_premium=vc.ps_max_premium,
+        )
+    else:
+        ps_score = _score_ps_discount(ps_at_offer, o.ps_peer_median)
+
+    psg: Optional[float] = None
+    if (ps_at_offer is not None
+            and t.revenue_growth_yoy is not None
+            and t.revenue_growth_yoy > 0):
+        psg = ps_at_offer / (t.revenue_growth_yoy * 100)
+        components["psg_at_offer"] = psg
+    if vc is not None:
+        psg_score = _score_psg_band(
+            psg,
+            excellent_max=vc.psg_excellent_max,
+            fair_max=vc.psg_fair_max,
+            rich_max=vc.psg_rich_max,
+            bubble_max=vc.psg_bubble_max,
+        )
+    else:
+        psg_score = _score_psg_band(psg)
+
+    lrp_score: Optional[float] = (
+        _score_last_round_premium(o.last_round_premium)
+        if o.last_round_premium is not None else None
+    )
+
+    components["ps_score"] = ps_score if ps_score is not None else 0.0
+    components["psg_score"] = psg_score if psg_score is not None else 0.0
+    components["lrp_score"] = lrp_score if lrp_score is not None else 0.0
+    components["ps_used"] = 1.0 if ps_score is not None else 0.0
+    components["psg_used"] = 1.0 if psg_score is not None else 0.0
+    components["lrp_used"] = 1.0 if lrp_score is not None else 0.0
+
+    # 全 disabled → fallback last_round_premium 单项 (旧行为)
+    if not enabled:
         s = _score_last_round_premium(o.last_round_premium)
-        return s, {"last_round_premium_score": s}
-    s_pe = _score_pe_discount(o.pe_at_offer, o.pe_peer_median)
-    s_pre = _score_last_round_premium(o.last_round_premium)
+        components["fallback_legacy_only_lrp"] = 1.0
+        return s, components
+
+    # 加权平均 (按可用信号 renormalize)
+    w_ps = vc.weight_ps if vc is not None else 0.30
+    w_psg = vc.weight_psg if vc is not None else 0.40
+    w_lrp = vc.weight_lrp if vc is not None else 0.30
+    fallback_neutral = vc.fallback_neutral if vc is not None else 60.0
+
+    weights = []
+    scores = []
+    if ps_score is not None:
+        weights.append(w_ps); scores.append(ps_score)
+    if psg_score is not None:
+        weights.append(w_psg); scores.append(psg_score)
+    if lrp_score is not None:
+        weights.append(w_lrp); scores.append(lrp_score)
+
+    if not scores:
+        # 三个信号都不可用 → 走中性默认 (跟旧行为兼容; OCR 数据补齐前 18C 大概率落这)
+        components["fallback_neutral"] = 1.0
+        return fallback_neutral, components
+
+    total_w = sum(weights)
+    final = sum(w * s for w, s in zip(weights, scores)) / total_w
+    return clip(final, 0.0, 100.0), components
+
+
+def _score_l1_1_valuation(o: IPOOffering) -> Tuple[float, Dict[str, float]]:
+    if o.company_type == CompanyType.TECH_18C:
+        # P3.2: 18C 走 P/S + PS/G + last_round_premium 加权 (替代旧 last_round 单项)
+        assert o.tech18c is not None, "18C 需提供 TechC18Fundamentals"
+        return _score_l1_1_18c(o.offering, o.tech18c)
+    s_pe = _score_pe_discount(o.offering.pe_at_offer, o.offering.pe_peer_median)
+    s_pre = _score_last_round_premium(o.offering.last_round_premium)
     score = 0.6 * s_pe + 0.4 * s_pre
     return score, {"pe_discount_score": s_pe, "preipo_premium_score": s_pre}
 
@@ -689,7 +822,7 @@ def _check_l1_veto(o: IPOOffering) -> Tuple[bool, Optional[str]]:
 
 def score_layer1_company(o: IPOOffering) -> LayerBreakdown:
     assert o.offering and o.sponsor and o.market, "Layer 1 需要 offering/sponsor/market"
-    s11, c11 = _score_l1_1_valuation(o.offering, o.company_type)
+    s11, c11 = _score_l1_1_valuation(o)
 
     s13: float
     c13: Dict[str, float]

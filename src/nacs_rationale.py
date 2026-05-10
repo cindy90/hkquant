@@ -108,14 +108,73 @@ def _explain_last_round_premium(o: OfferingStructure) -> str:
     return f"last_round_premium = {p:+.1%}; 命中 [{band}]"
 
 
-def _explain_l1_1(o: IPOOffering) -> str:
-    """估值合理性 (L1.1) — 18C 单走 last_round_premium; 其它 = 0.6 PE + 0.4 last_round"""
+def _explain_l1_1(o: IPOOffering,
+                  components: Optional[Dict[str, Any]] = None) -> str:
+    """估值合理性 (L1.1):
+        18C → P/S + PS/G + last_round_premium 按可用信号加权 (P3.2)
+        其它 → 0.6 × PE + 0.4 × last_round_premium
+    """
     if o.company_type == CompanyType.TECH_18C:
-        return ("18C 章节 PE/PS 不可比 → 单 last_round_premium 项. "
-                + _explain_last_round_premium(o.offering))
+        return _explain_l1_1_18c(o, components)
     return ("L1.1 = 0.6 × PE_score + 0.4 × last_round_premium_score. "
             + _explain_pe_discount(o.offering)
             + ". " + _explain_last_round_premium(o.offering))
+
+
+def _explain_l1_1_18c(o: IPOOffering,
+                      components: Optional[Dict[str, Any]] = None) -> str:
+    """P3.2: 18C 估值解释 — P/S + PS/G + last_round_premium 加权 (信号缺失自动剔除)"""
+    parts = ["18C 估值: PE 不可比 → P/S + PS/G + last_round 加权"]
+    o_off = o.offering
+    t = o.tech18c
+
+    # P/S
+    ps = None
+    if (o_off.mkt_cap_at_offer_hkd and t and t.revenue_latest_hkd
+            and t.revenue_latest_hkd > 0):
+        ps = o_off.mkt_cap_at_offer_hkd / t.revenue_latest_hkd
+    if ps is not None:
+        peer_str = (f", peer={o_off.ps_peer_median:.1f}x"
+                    if o_off.ps_peer_median else ", peer 缺失走 None")
+        parts.append(f"P/S={ps:.1f}x{peer_str}")
+    else:
+        parts.append("P/S=n/a (mkt_cap 或 revenue 缺失)")
+
+    # PS/G
+    psg = None
+    if (ps is not None and t and t.revenue_growth_yoy
+            and t.revenue_growth_yoy > 0):
+        psg = ps / (t.revenue_growth_yoy * 100)
+        band = ("便宜 ≤0.5" if psg <= 0.5
+                else "合理 0.5-1.0" if psg <= 1.0
+                else "偏贵 1.0-2.0" if psg <= 2.0
+                else "贵 2.0-3.0" if psg <= 3.0
+                else "泡沫 >3.0")
+        parts.append(f"PS/G={psg:.2f} ({band})")
+    else:
+        parts.append("PS/G=n/a (无营收增速或营收<=0)")
+
+    # last_round_premium
+    if o_off.last_round_premium is not None:
+        parts.append(
+            f"last_round_premium={o_off.last_round_premium:+.0%}")
+    else:
+        parts.append("last_round_premium 缺失 (招股书未抓, 走中性 60)")
+
+    # 实际生效的权重
+    if components:
+        ps_used = components.get("_ps_used", components.get("ps_used", 0))
+        psg_used = components.get("_psg_used", components.get("psg_used", 0))
+        lrp_used = components.get("_lrp_used", components.get("lrp_used", 0))
+        active = []
+        if ps_used: active.append("P/S")
+        if psg_used: active.append("PS/G")
+        if lrp_used: active.append("last_round")
+        if active:
+            parts.append(f"生效信号: {' + '.join(active)} (按权重 renormalize)")
+        else:
+            parts.append("三信号均缺 → fallback 中性 60")
+    return " · ".join(parts)
 
 
 def _explain_l1_2(s: SponsorInfo) -> str:
@@ -300,7 +359,7 @@ def explain_layer1_components(o: IPOOffering,
     """对 layer1.components 的每个 'L1.x_*' 公开子项, 给出 reason 字符串."""
     reasons = {}
     if "L1.1_valuation" in components:
-        reasons["L1.1_valuation"] = _explain_l1_1(o)
+        reasons["L1.1_valuation"] = _explain_l1_1(o, components)
     if "L1.2_sponsor" in components:
         reasons["L1.2_sponsor"] = _explain_l1_2(o.sponsor)
     if "L1.3_fundamentals" in components:
