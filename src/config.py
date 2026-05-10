@@ -143,6 +143,29 @@ class AiGildingAdjustment:
 
 
 @dataclass
+class SmallCapCSRescueFlag:
+    """P3.1: 小盘 + 高基石覆盖率 = 红旗 post-adjustment.
+
+    经验信号: 小盘公司 (offering_size 小 / 总市值小) + cornerstones 覆盖率
+    异常高 (e.g. >55%) → 通常是基本面弱, 找了一篮子关联基石"救场"凑发行.
+    历史 d30/60d 此类组合显著负偏.
+
+    触发条件 (两条都满足):
+        offering_size_hkd < small_offering_threshold (默认 1.5B HKD)
+        cornerstone_coverage > coverage_threshold (默认 0.55)
+
+    设计原则:
+        - 仅适用于"双信号"同时, 任一不满足都不触发 (避免误伤)
+        - 数据缺失保守不触发: offering_size=None 或 cornerstones 空 → 跳过
+        - cfg.enabled=False → 整段跳过
+    """
+    enabled: bool = True
+    small_offering_threshold_hkd: float = 1.5e9
+    coverage_threshold: float = 0.55
+    multiplier: float = 0.90
+
+
+@dataclass
 class AHHedgeMultiplier:
     """P2.1: A+H 同名 A 股可融券对冲 — 按 A 股 ADV (日均成交额, CNY) 分档.
 
@@ -177,6 +200,9 @@ class PostAdjustments:
     related_party_tx_recent: float = 0.85
     ai_gilding: AiGildingAdjustment = field(default_factory=AiGildingAdjustment)
     ah_hedge: AHHedgeMultiplier = field(default_factory=AHHedgeMultiplier)
+    small_cap_cs_rescue: SmallCapCSRescueFlag = field(
+        default_factory=SmallCapCSRescueFlag
+    )
 
 
 @dataclass
@@ -337,11 +363,14 @@ class NacsConfig:
             pa_data = dict(data["post_adjustments"])
             ag_data = pa_data.pop("ai_gilding", None)
             ah_data = pa_data.pop("ah_hedge", None)
+            sc_data = pa_data.pop("small_cap_cs_rescue", None)
             pa = PostAdjustments(**pa_data)
             if ag_data is not None:
                 pa.ai_gilding = AiGildingAdjustment(**ag_data)
             if ah_data is not None:
                 pa.ah_hedge = AHHedgeMultiplier(**ah_data)
+            if sc_data is not None:
+                pa.small_cap_cs_rescue = SmallCapCSRescueFlag(**sc_data)
             kwargs["post_adjustments"] = pa
         if "layer1_market_theme_heat" in data:
             kwargs["layer1_market_theme_heat"] = Layer1MarketThemeHeat(

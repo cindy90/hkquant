@@ -1333,6 +1333,23 @@ def compute_nacs(o: IPOOffering) -> NACSResult:
             f"(theme={o.theme_id}, AI 收入 {o.ai_revenue_pct:.0%} < {ag.threshold:.0%})"
         )
 
+    # P3.1: 小盘 + 高基石覆盖率 红旗
+    sc = adj.small_cap_cs_rescue if adj is not None else None
+    if (sc is not None and getattr(sc, "enabled", True)
+            and o.offering is not None
+            and o.offering.offering_size_hkd is not None
+            and o.cornerstones):
+        offer_size = o.offering.offering_size_hkd
+        cs_total = sum(c.ticket_size_hkd for c in o.cornerstones if c.ticket_size_hkd)
+        coverage = cs_total / offer_size if offer_size > 0 else 0.0
+        if (offer_size < sc.small_offering_threshold_hkd
+                and coverage > sc.coverage_threshold):
+            nacs_adj *= sc.multiplier
+            adjustments.append(
+                f"小盘+高基石覆盖红旗 x{sc.multiplier} "
+                f"(募资 {offer_size / 1e9:.1f}B HKD, 覆盖 {coverage:.0%})"
+            )
+
     nacs_adj = clip(nacs_adj, 0.0, 1.0)
     pos, decision = _position_from_nacs(nacs_adj)
 

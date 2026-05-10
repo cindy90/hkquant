@@ -143,6 +143,15 @@ post_adjustments:
     mid_multiplier: 1.05
     low_multiplier: 1.00
     fallback_multiplier: 1.10           # ADV 未知时沿用旧行为
+  # P3.1: 小盘 + 高基石覆盖率 = 红旗 post-adjustment
+  # 经验信号: 小盘公司 (募资 < 1.5B HKD) + 基石覆盖率 > 55% →
+  #   通常基本面弱, 找一篮子关联基石"救场"凑发行 → ×0.90 折扣
+  # 双信号同时才触发, 避免误伤优质小盘 IPO (后者 cs 覆盖通常 30~45%).
+  small_cap_cs_rescue:
+    enabled: true
+    small_offering_threshold_hkd: 1_500_000_000   # 1.5B HKD
+    coverage_threshold: 0.55
+    multiplier: 0.90
 
 # -----------------------------------------------------------------------------
 # L1.6 主题情绪 modifier (P0.1, 接 themes/heat_today.json)

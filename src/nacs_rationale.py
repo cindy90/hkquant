@@ -606,6 +606,10 @@ def explain_adjustment(adj_str: str) -> str:
     if "relationship 仓位激活" in adj_str:
         return ("v3 章节差异化 RELATIONSHIP: 18C/secondary/A+H 的 RELATIONSHIP "
                 "实战 m6 mean 显著为正, 激活 0.10 仓位; 主板/18A 维持 0")
+    if "小盘+高基石覆盖" in adj_str or "小盘+高基石" in adj_str:
+        return ("P3.1 小盘+高基石覆盖红旗 ×0.90: 募资规模偏小且基石覆盖率异常高 "
+                "(>55%) 同时触发. 经验信号: 基本面弱的小盘公司常被一篮子关联基石"
+                "'救场'凑发行, 历史 d30/60d 此类组合显著负偏. 给折扣防止过度仓位.")
     if "ai 镀金" in s or "AI 镀金" in adj_str:
         return ("P0.2 AI 镀金检测: 主题分类为 AI 但实际 AI 业务收入占比低 "
                 "(<阈值, 默认 10%); 公司可能在招股书把 AI 概念放头版以拉高估值,"
