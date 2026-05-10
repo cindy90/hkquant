@@ -182,6 +182,45 @@ def derive_profitable(fin):
     )
 
 
+# P3.2.B: 18C TechC18Fundamentals 字段从 ipo_financials 推算
+# fx_cny_hkd 默认 1.10 (跟 panel_snapshot.compute_panel_aggregates 同口径,
+# 二者必须一致才能让 deal 的 ps_at_offer 跟 panel 的 ps_peer_median 可比)
+_FX_CNY_TO_HKD = 1.10
+
+
+def _derive_tech18c(fin, chapter):
+    """从 ipo_financials (CNY) 推 TechC18Fundamentals.
+
+    输入: fin = {report_year: {'revenue': cny, ...}, ...} 或 None.
+
+    缺数据时走老 stub (revenue_growth_yoy=0.30) 保持向后兼容.
+    """
+    is_commercial = (chapter == ListingChapter.CHAPTER_18C_COMMERCIAL)
+    base = TechC18Fundamentals(
+        is_commercial=is_commercial,
+        milestone_score=3.0, rd_intensity=0.20,
+    )
+    if not fin:
+        # 无财务数据: 走 stub growth, revenue 留 None (PS/G 自动跳过)
+        base.revenue_growth_yoy = 0.30
+        return base
+    yrs = sorted(fin.keys())
+    rev_cny = [fin[y].get('revenue') for y in yrs if fin[y].get('revenue')]
+    if not rev_cny:
+        base.revenue_growth_yoy = 0.30
+        return base
+    # 最近一年营收 → HKD
+    base.revenue_latest_hkd = rev_cny[-1] * _FX_CNY_TO_HKD
+    # YoY 增速 (用最近两年; 没有 prior year 走 stub)
+    if len(rev_cny) >= 2 and rev_cny[-2] > 0:
+        yoy = (rev_cny[-1] / rev_cny[-2]) - 1.0
+        # clip 极端值 (>2.0 通常是 base effect, 模型不应给虚高分)
+        base.revenue_growth_yoy = max(-0.50, min(2.0, yoy))
+    else:
+        base.revenue_growth_yoy = 0.30
+    return base
+
+
 def build_offering(conn, ipo_id, regime_score, *, use_static_env: bool = False):
     """从 DB 数据构造 IPOOffering (含 v7 字段)
 
@@ -244,10 +283,11 @@ def build_offering(conn, ipo_id, regime_score, *, use_static_env: bool = False):
         core_pipeline_phase="II", pipeline_count_phase2plus=2,
         cash_runway_months=18, bd_deals_count_2y=1
     ) if ctype == CompanyType.BIOTECH_18A else None
-    tech18c = TechC18Fundamentals(
-        is_commercial=(chapter == ListingChapter.CHAPTER_18C_COMMERCIAL),
-        revenue_growth_yoy=0.30, milestone_score=3.0, rd_intensity=0.20
-    ) if ctype == CompanyType.TECH_18C else None
+    # P3.2.B: 从 ipo_financials 推 18C 的 revenue_latest_hkd + revenue_growth_yoy
+    # (替代旧 hardcoded growth=0.30 stub). 路径同 derive_profitable, 但只用最近
+    # 两年算 YoY (而非 3y CAGR), 因为 18C 商业化阶段较短, YoY 比 CAGR 反映得更近.
+    tech18c = (_derive_tech18c(get_financials(conn, sc, asof=asof), chapter)
+               if ctype == CompanyType.TECH_18C else None)
 
     return IPOOffering(
         company_name=row["company_name_zh"] or sc, stock_code=sc,
