@@ -108,7 +108,8 @@ def _scenario_prices(row) -> List[Tuple[str, float]]:
 def _evaluate_deal(conn, *, stock_code: str, asof: date,
                    scenarios: List[Tuple[str, float]],
                    themes_bundle: Optional[Dict] = None,
-                   ai_revenue_pct_override: Optional[float] = None
+                   ai_revenue_pct_override: Optional[float] = None,
+                   panel_snap: Optional[Dict] = None,
                    ) -> List[Dict]:
     """对一只 deal 在每个 scenario 跑一次 NACS, 返回 list of result dict.
 
@@ -163,6 +164,27 @@ def _evaluate_deal(conn, *, stock_code: str, asof: date,
                 offering_base.theme_heat_score = (
                     heat_data["themes"][cr.theme_id].get("heat_score")
                 )
+
+        # P3.2.A: ps_peer_median 从 panel by_theme 推传 (cascade 到 chapter / overall)
+        # 让 _score_l1_1_18c 的 PS 子项有 peer 可比 (没主题命中也走 chapter, 至少不空)
+        if panel_snap is not None and offering_base.offering is not None:
+            import json
+            from data.panel_snapshot import lookup_ps_peer_median
+            try:
+                aggs = json.loads(panel_snap.get("aggregates_json") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                aggs = {}
+            ps_peer, ps_source = lookup_ps_peer_median(
+                aggs,
+                theme_id=cr.theme_id,
+                listing_chapter=row["listing_chapter"],
+            )
+            if ps_peer is not None:
+                offering_base.offering.ps_peer_median = ps_peer
+                # source 标识"用了哪一层" (theme:xxx / chapter:xxx / overall);
+                # 打印让 stdout 可追溯, IC memo 后续 phase 可挂到 thesis.
+                print(f"  [P/S peer] median={ps_peer:.1f}x source={ps_source}",
+                      file=sys.stderr)
 
         # P0.2: ai_revenue_pct 三层优先 (CLI > deal YAML > ai_revenue_manual)
         # CLI/YAML 在 main() 里收集到 ai_pct_per_code, 用 ai_revenue_pct_override
@@ -454,6 +476,7 @@ def main() -> int:
                     conn, stock_code=code, asof=asof,
                     scenarios=scenarios, themes_bundle=themes_bundle,
                     ai_revenue_pct_override=ai_pct_for_eval,
+                    panel_snap=snap,
                 )
             except SystemExit as e:
                 print(str(e), file=sys.stderr)
