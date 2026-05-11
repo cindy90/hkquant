@@ -106,11 +106,13 @@ def test_cli_single_deal_smoke(empty_db, project_root):
         """)
         c.commit()
 
-    env = {**os.environ, "PYTHONPATH": f"{project_root}:{project_root}/src"}
+    env = {**os.environ, "PYTHONPATH": f"{project_root}:{project_root}/src",
+           "PYTHONIOENCODING": "utf-8"}
     result = subprocess.run(
         [sys.executable, str(project_root / "scripts" / "analyze_deal.py"),
          "--stock-code", "9999.HK", "--db", str(empty_db)],
         env=env, capture_output=True, text=True, timeout=30,
+        encoding="utf-8", errors="replace",
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert "9999.HK" in result.stdout
