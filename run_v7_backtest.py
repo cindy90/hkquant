@@ -289,11 +289,14 @@ def build_offering(conn, ipo_id, regime_score, *, use_static_env: bool = False):
     tech18c = (_derive_tech18c(get_financials(conn, sc, asof=asof), chapter)
                if ctype == CompanyType.TECH_18C else None)
 
+    # P2.1 ah_hedge: 读 a_share_adv_cny (CNY); migration v4 之前的 DB 没这列, 用 _keys 防御读
+    _a_share_adv = row["a_share_adv_cny"] if "a_share_adv_cny" in _keys else None
     return IPOOffering(
         company_name=row["company_name_zh"] or sc, stock_code=sc,
         listing_chapter=chapter, company_type=ctype,
         is_a_h=bool(row["is_a_h"]),
         a_share_short_borrowable=bool(row["is_a_h"]),
+        a_share_adv_cny=_a_share_adv,
         cornerstones=cs,
         offering=OfferingStructure(
             pricing_in_range=row["pricing_in_range"] or 0.7,
