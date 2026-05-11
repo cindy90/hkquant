@@ -74,6 +74,21 @@ def _fetch_one(a_share_code: str, start_iso: str, end_iso: str) -> float | None:
     return v if v > 0 else None
 
 
+def _a_share_ipo_date(a_share_code: str) -> date | None:
+    """查 A 股上市日 (返回 date 或 None). 用于识别反向 A+H (A 后于 H 上市)."""
+    from iFinDPy import THS_BD
+    r = THS_BD(a_share_code, "ths_ipo_date_stock", "")
+    if r.errorcode != 0 or r.data is None or r.data.empty:
+        return None
+    val = r.data.iloc[0].get("ths_ipo_date_stock")
+    if not val or not isinstance(val, str) or len(val) < 8:
+        return None
+    try:
+        return date(int(val[:4]), int(val[4:6]), int(val[6:8]))
+    except (TypeError, ValueError):
+        return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
@@ -116,6 +131,7 @@ def main() -> int:
     updates = []   # (adv, ipo_id)
     samples = []
     n_null = 0
+    n_reverse_ah = 0   # 反向 A+H: A 股晚于 H 股上市, 评估时点 A 股不存在
     t0 = time.time()
     for idx, (ipo_id, hk_code, a_code, pricing_date_str) in enumerate(rows):
         if idx > 0 and idx % RELOGIN_EVERY_N == 0:
@@ -124,6 +140,19 @@ def main() -> int:
         pd_d = date.fromisoformat(str(pricing_date_str)[:10])
         end_d = pd_d - timedelta(days=1)
         start_d = end_d - timedelta(days=WINDOW_DAYS)
+
+        # 反向 A+H guard: A 股若晚于 H 股 pricing 才上市, 窗口里没有数据可拉.
+        # 不浪费 API call, 直接标 reverse_ah 并保 ADV=None (模型由
+        # a_share_short_borrowable=0 短路, ADV NULL 不影响 NACS).
+        a_ipo = _a_share_ipo_date(a_code)
+        if a_ipo and a_ipo > end_d:
+            n_reverse_ah += 1
+            updates.append((None, ipo_id))
+            print(f"  [{idx+1}/{len(rows)}] {hk_code} ({a_code}) "
+                  f"reverse-A+H: A 股 {a_ipo} 晚于 H 股 pricing {pd_d}, 跳过")
+            time.sleep(SLEEP_SEC)
+            continue
+
         try:
             adv = _fetch_one(a_code, start_d.isoformat(), end_d.isoformat())
         except Exception as e:
@@ -147,6 +176,7 @@ def main() -> int:
         time.sleep(SLEEP_SEC)
 
     print(f"\n[step3] 拉取完成: {len(samples)}/{len(rows)} 成功, "
+          f"reverse_ah={n_reverse_ah}, "
           f"耗时 {time.time()-t0:.1f}s")
 
     if samples:
