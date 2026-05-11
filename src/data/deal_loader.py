@@ -45,7 +45,7 @@ from typing import Any, Dict, List, Optional
 # 允许覆盖到 ipo_master 的字段集合 (与 schema 对齐, 不允许 ipo_id / created_at 等元字段)
 ALLOWED_MASTER_FIELDS = {
     "company_name_zh", "company_name_en", "listing_chapter", "is_a_h",
-    "a_share_code", "a_share_adv_cny", "gics_l2",
+    "a_share_code", "a_share_adv_cny", "a_share_short_borrowable", "gics_l2",
     "offer_price_hkd", "offer_price_low", "offer_price_high",
     "offering_size_hkd", "gross_proceeds_excl_greenshoe", "total_offer_shares",
     "pricing_in_range", "intl_oversub", "public_oversub",

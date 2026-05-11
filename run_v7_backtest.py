@@ -291,11 +291,15 @@ def build_offering(conn, ipo_id, regime_score, *, use_static_env: bool = False):
 
     # P2.1 ah_hedge: 读 a_share_adv_cny (CNY); migration v4 之前的 DB 没这列, 用 _keys 防御读
     _a_share_adv = row["a_share_adv_cny"] if "a_share_adv_cny" in _keys else None
+    # 融券标的: DB 有真值 → 用; NULL/缺列 → 回退旧行为 (= is_a_h), 避免拉数前静默回归
+    _is_ah = bool(row["is_a_h"])
+    _borrow_raw = row["a_share_short_borrowable"] if "a_share_short_borrowable" in _keys else None
+    _borrowable = bool(_borrow_raw) if _borrow_raw is not None else _is_ah
     return IPOOffering(
         company_name=row["company_name_zh"] or sc, stock_code=sc,
         listing_chapter=chapter, company_type=ctype,
-        is_a_h=bool(row["is_a_h"]),
-        a_share_short_borrowable=bool(row["is_a_h"]),
+        is_a_h=_is_ah,
+        a_share_short_borrowable=_borrowable,
         a_share_adv_cny=_a_share_adv,
         cornerstones=cs,
         offering=OfferingStructure(

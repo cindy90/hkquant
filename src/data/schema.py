@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS ipo_master (
     is_a_h                  INTEGER DEFAULT 0,
     a_share_code            TEXT,
     a_share_adv_cny         REAL,                 -- A 股近 60 个交易日日均成交额(CNY); 用于 ah_hedge tier
+    a_share_short_borrowable INTEGER,             -- 1=可融券, 0=不可, NULL=未知 (回退到 is_a_h 行为)
     gics_l2                 TEXT,
     -- 发行结构
     offer_price_hkd         REAL,
