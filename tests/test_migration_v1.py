@@ -210,10 +210,12 @@ def test_load_cornerstones_converts_usd_in_csv(empty_db, tmp_path):
             "SELECT currency, ticket_size_native, ticket_size_hkd, fx_to_hkd "
             "FROM ipo_cornerstone_link"
         ).fetchone()
+    from data_sources.ifind.field_mappings import get_fx_rate
+    expected_fx = get_fx_rate("USD", "2024-06-01")
     assert row[0] == "USD"
     assert row[1] == 1.5e7
-    assert row[2] == pytest.approx(1.5e7 * 7.80)
-    assert row[3] == pytest.approx(7.80)
+    assert row[2] == pytest.approx(1.5e7 * expected_fx)
+    assert row[3] == pytest.approx(expected_fx)
 
 
 # =============================================================================

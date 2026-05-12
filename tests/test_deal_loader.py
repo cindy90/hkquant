@@ -208,11 +208,13 @@ def test_load_deal_writes_cornerstones_with_currency_normalization(empty_db):
         ).fetchall()
     assert stats.cornerstones_inserted == 2
     by_name = {r[0]: r for r in rows}
+    from data_sources.ifind.field_mappings import get_fx_rate
+    expected_fx = get_fx_rate("USD", future_date)
     assert by_name["GIC Private Limited"][1] == "HKD"
     assert by_name["GIC Private Limited"][3] == 1.5e8
     assert by_name["Foreign Fund LP"][1] == "USD"
-    assert by_name["Foreign Fund LP"][3] == pytest.approx(2e7 * 7.80)
-    assert by_name["Foreign Fund LP"][4] == pytest.approx(7.80)
+    assert by_name["Foreign Fund LP"][3] == pytest.approx(2e7 * expected_fx)
+    assert by_name["Foreign Fund LP"][4] == pytest.approx(expected_fx)
 
 
 def test_load_deal_status_pricing_when_oversub_known(empty_db):

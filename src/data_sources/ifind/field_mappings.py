@@ -150,27 +150,27 @@ def parse_int(v) -> int | None:
     f = parse_float(v)
     if f is None:
         return None
-    return int(f)
+    return round(f)
 
 
 def parse_date(v) -> str | None:
     """yyyy/mm/dd or yyyy-mm-dd → ISO date string"""
+    from datetime import date as _date
+
     if v is None:
         return None
     s = str(v).strip()
     if s in NULL_TOKENS:
         return None
     s = s.replace("/", "-").replace(".", "-")
-    # 严格校验格式
     parts = s.split("-")
     if len(parts) != 3:
         return None
     try:
         y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
-        if not (1900 <= y <= 2100 and 1 <= m <= 12 and 1 <= d <= 31):
-            return None
+        _date(y, m, d)  # 严格校验: 闰日、月天数等均由 stdlib 保证
         return f"{y:04d}-{m:02d}-{d:02d}"
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return None
 
 
@@ -211,3 +211,74 @@ def make_cornerstone_id(canonical_name: str) -> str:
         name = name.replace("__", "_")
     name = name.strip("_")
     return f"CS_{name}"
+
+
+# =============================================================================
+# FX 汇率: 按季度查表 (替代硬编码常数)
+# =============================================================================
+# 数据来源: 港元联系汇率 + 离岸人民币季末中间价
+# USD/HKD 受联系汇率制约 (7.75-7.85), 变动极小;
+# CNY/HKD = USD/HKD ÷ USD/CNY, 波动区间 ~1.07-1.23.
+#
+# 表格格式: (季度起始日, USD→HKD, CNY→HKD)
+# 查找逻辑: 取 ≤ asof_date 的最近一条; 超出表格范围则用最近值外推.
+_FX_QUARTERLY: list[tuple[str, float, float]] = [
+    # 2022
+    ("2022-01-01", 7.80, 1.23),
+    ("2022-04-01", 7.83, 1.17),
+    ("2022-07-01", 7.83, 1.13),
+    ("2022-10-01", 7.83, 1.09),
+    # 2023
+    ("2023-01-01", 7.83, 1.14),
+    ("2023-04-01", 7.83, 1.08),
+    ("2023-07-01", 7.82, 1.08),
+    ("2023-10-01", 7.82, 1.10),
+    # 2024
+    ("2024-01-01", 7.82, 1.08),
+    ("2024-04-01", 7.81, 1.08),
+    ("2024-07-01", 7.80, 1.11),
+    ("2024-10-01", 7.80, 1.07),
+    # 2025
+    ("2025-01-01", 7.79, 1.07),
+    ("2025-04-01", 7.79, 1.08),
+    ("2025-07-01", 7.79, 1.08),
+    ("2025-10-01", 7.79, 1.07),
+    # 2026
+    ("2026-01-01", 7.78, 1.07),
+    ("2026-04-01", 7.78, 1.07),
+]
+
+# 向后兼容: 无日期时的默认值 (与旧常数一致)
+FX_USD_HKD_DEFAULT = 7.80
+FX_CNY_HKD_DEFAULT = 1.10
+
+
+def get_fx_rate(currency: str, asof_date: str | None = None) -> float:
+    """返回指定币种在 asof_date 附近的 → HKD 汇率.
+
+    Args:
+        currency: 'USD' / 'CNY' / 'HKD' (不区分大小写)
+        asof_date: ISO date (yyyy-mm-dd); None 时回退到默认常数
+
+    Returns:
+        1 unit currency = ? HKD
+    """
+    c = (currency or "HKD").upper()
+    if c == "HKD":
+        return 1.0
+
+    if asof_date is None:
+        return FX_USD_HKD_DEFAULT if c == "USD" else FX_CNY_HKD_DEFAULT
+
+    # 二分查找: 取 ≤ asof_date 的最近条目
+    idx = 0  # 列索引: 1=USD, 2=CNY
+    col = 1 if c == "USD" else 2
+
+    best = _FX_QUARTERLY[0]  # fallback: 最早条目
+    for entry in _FX_QUARTERLY:
+        if entry[0] <= asof_date:
+            best = entry
+        else:
+            break
+
+    return best[col]

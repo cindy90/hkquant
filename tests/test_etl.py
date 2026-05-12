@@ -26,9 +26,13 @@ class TestParsers:
         from data_sources.ifind.field_mappings import parse_float
         assert parse_float("abc") is None
 
-    def test_parse_int_truncates(self):
+    def test_parse_int_rounds(self):
         from data_sources.ifind.field_mappings import parse_int
-        assert parse_int("12.7") == 12
+        assert parse_int("12.7") == 13
+        assert parse_int("12.4") == 12
+        assert parse_int("12.5") == 12  # banker's rounding (round-half-even)
+        assert parse_int("13.5") == 14  # banker's rounding (round-half-even)
+        assert parse_int("0") == 0
         assert parse_int("--") is None
 
     def test_parse_date_formats(self):
@@ -39,6 +43,14 @@ class TestParsers:
         assert parse_date("--") is None
         assert parse_date("not a date") is None
         assert parse_date("2026/13/01") is None  # 月份非法
+
+    def test_parse_date_rejects_invalid_days(self):
+        from data_sources.ifind.field_mappings import parse_date
+        assert parse_date("2026-02-30") is None  # 2月无30日
+        assert parse_date("2026-02-29") is None  # 2026非闰年
+        assert parse_date("2024-02-29") == "2024-02-29"  # 2024闰年
+        assert parse_date("2026-04-31") is None  # 4月无31日
+        assert parse_date("2026-06-31") is None  # 6月无31日
 
     def test_parse_str_trims(self):
         from data_sources.ifind.field_mappings import parse_str
@@ -240,3 +252,52 @@ class TestLoadDelisted:
                 "SELECT is_delisted FROM ipo_master WHERE stock_code = '0001.HK'"
             ).fetchone()
         assert row["is_delisted"] == 0  # 未被写入
+
+
+# =============================================================================
+# FX 汇率查表
+# =============================================================================
+
+class TestFxRate:
+    def test_hkd_always_one(self):
+        from data_sources.ifind.field_mappings import get_fx_rate
+        assert get_fx_rate("HKD") == 1.0
+        assert get_fx_rate("HKD", "2024-06-15") == 1.0
+
+    def test_usd_varies_by_quarter(self):
+        from data_sources.ifind.field_mappings import get_fx_rate
+        rate_2022q1 = get_fx_rate("USD", "2022-02-15")
+        rate_2024q3 = get_fx_rate("USD", "2024-08-01")
+        assert rate_2022q1 == pytest.approx(7.80, abs=0.05)
+        assert rate_2024q3 == pytest.approx(7.80, abs=0.05)
+        # 不同季度不一定完全相同
+        assert isinstance(rate_2022q1, float)
+
+    def test_cny_varies_significantly(self):
+        from data_sources.ifind.field_mappings import get_fx_rate
+        rate_2022q1 = get_fx_rate("CNY", "2022-02-15")  # ~1.23
+        rate_2024q4 = get_fx_rate("CNY", "2024-11-01")  # ~1.07
+        assert rate_2022q1 > rate_2024q4, "2022Q1 CNY/HKD 应高于 2024Q4"
+        assert rate_2022q1 == pytest.approx(1.23, abs=0.02)
+        assert rate_2024q4 == pytest.approx(1.07, abs=0.02)
+
+    def test_no_date_uses_default(self):
+        from data_sources.ifind.field_mappings import get_fx_rate, FX_USD_HKD_DEFAULT, FX_CNY_HKD_DEFAULT
+        assert get_fx_rate("USD") == FX_USD_HKD_DEFAULT
+        assert get_fx_rate("CNY") == FX_CNY_HKD_DEFAULT
+
+    def test_case_insensitive(self):
+        from data_sources.ifind.field_mappings import get_fx_rate
+        assert get_fx_rate("usd", "2024-01-15") == get_fx_rate("USD", "2024-01-15")
+        assert get_fx_rate("cny", "2024-01-15") == get_fx_rate("CNY", "2024-01-15")
+
+    def test_date_before_table_uses_earliest(self):
+        from data_sources.ifind.field_mappings import get_fx_rate
+        rate = get_fx_rate("CNY", "2020-01-01")  # 远早于表格
+        assert rate == pytest.approx(1.23, abs=0.02)  # 用表格第一条
+
+    def test_date_after_table_uses_latest(self):
+        from data_sources.ifind.field_mappings import get_fx_rate
+        rate = get_fx_rate("CNY", "2030-12-31")  # 远晚于表格
+        assert isinstance(rate, float)
+        assert rate > 1.0

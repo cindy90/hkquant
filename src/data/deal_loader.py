@@ -217,7 +217,7 @@ def load_deal_dict(conn: sqlite3.Connection, data: Dict[str, Any]) -> DealLoadSt
                   alias_type="manual_deal", match_confidence=1.0)
 
         currency = (cs.get("currency") or "HKD").upper()
-        fx = _fx_to_hkd(currency)
+        fx = _fx_to_hkd(currency, expected_date)
         native = cs.get("ticket_size_native") or cs.get("ticket_size_hkd")
         hkd = native * fx if native is not None else None
 

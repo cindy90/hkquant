@@ -54,6 +54,7 @@ from data_sources.ifind.field_mappings import (  # noqa: E402
     parse_str,
     make_ipo_id,
     make_cornerstone_id,
+    get_fx_rate,
 )
 from data_sources.ifind.overrides import (  # noqa: E402
     load_overrides,
@@ -72,19 +73,19 @@ from nacs_model import CornerstoneType  # noqa: E402
 
 
 # =============================================================================
-# 汇率: 与 scripts/migrate_data_quality_v1.py 保持一致
+# 汇率: 按日期查季度表 (via field_mappings.get_fx_rate)
 # =============================================================================
-FX_USD_HKD = 7.80
-FX_CNY_HKD = 1.10
+# 向后兼容别名, 供 deal_loader 等外部模块 import
+FX_USD_HKD = 7.80  # legacy default, 新代码请用 get_fx_rate()
+FX_CNY_HKD = 1.10  # legacy default, 新代码请用 get_fx_rate()
 
 
-def _fx_to_hkd(currency: Optional[str]) -> float:
-    c = (currency or "HKD").upper()
-    if c == "USD":
-        return FX_USD_HKD
-    if c == "CNY":
-        return FX_CNY_HKD
-    return 1.0  # HKD or 未知 (回退保守)
+def _fx_to_hkd(currency: Optional[str], asof_date: Optional[str] = None) -> float:
+    """返回 1 unit currency → HKD 汇率.
+
+    asof_date: ISO date, 传入时按季度查表; None 则用默认常数 (向后兼容).
+    """
+    return get_fx_rate(currency or "HKD", asof_date)
 
 
 # =============================================================================
@@ -320,7 +321,7 @@ def load_cornerstones(conn: sqlite3.Connection, csv_path: Path,
         currency_raw = (parse_str(row.get("currency")) or "HKD").upper()
         if currency_raw not in ("HKD", "USD", "CNY"):
             currency_raw = "HKD"  # 未知 — 保守不换算
-        fx = _fx_to_hkd(currency_raw)
+        fx = _fx_to_hkd(currency_raw, listing_date)
         native = parse_float(row.get("ticket_size_hkd"))
         hkd_normalized = native * fx if native is not None else None
 
