@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import logging
 import os
 import sqlite3
 import sys
@@ -69,7 +70,15 @@ from data.dao import (  # noqa: E402
     link_cornerstone_to_ipo,
 )
 from data.schema import init_database  # noqa: E402
+from data.data_quality import (  # noqa: E402
+    refresh_quality_scores,
+    generate_quality_report,
+    save_quality_report,
+)
 from nacs_model import CornerstoneType  # noqa: E402
+from log import get_logger  # noqa: E402
+
+_log = get_logger(__name__)
 
 
 # =============================================================================
@@ -415,6 +424,9 @@ def parse_tables_arg(s: str) -> List[str]:
 
 
 def main() -> int:
+    from log import setup_cli_logging
+    setup_cli_logging("INFO")
+
     ap = argparse.ArgumentParser(
         description="iFinD raw CSV → nacs_real.db ETL loader"
     )
@@ -434,18 +446,18 @@ def main() -> int:
     db_path = Path(args.db)
     tables = parse_tables_arg(args.tables)
 
-    print(f"[load_to_db] raw={raw_dir}")
-    print(f"[load_to_db] db ={db_path}  dry_run={args.dry_run}")
-    print(f"[load_to_db] tables={tables}")
+    _log.info("raw=%s", raw_dir)
+    _log.info("db=%s  dry_run=%s", db_path, args.dry_run)
+    _log.info("tables=%s", tables)
 
     if args.init_db and not args.dry_run:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         init_database(str(db_path))
-        print(f"[load_to_db] schema initialized")
+        _log.info("schema initialized")
 
     if not db_path.exists():
         if args.dry_run:
-            print(f"[load_to_db] WARN: DB 不存在 ({db_path}), dry-run 用 :memory: 兜底")
+            _log.warning("DB 不存在 (%s), dry-run 用 :memory: 兜底", db_path)
         else:
             raise SystemExit(
                 f"DB 不存在: {db_path}\n  → 用 --init-db 创建, 或检查路径"
@@ -468,40 +480,41 @@ def main() -> int:
 
 def _run_loaders(conn: Optional[sqlite3.Connection], raw_dir: Path,
                  tables: List[str], *, dry_run: bool) -> None:
-    """实际执行各表 loader 并打印统计"""
+    """实际执行各表 loader 并输出统计"""
     if "ipo" in tables:
         path = raw_dir / "ifind_ipo_info.csv"
-        print(f"\n--- IPO info ({path.name}) ---")
+        _log.info("--- IPO info (%s) ---", path.name)
         s = load_ipo_info(conn, path, dry_run=dry_run)  # type: ignore[arg-type]
-        print(f"  rows in CSV : {s.n_rows_csv}")
-        print(f"  upserted    : {s.n_inserted}")
-        print(f"  skipped (no listing_date): {s.n_skipped_no_date}")
-        print(f"  skipped (no stock_code) : {s.n_skipped_no_code}")
+        _log.info("  rows_csv=%d upserted=%d skipped_no_date=%d skipped_no_code=%d",
+                  s.n_rows_csv, s.n_inserted, s.n_skipped_no_date, s.n_skipped_no_code)
 
     if "cornerstones" in tables:
         path = raw_dir / "ifind_cornerstones.csv"
-        print(f"\n--- Cornerstones ({path.name}) ---")
+        _log.info("--- Cornerstones (%s) ---", path.name)
         s2 = load_cornerstones(conn, path, dry_run=dry_run)  # type: ignore[arg-type]
-        print(f"  rows in CSV     : {s2.n_rows_csv}")
-        print(f"  unique CS in run: {s2.n_cs_unique}")
-        print(f"  CS new (first seen, DB had none): {s2.n_cs_new}")
-        print(f"  CS preserved (DB already has, type kept): {s2.n_cs_preserved}")
-        print(f"  aliases upserted: {s2.n_aliases_added}")
-        print(f"  ipo x cs links  : {s2.n_links_inserted}")
-        print(f"  skipped (incomplete row): {s2.n_skipped}")
+        _log.info("  rows_csv=%d unique_cs=%d new=%d preserved=%d aliases=%d links=%d skipped=%d",
+                  s2.n_rows_csv, s2.n_cs_unique, s2.n_cs_new, s2.n_cs_preserved,
+                  s2.n_aliases_added, s2.n_links_inserted, s2.n_skipped)
 
     if "delisted" in tables:
         path = raw_dir / "ifind_delisted_hk.csv"
-        print(f"\n--- Delisted ({path.name}) ---")
+        _log.info("--- Delisted (%s) ---", path.name)
         if not path.exists():
-            print(f"  ⚠ CSV 不存在 ({path}), 跳过")
-            print(f"    → 先跑: python src/data_sources/ifind/delisted_pull.py")
+            _log.warning("CSV 不存在 (%s), 跳过; 先跑 delisted_pull.py", path)
         else:
             s3 = load_delisted(conn, path, dry_run=dry_run)  # type: ignore[arg-type]
-            print(f"  rows in CSV : {s3.n_rows_csv}")
-            print(f"  matched (ipo_master 中已有 stock_code): {s3.n_matched}")
-            print(f"  unmatched (退市但 ipo_master 中无): {s3.n_unmatched}")
-            print(f"  skipped (no stock_code): {s3.n_skipped}")
+            _log.info("  rows_csv=%d matched=%d unmatched=%d skipped=%d",
+                      s3.n_rows_csv, s3.n_matched, s3.n_unmatched, s3.n_skipped)
+
+    # ----- 数据质量评分 & 报告 -----
+    if not dry_run and conn is not None:
+        _log.info("--- Data Quality ---")
+        refresh_quality_scores(conn)
+        report = generate_quality_report(conn)
+        save_quality_report(report)
+        _log.info("  avg_score=%.4f  distribution=%s",
+                  report.get("avg_quality_score") or 0,
+                  report.get("score_distribution"))
 
 
 if __name__ == "__main__":

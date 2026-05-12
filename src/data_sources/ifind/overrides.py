@@ -20,6 +20,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from log import get_logger
+
+_log = get_logger(__name__)
+
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OVERRIDES_PATH = _PROJECT_ROOT / "data" / "raw" / "overrides.yaml"
@@ -80,10 +84,10 @@ def apply_ipo_overrides(rows: List[Dict[str, str]],
     csv_codes = {r.get("stock_code") for r in rows if r.get("stock_code")}
     orphans = set(ipo_overrides.keys()) - csv_codes
     if orphans:
-        import sys
-        sys.stderr.write(
-            f"[overrides] WARN: {len(orphans)} stock_codes in overrides 不在 raw CSV: "
-            f"{sorted(orphans)[:5]}{'...' if len(orphans) > 5 else ''}\n"
+        _log.warning(
+            "%d stock_codes in overrides 不在 raw CSV: %s%s",
+            len(orphans), sorted(orphans)[:5],
+            "..." if len(orphans) > 5 else "",
         )
 
     return out

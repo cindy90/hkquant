@@ -26,6 +26,10 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from log import get_logger
+
+_log = get_logger(__name__)
+
 from nacs_model import (
     CornerstoneInvestor, CornerstoneType,
     CHINESE_TYPES, LONGTERM_TYPES,
@@ -862,9 +866,9 @@ def fetch_market_env_at(conn: sqlite3.Connection,
             fields.update(ifind_data)
             source = "ifind"
         except Exception as e:
-            sys.stderr.write(
-                f"[market_env] iFinD fetch 失败 month={month_key_str} "
-                f"err={type(e).__name__}: {e}; 走 fallback/json\n"
+            _log.warning(
+                "iFinD fetch 失败 month=%s err=%s: %s; 走 fallback/json",
+                month_key_str, type(e).__name__, e,
             )
             # source 保持原值 (fallback or json)
 

@@ -426,6 +426,10 @@ def init_database(db_path: str) -> None:
 
 if __name__ == "__main__":
     import sys
+    from log import get_logger, setup_cli_logging
+    setup_cli_logging("INFO")
+    _log = get_logger("schema")
+
     db_path = sys.argv[1] if len(sys.argv) > 1 else "nacs.db"
     init_database(db_path)
-    print(f"NACS DB initialized at: {db_path}")
+    _log.info("NACS DB initialized at: %s", db_path)

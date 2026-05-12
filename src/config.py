@@ -559,16 +559,20 @@ def reset_config() -> None:
 
 
 if __name__ == "__main__":
+    from log import get_logger, setup_cli_logging
+    setup_cli_logging("INFO")
+    _log = get_logger("config")
+
     # 自检: 默认配置应通过 validate
     cfg = NacsConfig()
     errs = cfg.validate()
     if errs:
-        print("默认配置校验失败:")
+        _log.error("默认配置校验失败:")
         for e in errs:
-            print(f"  - {e}")
+            _log.error("  - %s", e)
         raise SystemExit(1)
-    print(f"OK 默认配置通过校验 (version={cfg.version})")
-    print(f"  L1 权重和: {sum(asdict(cfg.layer1_weights).values()):.3f}")
-    print(f"  L2 权重和: {sum(asdict(cfg.layer2_weights).values()):.3f}")
-    print(f"  L3 权重和: {sum(asdict(cfg.layer3_weights).values()):.3f}")
-    print(f"  仓位档位: {[b.decision for b in cfg.position_bands]}")
+    _log.info("OK 默认配置通过校验 (version=%s)", cfg.version)
+    _log.info("  L1 权重和: %.3f", sum(asdict(cfg.layer1_weights).values()))
+    _log.info("  L2 权重和: %.3f", sum(asdict(cfg.layer2_weights).values()))
+    _log.info("  L3 权重和: %.3f", sum(asdict(cfg.layer3_weights).values()))
+    _log.info("  仓位档位: %s", [b.decision for b in cfg.position_bands])

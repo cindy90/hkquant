@@ -22,6 +22,10 @@ import os
 import sys
 from pathlib import Path
 
+from log import get_logger, setup_cli_logging
+
+_log = get_logger("ifind.delisted_pull")
+
 # Windows GBK → UTF-8
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     try:
@@ -63,12 +67,13 @@ def _load_env(env_path: Path) -> None:
 # =============================================================================
 
 def main() -> int:
+    setup_cli_logging("INFO")
     _load_env(Path(__file__).parent / ".env")
 
     username = os.environ.get("IFIND_USERNAME", "")
     password = os.environ.get("IFIND_PASSWORD", "")
     if not (username and password):
-        print("❌ 未读到 IFIND_USERNAME / IFIND_PASSWORD")
+        _log.error("未读到 IFIND_USERNAME / IFIND_PASSWORD")
         return 1
 
     try:
@@ -76,16 +81,16 @@ def main() -> int:
             THS_iFinDLogin, THS_iFinDLogout, THS_DataPool,
         )
     except ImportError as e:
-        print(f"❌ iFindPy 不可用 ({e})")
-        print("   本地 iFinD 客户端必须先注册 (写 .pth 到 site-packages),")
-        print("   见 src/data_sources/ifind/README.md")
+        _log.error("iFindPy 不可用 (%s)", e)
+        _log.error("本地 iFinD 客户端必须先注册 (写 .pth 到 site-packages), "
+                    "见 src/data_sources/ifind/README.md")
         return 1
 
     code = THS_iFinDLogin(username, password)
     if code not in (0, -201):
-        print(f"❌ 登录失败: {code}")
+        _log.error("登录失败: %s", code)
         return 1
-    print("✓ iFinD 登录成功")
+    _log.info("iFinD 登录成功")
 
     # -------------------------------------------------------------------
     # TODO (人工核对): iFinD 港股退市板块的 dataPool name
@@ -98,7 +103,7 @@ def main() -> int:
     # -------------------------------------------------------------------
     BLOCK_NAME = "退市港股"  # ← 占位, 跑前必须人工核对
 
-    print(f"  拉取 dataPool: {BLOCK_NAME}")
+    _log.info("拉取 dataPool: %s", BLOCK_NAME)
     try:
         result = THS_DataPool(
             "block",
@@ -106,13 +111,13 @@ def main() -> int:
             "thscode:Y,security_name:Y",
         )
     except Exception as e:
-        print(f"❌ THS_DataPool 调用失败: {e}")
+        _log.error("THS_DataPool 调用失败: %s", e)
         THS_iFinDLogout()
         return 1
 
     # iFinD 返回结构因接口而异; 解析逻辑随 BLOCK_NAME 调整
-    print(f"  返回类型: {type(result).__name__}")
-    print(f"  返回内容预览: {str(result)[:300]}")
+    _log.info("返回类型: %s", type(result).__name__)
+    _log.info("返回内容预览: %s", str(result)[:300])
 
     # TODO: 解析为标准 CSV 列 [stock_code, delisting_date, delisting_reason, is_acquired]
     # 占位: 输出空 CSV 让下游 ETL 不报错
@@ -120,8 +125,8 @@ def main() -> int:
         "stock_code,delisting_date,delisting_reason,is_acquired\n",
         encoding="utf-8",
     )
-    print(f"  ⚠ 输出占位空 CSV: {OUTPUT_PATH}")
-    print(f"  实际拉数需要在 iFinD 客户端核对 BLOCK_NAME 与字段后改本脚本")
+    _log.warning("输出占位空 CSV: %s", OUTPUT_PATH)
+    _log.warning("实际拉数需要在 iFinD 客户端核对 BLOCK_NAME 与字段后改本脚本")
 
     THS_iFinDLogout()
     return 0

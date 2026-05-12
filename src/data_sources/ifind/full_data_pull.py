@@ -11,7 +11,7 @@ iFinD 全样本数据拉取脚本 — 基于真实 reportID (p05309 + p05310)
 预计运行时间: 5-15 分钟 (取决于 iFinD 限速)
 """
 import sys
-# Windows 控制台默认 GBK，强制 UTF-8 以支持 ✓ 等 Unicode 字符
+# Windows 控制台默认 GBK，强制 UTF-8 以支持 Unicode 字符
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -19,14 +19,26 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     except Exception:
         pass
 
+import logging
+import os
+import time
+from pathlib import Path
+
+# 让 src/ 在 sys.path 中以便 import log 模块
+_SRC = Path(__file__).resolve().parents[2]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from log import get_logger, setup_cli_logging
+
+setup_cli_logging("INFO")
+_log = get_logger("ifind.full_data_pull")
+
 from iFinDPy import (
     THS_iFinDLogin, THS_iFinDLogout,
     THS_DR, THS_BD, THS_DataPool,
 )
 import pandas as pd
-import time
-import os
-from pathlib import Path
 
 # ============================================================================
 # 1. 配置 — 从同目录 .env 读取凭证
@@ -49,7 +61,7 @@ _load_env(Path(__file__).parent / ".env")
 USERNAME = os.environ.get("IFIND_USERNAME", "")
 PASSWORD = os.environ.get("IFIND_PASSWORD", "")
 if not USERNAME or not PASSWORD:
-    raise SystemExit("❌ 未读到 IFIND_USERNAME / IFIND_PASSWORD，检查 .env")
+    raise SystemExit("未读到 IFIND_USERNAME / IFIND_PASSWORD，检查 .env")
 
 # 时间范围: 2022-01-01 到 2026-05-07 (NACS 回测窗口)
 SDATE = "20220101"
@@ -72,16 +84,15 @@ TEST_CODES = "3296.HK,2513.HK,3750.HK,6082.HK,2565.HK"
 # ============================================================================
 login_code = THS_iFinDLogin(USERNAME, PASSWORD)
 if login_code not in (0, -201):
-    raise SystemExit(f"❌ 登录失败: {login_code}")
-print(f"✓ 登录成功\n")
+    raise SystemExit(f"登录失败: {login_code}")
+_log.info("iFinD 登录成功")
 
 
 # ============================================================================
 # 3. 拉取报表 A: 基石投资者 (p05309)
 # ============================================================================
-print("="*70)
-print("[1/6] 拉取基石投资者 (p05309)")
-print("="*70)
+_log.info("=" * 70)
+_log.info("[1/6] 拉取基石投资者 (p05309)")
 
 t0 = time.time()
 result_cs = THS_DR(
@@ -96,23 +107,22 @@ result_cs = THS_DR(
 )
 
 if result_cs.errorcode != 0:
-    print(f"❌ 失败: {result_cs.errmsg}")
+    _log.error("p05309 失败: %s", result_cs.errmsg)
     raise SystemExit(1)
 
 df_cs = result_cs.data
-print(f"✓ 共 {len(df_cs)} 条基石记录, 耗时 {time.time()-t0:.1f}s")
-print(f"  列名: {df_cs.columns.tolist()}")
+_log.info("p05309: %d 条基石记录, 耗时 %.1fs", len(df_cs), time.time() - t0)
+_log.debug("  列名: %s", df_cs.columns.tolist())
 df_cs.to_csv(f'{OUTPUT_DIR}/ifind_cornerstones.csv', index=False, encoding='utf-8-sig')
-print(f"✓ 已保存: ifind_cornerstones.csv")
+_log.info("已保存: ifind_cornerstones.csv")
 
 
 # ============================================================================
 # 4. 拉取报表 B: 首发信息一览 (p05310) — 54 字段
 #    带 IFindKey 港股全集 (含 _1 副牌、80xxx GEM、H 类), 避免 sfzx=1 漏副牌
 # ============================================================================
-print("\n" + "="*70)
-print("[2/6] 拉取首发信息一览 (p05310)")
-print("="*70)
+_log.info("=" * 70)
+_log.info("[2/6] 拉取首发信息一览 (p05310)")
 
 t0 = time.time()
 
@@ -124,7 +134,7 @@ hk_universe_path = Path(__file__).parent / "hk_universe.txt"
 ifind_key = ""
 if hk_universe_path.exists():
     ifind_key = hk_universe_path.read_text(encoding="utf-8").strip()
-    print(f"  使用 IFindKey: {ifind_key.count(',')+1} 个港股代码")
+    _log.info("使用 IFindKey: %d 个港股代码", ifind_key.count(',') + 1)
 
 ttype_str = f'ttype=1;sdate={SDATE};edate={EDATE};sfzx=1'
 if ifind_key:
@@ -138,12 +148,10 @@ result_ipo = THS_DR(
 )
 
 if result_ipo.errorcode != 0:
-    print(f"❌ 失败: {result_ipo.errmsg}")
-    print(f"   尝试: 减少字段, 或加上 IFindKey 参数")
-    # 备用: 减字段重试
-    print("\n  备用方案: 只拉关键字段")
+    _log.error("p05310 失败: %s", result_ipo.errmsg)
+    _log.info("备用方案: 只拉关键字段")
     key_fields = ",".join([
-        f"p05310_f{i:03d}:Y" for i in 
+        f"p05310_f{i:03d}:Y" for i in
         [1,2,3,4,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,
          28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,
          51,52,53,54]
@@ -155,10 +163,10 @@ if result_ipo.errorcode != 0:
         raise SystemExit(f"备用方案也失败: {result_ipo.errmsg}")
 
 df_ipo = result_ipo.data
-print(f"✓ 共 {len(df_ipo)} 条 IPO, 耗时 {time.time()-t0:.1f}s")
-print(f"  列名 ({len(df_ipo.columns)} 个): {df_ipo.columns.tolist()[:10]}...")
+_log.info("p05310: %d 条 IPO, 耗时 %.1fs", len(df_ipo), time.time() - t0)
+_log.debug("  列名 (%d 个): %s...", len(df_ipo.columns), df_ipo.columns.tolist()[:10])
 df_ipo.to_csv(f'{OUTPUT_DIR}/ifind_ipo_info.csv', index=False, encoding='utf-8-sig')
-print(f"✓ 已保存: ifind_ipo_info.csv")
+_log.info("已保存: ifind_ipo_info.csv")
 
 
 # ============================================================================
@@ -173,15 +181,15 @@ for c in df_ipo.columns:
         break
 
 if not code_col:
-    print(f"⚠ 找不到股票代码列, 用前 5 只测试")
+    _log.warning("找不到股票代码列, 用前 5 只测试")
     all_codes = TEST_CODES.split(",")
 else:
-    print(f"  使用代码列: {code_col}")
+    _log.info("使用代码列: %s", code_col)
     all_codes = df_ipo[code_col].dropna().astype(str).unique().tolist()
     # 过滤掉非标准代码 (含 _1 副牌)
     all_codes = [c for c in all_codes if "_" not in c and c.endswith(".HK")]
 
-print(f"\n  抽取到 {len(all_codes)} 只股票, 准备拉财务")
+_log.info("抽取到 %d 只股票, 准备拉财务", len(all_codes))
 
 
 # ============================================================================
@@ -193,9 +201,8 @@ print(f"\n  抽取到 {len(all_codes)} 只股票, 准备拉财务")
 #      ths_roe_hks                    ROE              参数 报告期-12-31,100
 #    第三参数按指标用 ; 分隔, 每个指标对应自己的参数
 # ============================================================================
-print("\n" + "="*70)
-print("[3/6] 拉取公司财务 (港股年报)")
-print("="*70)
+_log.info("=" * 70)
+_log.info("[3/6] 拉取公司财务 (港股年报)")
 
 BATCH_SIZE = 50
 
@@ -209,7 +216,7 @@ annual_indicators = (
 
 annual_dfs = []
 for year in [2022, 2023, 2024, 2025]:
-    print(f"\n  [年报] {year} 年...")
+    _log.info("[年报] %d 年...", year)
     # 各指标参数 (探测后确认):
     #   total_oi: 单独日期 (带 104,100,OC 后缀反而 None)
     #   gross_selling_rate / net_profit_margin_on_sales: 日期,104 (104=年报期)
@@ -232,19 +239,19 @@ for year in [2022, 2023, 2024, 2025]:
             df_year['report_year'] = year
             year_dfs.append(df_year)
         else:
-            print(f"    ⚠ batch {i//BATCH_SIZE} 失败: {result.errmsg}")
+            _log.warning("batch %d 失败: %s", i // BATCH_SIZE, result.errmsg)
         time.sleep(0.5)
     if year_dfs:
         df_year_combined = pd.concat(year_dfs, ignore_index=True)
         annual_dfs.append(df_year_combined)
-        print(f"    ✓ {year}: {len(df_year_combined)} 行")
+        _log.info("  %d: %d 行", year, len(df_year_combined))
 
 if annual_dfs:
     df_annual = pd.concat(annual_dfs, ignore_index=True)
     df_annual.to_csv(f'{OUTPUT_DIR}/ifind_financials_annual.csv', index=False, encoding='utf-8-sig')
-    print(f"\n  ✓ 年报已保存: ifind_financials_annual.csv ({len(df_annual)} 行)")
+    _log.info("年报已保存: ifind_financials_annual.csv (%d 行)", len(df_annual))
 else:
-    print("\n  ⚠ 年报数据全部失败")
+    _log.warning("年报数据全部失败")
 
 
 # ============================================================================
@@ -256,9 +263,8 @@ else:
 #      f009=增发价 f010=募资总额 f011=募资净额 f012=用途 f013=币种
 #      f015/f016=行业 f021/f023=主承销商
 # ============================================================================
-print("\n" + "="*70)
-print("[4/6] 拉取增发信息一览 (p05493)")
-print("="*70)
+_log.info("=" * 70)
+_log.info("[4/6] 拉取增发信息一览 (p05493)")
 
 t0 = time.time()
 p05493_fields = ",".join(
@@ -274,10 +280,9 @@ if result_so.errorcode == 0 and result_so.data is not None:
     df_so = result_so.data
     df_so.to_csv(f'{OUTPUT_DIR}/ifind_secondary_offerings.csv',
                  index=False, encoding='utf-8-sig')
-    print(f"✓ 共 {len(df_so)} 条增发记录, 耗时 {time.time()-t0:.1f}s")
-    print(f"  已保存: ifind_secondary_offerings.csv")
+    _log.info("p05493: %d 条增发记录, 耗时 %.1fs", len(df_so), time.time() - t0)
 else:
-    print(f"❌ 失败: {result_so.errmsg}")
+    _log.error("p05493 失败: %s", result_so.errmsg)
 
 
 # ============================================================================
@@ -287,9 +292,8 @@ else:
 #                                                          实际是发行股本含超配)
 #    推算: 上市前总股本 = 首发后 - 实际发行 (含超额配售选择权)
 # ============================================================================
-print("\n" + "="*70)
-print("[5/6] 拉取股本指标, 推算上市前总股本")
-print("="*70)
+_log.info("=" * 70)
+_log.info("[5/6] 拉取股本指标, 推算上市前总股本")
 
 t0 = time.time()
 share_indicators = 'ths_total_shares_after_ipo_ld_global;currency_unit'
@@ -301,7 +305,7 @@ for i in range(0, len(all_codes), BATCH_SIZE):
     if result.errorcode == 0 and result.data is not None:
         share_dfs.append(result.data.copy())
     else:
-        print(f"  ⚠ batch {i//BATCH_SIZE} 失败: {result.errmsg}")
+        _log.warning("batch %d 失败: %s", i // BATCH_SIZE, result.errmsg)
     time.sleep(0.5)
 
 if share_dfs:
@@ -321,25 +325,23 @@ if share_dfs:
     df_shares.to_csv(f'{OUTPUT_DIR}/ifind_share_capital.csv',
                      index=False, encoding='utf-8-sig')
     n_ok = df_shares['pre_ipo_shares'].notna().sum()
-    print(f"✓ 共 {len(df_shares)} 行, 推算到 {n_ok} 只上市前股本, "
-          f"耗时 {time.time()-t0:.1f}s")
-    print(f"  已保存: ifind_share_capital.csv")
+    _log.info("股本: %d 行, 推算到 %d 只上市前股本, 耗时 %.1fs",
+              len(df_shares), n_ok, time.time() - t0)
 else:
-    print(f"  ⚠ 股本数据全部失败")
+    _log.warning("股本数据全部失败")
 
 
 # ============================================================================
 # 9. 拉取板块成分: 18A / 18C / A+H 名单
 # ============================================================================
-print("\n" + "="*70)
-print("[6/6] 拉取上市章节板块成分 (18A/18C/A+H)")
-print("="*70)
+_log.info("=" * 70)
+_log.info("[6/6] 拉取上市章节板块成分 (18A/18C/A+H)")
 
 BLOCK_IDS = {
-    "18A": "001005348",  # ★ 待验证: 用 sc 工具找到生物科技公司(18A)的板块ID
-    "18C": "001011051",  # ★ 待验证: 特专科技公司(18C)
-    "AH":  "001005299",  # ★ 待验证: AH股
-    "18B_SPAC": "001012088",  # ★ 待验证
+    "18A": "001005348",  # 生物科技公司(18A)
+    "18C": "001011051",  # 特专科技公司(18C)
+    "AH":  "001005299",  # AH股
+    "18B_SPAC": "001012088",
 }
 
 block_dfs = {}
@@ -362,35 +364,28 @@ for name, block_id in BLOCK_IDS.items():
                 df_block = pd.DataFrame(tables) if tables is not None else pd.DataFrame()
             df_block['block_name'] = name
             block_dfs[name] = df_block
-            print(f"  ✓ {name}: {len(df_block)} 只")
+            _log.info("  %s: %d 只", name, len(df_block))
         else:
-            print(f"  ⚠ {name} 失败: {errmsg} (block_id 可能不对, 用 sc 验证)")
+            _log.warning("  %s 失败: %s (block_id 可能不对)", name, errmsg)
     except Exception as e:
-        print(f"  ⚠ {name} 异常: {e}")
+        _log.warning("  %s 异常: %s", name, e)
 
 if block_dfs:
     df_blocks = pd.concat(block_dfs.values(), ignore_index=True)
     df_blocks.to_csv(f'{OUTPUT_DIR}/ifind_blocks.csv', index=False, encoding='utf-8-sig')
-    print(f"\n✓ 已保存: ifind_blocks.csv")
+    _log.info("已保存: ifind_blocks.csv")
 
 
 # ============================================================================
-# 8. 退出
+# 10. 退出
 # ============================================================================
 THS_iFinDLogout()
 
-print("\n" + "="*70)
-print("✓ 全部完成!")
-print("="*70)
-print("发给 Claude 这 6 个 CSV:")
-print(f"  {OUTPUT_DIR}/ifind_cornerstones.csv          (基石投资者)")
-print(f"  {OUTPUT_DIR}/ifind_ipo_info.csv              (首发信息一览)")
-print(f"  {OUTPUT_DIR}/ifind_financials_annual.csv     (公司年报财务)")
-print(f"  {OUTPUT_DIR}/ifind_secondary_offerings.csv   (增发信息)")
-print(f"  {OUTPUT_DIR}/ifind_share_capital.csv         (股本: 后/实际发行/前)")
-print(f"  {OUTPUT_DIR}/ifind_blocks.csv                (上市章节成分)")
-print()
-print("Claude 拿到后会:")
-print("  1. 验证字段映射 (f001-f054 对应中文)")
-print("  2. 灌入 SQLite 替换 Wind 数据")
-print("  3. 重跑 Run 5 回测")
+_log.info("=" * 70)
+_log.info("全部完成! 输出 CSV:")
+_log.info("  %s/ifind_cornerstones.csv          (基石投资者)", OUTPUT_DIR)
+_log.info("  %s/ifind_ipo_info.csv              (首发信息一览)", OUTPUT_DIR)
+_log.info("  %s/ifind_financials_annual.csv     (公司年报财务)", OUTPUT_DIR)
+_log.info("  %s/ifind_secondary_offerings.csv   (增发信息)", OUTPUT_DIR)
+_log.info("  %s/ifind_share_capital.csv         (股本: 后/实际发行/前)", OUTPUT_DIR)
+_log.info("  %s/ifind_blocks.csv                (上市章节成分)", OUTPUT_DIR)
