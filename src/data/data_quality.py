@@ -40,6 +40,44 @@ CORE_FIELDS: List[str] = [
     "pe_peer_median",
 ]
 
+# 按 NACS 三层模型拆分的字段分组
+# L1 (Q_company): 发行质量 — 发行结构 + 估值 + 中介
+L1_FIELDS: List[str] = [
+    "listing_chapter",
+    "offer_price_hkd",
+    "offering_size_hkd",
+    "total_offer_shares",
+    "pricing_in_range",
+    "intl_oversub",
+    "public_oversub",
+    "sponsor_primary",
+    "sponsor_tier",
+    "pe_at_offer",
+    "pe_peer_median",
+]
+
+# L2 (Q_ecosystem): 基石生态 — ipo_master 聚合 + link 表细节
+L2_FIELDS: List[str] = [
+    "cornerstone_coverage",
+    "cornerstone_count",
+    "cornerstone_total_hkd",
+]
+
+# L3 (R_lockup): 锁定期风险 — 需要估值/股本/市场数据
+L3_FIELDS: List[str] = [
+    "lockup_months",
+    "overhang_ratio",
+    "peer_lockup_avg_drawdown",
+    "pe_vs_history_pct",
+    "fundamental_risk_score",
+]
+
+LAYER_GROUPS: Dict[str, List[str]] = {
+    "L1_company": L1_FIELDS,
+    "L2_ecosystem": L2_FIELDS,
+    "L3_lockup": L3_FIELDS,
+}
+
 
 def compute_row_quality(row: Dict[str, Any]) -> float:
     """计算单行 data_quality_score (0..1).
@@ -116,7 +154,7 @@ def generate_quality_report(conn: sqlite3.Connection) -> Dict[str, Any]:
         "critical_<0.4": buckets["critical"] or 0,
     }
 
-    # 每字段覆盖率
+    # 每字段覆盖率 (核心字段)
     field_coverage: Dict[str, float] = {}
     total = report["total_ipos"]
     if total > 0:
@@ -127,6 +165,25 @@ def generate_quality_report(conn: sqlite3.Connection) -> Dict[str, Any]:
             ).fetchone()
             field_coverage[f] = round(r2["n"] / total, 4)
     report["field_coverage"] = field_coverage
+
+    # 按模型层级 (L1/L2/L3) 细分覆盖率
+    layer_quality: Dict[str, Any] = {}
+    if total > 0:
+        for layer_name, fields in LAYER_GROUPS.items():
+            layer_cov: Dict[str, float] = {}
+            for f in fields:
+                r3 = conn.execute(
+                    f"SELECT COUNT(*) AS n FROM ipo_master "
+                    f"WHERE {f} IS NOT NULL AND TRIM(CAST({f} AS TEXT)) != ''"
+                ).fetchone()
+                layer_cov[f] = round(r3["n"] / total, 4)
+            avg_cov = round(sum(layer_cov.values()) / len(fields), 4) if fields else 0.0
+            layer_quality[layer_name] = {
+                "fields": layer_cov,
+                "avg_coverage": avg_cov,
+                "n_fields": len(fields),
+            }
+    report["layer_quality"] = layer_quality
 
     # 最差 10 只
     worst = conn.execute("""

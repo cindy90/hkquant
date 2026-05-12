@@ -9,6 +9,10 @@ import pytest
 
 from data.data_quality import (
     CORE_FIELDS,
+    L1_FIELDS,
+    L2_FIELDS,
+    L3_FIELDS,
+    LAYER_GROUPS,
     compute_row_quality,
     refresh_quality_scores,
     generate_quality_report,
@@ -157,6 +161,66 @@ class TestGenerateQualityReport:
         assert total == 3
 
 
+class TestLayerQuality:
+    def test_report_has_layer_quality(self, db_conn):
+        refresh_quality_scores(db_conn)
+        report = generate_quality_report(db_conn)
+        assert "layer_quality" in report
+        assert "L1_company" in report["layer_quality"]
+        assert "L2_ecosystem" in report["layer_quality"]
+        assert "L3_lockup" in report["layer_quality"]
+
+    def test_l1_structure(self, db_conn):
+        refresh_quality_scores(db_conn)
+        report = generate_quality_report(db_conn)
+        l1 = report["layer_quality"]["L1_company"]
+        assert "fields" in l1
+        assert "avg_coverage" in l1
+        assert "n_fields" in l1
+        assert l1["n_fields"] == len(L1_FIELDS)
+        # 每个 L1 字段都有覆盖率数据
+        for f in L1_FIELDS:
+            assert f in l1["fields"]
+
+    def test_l1_full_row_coverage(self, db_conn):
+        """完整行的 L1 字段应全部有覆盖."""
+        refresh_quality_scores(db_conn)
+        report = generate_quality_report(db_conn)
+        l1 = report["layer_quality"]["L1_company"]
+        # offer_price_hkd 两行有值 → 2/3
+        assert l1["fields"]["offer_price_hkd"] == round(2 / 3, 4)
+
+    def test_l2_mostly_empty(self, db_conn):
+        """L2 字段只有完整行有 cornerstone_coverage/count."""
+        refresh_quality_scores(db_conn)
+        report = generate_quality_report(db_conn)
+        l2 = report["layer_quality"]["L2_ecosystem"]
+        # cornerstone_coverage 和 cornerstone_count 只有 1 行有
+        assert l2["fields"]["cornerstone_coverage"] == round(1 / 3, 4)
+        assert l2["fields"]["cornerstone_count"] == round(1 / 3, 4)
+
+    def test_l3_mostly_empty(self, db_conn):
+        """L3 字段大多为 NULL; lockup_months 有 DEFAULT 6 所以全有值."""
+        refresh_quality_scores(db_conn)
+        report = generate_quality_report(db_conn)
+        l3 = report["layer_quality"]["L3_lockup"]
+        # lockup_months: 3/3=1.0, 其余 4 字段 0/3=0.0
+        # avg = 1.0/5 = 0.2
+        assert l3["avg_coverage"] == pytest.approx(0.2, abs=0.01)
+        assert l3["fields"]["lockup_months"] == pytest.approx(1.0)
+        assert l3["fields"]["overhang_ratio"] == 0.0
+
+    def test_layer_groups_no_overlap(self):
+        """L1/L2/L3 字段不应重叠."""
+        all_fields = set(L1_FIELDS) | set(L2_FIELDS) | set(L3_FIELDS)
+        assert len(all_fields) == len(L1_FIELDS) + len(L2_FIELDS) + len(L3_FIELDS)
+
+    def test_layer_groups_dict_matches(self):
+        assert LAYER_GROUPS["L1_company"] is L1_FIELDS
+        assert LAYER_GROUPS["L2_ecosystem"] is L2_FIELDS
+        assert LAYER_GROUPS["L3_lockup"] is L3_FIELDS
+
+
 class TestSaveQualityReport:
     def test_creates_json_file(self, tmp_path, db_conn):
         refresh_quality_scores(db_conn)
@@ -167,3 +231,12 @@ class TestSaveQualityReport:
         assert out.exists()
         data = json.loads(out.read_text(encoding="utf-8"))
         assert data["total_ipos"] == 3
+
+    def test_json_includes_layer_quality(self, tmp_path, db_conn):
+        refresh_quality_scores(db_conn)
+        report = generate_quality_report(db_conn)
+        out = tmp_path / "quality_layers.json"
+        save_quality_report(report, out)
+        data = json.loads(out.read_text(encoding="utf-8"))
+        assert "layer_quality" in data
+        assert "L1_company" in data["layer_quality"]

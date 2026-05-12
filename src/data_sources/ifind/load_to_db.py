@@ -47,8 +47,11 @@ if str(_SRC) not in sys.path:
 from data_sources.ifind.field_mappings import (  # noqa: E402
     P05309_CORNERSTONES,
     P05310_IPO_INFO,
+    FINANCIALS_ANNUAL,
     DELISTED_HK,
+    BLOCK_TO_CHAPTER,
     NULL_TOKENS,
+    SUPPORTED_CURRENCIES,
     parse_float,
     parse_int,
     parse_date,
@@ -79,6 +82,16 @@ from nacs_model import CornerstoneType  # noqa: E402
 from log import get_logger  # noqa: E402
 
 _log = get_logger(__name__)
+
+
+# =============================================================================
+# 常量: listing_chapter 有效值 (与 nacs_model.ListingChapter 对应)
+# =============================================================================
+VALID_CHAPTERS = frozenset({
+    "main_board", "main_board_profitable", "main_board_unprofitable",
+    "a_plus_h", "18a", "secondary",
+    "18c_commercial", "18c_precommercial", "spac",
+})
 
 
 # =============================================================================
@@ -145,6 +158,9 @@ class IpoLoadStats:
     n_overrides_applied: int = 0
     n_status_prospectus: int = 0
     n_status_pricing: int = 0
+    n_sanitized: int = 0          # 因校验而被置 NULL 的字段总次数
+    n_chapter_defaulted: int = 0  # 使用默认 'main_board' 的 IPO 数
+    n_chapter_invalid: int = 0    # listing_chapter 不在有效集合中, 回退 main_board
 
 
 def _classify_status(listing_date_iso: str,
@@ -213,18 +229,79 @@ def load_ipo_info(conn: sqlite3.Connection, csv_path: Path,
         elif deal_status == "pricing":
             stats.n_status_pricing += 1
 
+        pricing_date = parse_date(row.get("pricing_date"))
+        offer_price = parse_float(row.get("offer_price_hkd"))
+        offer_price_high = parse_float(row.get("offer_price_high"))
+        offer_price_low = parse_float(row.get("offer_price_low"))
+        offering_size = parse_float(row.get("offering_size_hkd"))
+        public_oversub = parse_float(row.get("public_oversub"))
+
+        # --- 输入校验: 不合理值置 NULL + log warning ---
+        if offer_price is not None and offer_price <= 0:
+            _log.warning("%s offer_price_hkd=%.4f <= 0, 置 NULL", stock_code, offer_price)
+            offer_price = None
+            stats.n_sanitized += 1
+        if pricing_date is not None and pricing_date > listing_date:
+            _log.warning("%s pricing_date=%s > listing_date=%s, 置 NULL",
+                         stock_code, pricing_date, listing_date)
+            pricing_date = None
+            stats.n_sanitized += 1
+        if coverage is not None and (coverage < 0 or coverage > 1.0):
+            _log.warning("%s cornerstone_coverage=%.4f 超出 [0,1], 置 NULL",
+                         stock_code, coverage)
+            coverage = None
+            stats.n_sanitized += 1
+        if intl_oversub is not None and intl_oversub < 0:
+            _log.warning("%s intl_oversub=%.2f < 0, 置 NULL", stock_code, intl_oversub)
+            intl_oversub = None
+            stats.n_sanitized += 1
+        if public_oversub is not None and public_oversub < 0:
+            _log.warning("%s public_oversub=%.2f < 0, 置 NULL", stock_code, public_oversub)
+            public_oversub = None
+            stats.n_sanitized += 1
+        if offering_size is not None and offering_size <= 0:
+            _log.warning("%s offering_size_hkd=%.2f <= 0, 置 NULL", stock_code, offering_size)
+            offering_size = None
+            stats.n_sanitized += 1
+        if offer_price_high is not None and offer_price is not None \
+                and offer_price_high < offer_price:
+            _log.warning("%s offer_price_high=%.4f < offer_price=%.4f, high 置 NULL",
+                         stock_code, offer_price_high, offer_price)
+            offer_price_high = None
+            stats.n_sanitized += 1
+        if offer_price_low is not None and offer_price is not None \
+                and offer_price_low > offer_price:
+            _log.warning("%s offer_price_low=%.4f > offer_price=%.4f, low 置 NULL",
+                         stock_code, offer_price_low, offer_price)
+            offer_price_low = None
+            stats.n_sanitized += 1
+
+        total_offer_shares = parse_float(row.get("total_offer_shares"))
+
+        # --- 章节校验 ---
+        chapter = chapter_override or "main_board"
+        if chapter not in VALID_CHAPTERS:
+            _log.warning("%s listing_chapter=%r 不在有效集合, 回退 main_board",
+                         stock_code, chapter)
+            chapter = "main_board"
+            stats.n_chapter_invalid += 1
+        if chapter == "main_board" and not chapter_override:
+            stats.n_chapter_defaulted += 1
+
         kwargs = {
             "ipo_id": ipo_id,
             "stock_code": stock_code,
             "company_name_zh": parse_str(row.get("company_name_zh")),
             "listing_date": listing_date,
-            "pricing_date": parse_date(row.get("pricing_date")),
-            "listing_chapter": chapter_override or "main_board",
-            "offer_price_hkd": parse_float(row.get("offer_price_hkd")),
-            "offer_price_high": parse_float(row.get("offer_price_high")),
-            "offering_size_hkd": parse_float(row.get("offering_size_hkd")),
+            "pricing_date": pricing_date,
+            "listing_chapter": chapter,
+            "offer_price_hkd": offer_price,
+            "offer_price_high": offer_price_high,
+            "offer_price_low": offer_price_low,
+            "offering_size_hkd": offering_size,
+            "total_offer_shares": total_offer_shares,
             "intl_oversub": intl_oversub,
-            "public_oversub": parse_float(row.get("public_oversub")),
+            "public_oversub": public_oversub,
             "cornerstone_coverage": coverage,
             "status": deal_status,
             "data_source_notes": "ifind:p05310" + (
@@ -258,6 +335,8 @@ class CornerstoneLoadStats:
     n_aliases_added: int = 0
     n_links_inserted: int = 0
     n_skipped: int = 0
+    n_sanitized: int = 0       # 因校验而被置 NULL 的字段总次数
+    n_unknown_currency: int = 0  # 未知 currency fallback 次数
 
 
 def _existing_cornerstone_ids(conn: sqlite3.Connection) -> Set[str]:
@@ -328,10 +407,20 @@ def load_cornerstones(conn: sqlite3.Connection, csv_path: Path,
         # 货币归一: raw CSV 的 ticket_size_hkd 列实际是 native 值 (currency 列另给).
         # 写库时 ticket_size_native = native, ticket_size_hkd = native × FX.
         currency_raw = (parse_str(row.get("currency")) or "HKD").upper()
-        if currency_raw not in ("HKD", "USD", "CNY"):
-            currency_raw = "HKD"  # 未知 — 保守不换算
+        if currency_raw not in SUPPORTED_CURRENCIES:
+            _log.warning("%s/%s currency=%r 不在支持列表 %s, fallback HKD (不换算)",
+                         stock_code, cs_name_raw, currency_raw,
+                         sorted(SUPPORTED_CURRENCIES))
+            currency_raw = "HKD"
+            stats.n_unknown_currency += 1
         fx = _fx_to_hkd(currency_raw, listing_date)
         native = parse_float(row.get("ticket_size_hkd"))
+        # 校验: ticket_size 不应为负
+        if native is not None and native <= 0:
+            _log.warning("%s/%s ticket_size=%.2f <= 0, 置 NULL",
+                         stock_code, cs_name_raw, native)
+            native = None
+            stats.n_sanitized += 1
         hkd_normalized = native * fx if native is not None else None
 
         if not dry_run:
@@ -365,6 +454,7 @@ class DelistedLoadStats:
     n_matched: int = 0    # 在 ipo_master 找到对应 stock_code
     n_unmatched: int = 0  # 退市表里有, ipo_master 中无 (该 IPO 不在 universe)
     n_skipped: int = 0
+    n_date_invalid: int = 0  # 退市日早于上市日 (数据异常)
 
 
 def load_delisted(conn: sqlite3.Connection, csv_path: Path,
@@ -373,6 +463,8 @@ def load_delisted(conn: sqlite3.Connection, csv_path: Path,
 
     匹配键: stock_code (一只 IPO 唯一对应一个港股代码).
     若退市表给出 IPO 在我们 ipo_master 之外的 stock_code, 计入 n_unmatched (不写库).
+
+    交叉验证: 退市日 vs 上市日 — 退市日 ≤ 上市日则记为 n_date_invalid 但仍写入.
     """
     rows = read_csv_dict(csv_path, DELISTED_HK)
     stats = DelistedLoadStats(n_rows_csv=len(rows))
@@ -390,6 +482,23 @@ def load_delisted(conn: sqlite3.Connection, csv_path: Path,
             stats.n_matched += 1  # dry-run 不区分是否真匹配
             continue
 
+        # 交叉验证: 退市日 vs 上市日
+        if delist_date and conn is not None:
+            listing_row = conn.execute(
+                "SELECT listing_date FROM ipo_master WHERE stock_code = ?",
+                (stock_code,),
+            ).fetchone()
+            if listing_row and listing_row["listing_date"]:
+                # DB listing_date 可能是 date 对象或 str, 统一为 str 比较
+                ld = listing_row["listing_date"]
+                ld_str = ld.isoformat() if hasattr(ld, "isoformat") else str(ld)
+                if delist_date <= ld_str:
+                    _log.warning(
+                        "%s delisting_date=%s <= listing_date=%s, 数据异常 (仍写入)",
+                        stock_code, delist_date, ld_str,
+                    )
+                    stats.n_date_invalid += 1
+
         cur = conn.execute("""
             UPDATE ipo_master
             SET is_delisted = 1,
@@ -402,6 +511,142 @@ def load_delisted(conn: sqlite3.Connection, csv_path: Path,
             stats.n_matched += 1
         else:
             stats.n_unmatched += 1
+            _log.debug("退市表 %s 不在 ipo_master (universe 外)", stock_code)
+
+    return stats
+
+
+# =============================================================================
+# 章节验证: 检查 ipo_master.listing_chapter 一致性
+# =============================================================================
+
+@dataclass
+class ChapterValidationResult:
+    total_ipos: int = 0
+    n_valid: int = 0
+    n_defaulted_main_board: int = 0  # 可能未经分类的 main_board
+    n_invalid_chapter: int = 0       # 不在 VALID_CHAPTERS 中
+    chapter_distribution: Dict = None  # type: ignore[assignment]
+    issues: List = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.chapter_distribution is None:
+            self.chapter_distribution = {}
+        if self.issues is None:
+            self.issues = []
+
+
+def validate_chapters(conn: sqlite3.Connection) -> ChapterValidationResult:
+    """校验 ipo_master 中 listing_chapter 的有效性和覆盖率.
+
+    检查项:
+      1. listing_chapter 值必须在 VALID_CHAPTERS 中
+      2. 'main_board' 占比过高 (>90%) 提示可能未分类
+      3. 统计章节分布
+    """
+    result = ChapterValidationResult()
+
+    # 统计总数和分布
+    rows = conn.execute(
+        "SELECT listing_chapter, COUNT(*) AS cnt FROM ipo_master GROUP BY listing_chapter"
+    ).fetchall()
+
+    for row in rows:
+        ch = row["listing_chapter"]
+        cnt = row["cnt"]
+        result.total_ipos += cnt
+        result.chapter_distribution[ch] = cnt
+
+        if ch not in VALID_CHAPTERS:
+            result.n_invalid_chapter += cnt
+            result.issues.append(
+                f"无效 listing_chapter={ch!r} ({cnt} 只 IPO)"
+            )
+        elif ch == "main_board":
+            result.n_defaulted_main_board += cnt
+        else:
+            result.n_valid += cnt
+
+    # main_board 占比警告
+    if result.total_ipos > 0:
+        mb_pct = result.n_defaulted_main_board / result.total_ipos
+        if mb_pct > 0.90:
+            result.issues.append(
+                f"main_board 占比 {mb_pct:.0%} (>{90}%), "
+                "可能有大量 IPO 未经章节分类 (18A/18C/AH/SPAC 等)"
+            )
+
+    # 检查 -W 后缀股票被标为 18a 的潜在错分
+    w_as_18a = conn.execute("""
+        SELECT stock_code, company_name_zh FROM ipo_master
+        WHERE listing_chapter = '18a'
+          AND company_name_zh LIKE '%-W'
+    """).fetchall()
+    if w_as_18a:
+        codes = [r["stock_code"] for r in w_as_18a]
+        result.issues.append(
+            f"{len(codes)} 只 -W 后缀股票被标为 18a, 可能需要区分: "
+            f"{codes[:5]}{'...' if len(codes) > 5 else ''}"
+        )
+
+    return result
+
+
+# =============================================================================
+# 4. financials_annual CSV → ipo_financials
+# =============================================================================
+
+@dataclass
+class FinancialsLoadStats:
+    n_rows_csv: int = 0
+    n_upserted: int = 0
+    n_skipped_no_code: int = 0
+    n_skipped_no_year: int = 0
+    n_all_null: int = 0       # 所有财务字段均为 NULL (如新上市公司无历史)
+
+
+def load_financials(conn: sqlite3.Connection, csv_path: Path,
+                    *, dry_run: bool = False) -> FinancialsLoadStats:
+    """ifind_financials_annual.csv → ipo_financials.
+
+    一行 = 一个 stock_code × 一个 report_year.
+    CSV 表头已是语义名 (thscode, total_oi, ...), 用 FINANCIALS_ANNUAL 映射.
+    """
+    rows = read_csv_dict(csv_path, FINANCIALS_ANNUAL)
+    stats = FinancialsLoadStats(n_rows_csv=len(rows))
+
+    for row in rows:
+        stock_code = parse_str(row.get("stock_code"))
+        report_year = parse_int(row.get("report_year"))
+
+        if not stock_code:
+            stats.n_skipped_no_code += 1
+            continue
+        if report_year is None:
+            stats.n_skipped_no_year += 1
+            continue
+
+        revenue = parse_float(row.get("revenue"))
+        gross_margin = parse_float(row.get("gross_margin"))
+        net_margin = parse_float(row.get("net_margin"))
+        roe = parse_float(row.get("roe"))
+
+        # 全部为 NULL 的行 (iFinD 返回空) 计入但仍写入, 保留"已查询过"记录
+        if all(v is None for v in (revenue, gross_margin, net_margin, roe)):
+            stats.n_all_null += 1
+
+        if not dry_run:
+            conn.execute("""
+                INSERT INTO ipo_financials (stock_code, report_year,
+                                            revenue_cny, gross_margin, net_margin, roe)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(stock_code, report_year) DO UPDATE SET
+                    revenue_cny  = COALESCE(excluded.revenue_cny,  revenue_cny),
+                    gross_margin = COALESCE(excluded.gross_margin, gross_margin),
+                    net_margin   = COALESCE(excluded.net_margin,   net_margin),
+                    roe          = COALESCE(excluded.roe,          roe)
+            """, (stock_code, report_year, revenue, gross_margin, net_margin, roe))
+        stats.n_upserted += 1
 
     return stats
 
@@ -410,7 +655,7 @@ def load_delisted(conn: sqlite3.Connection, csv_path: Path,
 # CLI
 # =============================================================================
 
-KNOWN_TABLES = ("ipo", "cornerstones", "delisted")  # 当前覆盖范围
+KNOWN_TABLES = ("ipo", "cornerstones", "delisted", "financials")
 
 
 def parse_tables_arg(s: str) -> List[str]:
@@ -485,16 +730,20 @@ def _run_loaders(conn: Optional[sqlite3.Connection], raw_dir: Path,
         path = raw_dir / "ifind_ipo_info.csv"
         _log.info("--- IPO info (%s) ---", path.name)
         s = load_ipo_info(conn, path, dry_run=dry_run)  # type: ignore[arg-type]
-        _log.info("  rows_csv=%d upserted=%d skipped_no_date=%d skipped_no_code=%d",
-                  s.n_rows_csv, s.n_inserted, s.n_skipped_no_date, s.n_skipped_no_code)
+        _log.info("  rows_csv=%d upserted=%d skipped_no_date=%d skipped_no_code=%d "
+                  "sanitized=%d chapter_defaulted=%d chapter_invalid=%d",
+                  s.n_rows_csv, s.n_inserted, s.n_skipped_no_date, s.n_skipped_no_code,
+                  s.n_sanitized, s.n_chapter_defaulted, s.n_chapter_invalid)
 
     if "cornerstones" in tables:
         path = raw_dir / "ifind_cornerstones.csv"
         _log.info("--- Cornerstones (%s) ---", path.name)
         s2 = load_cornerstones(conn, path, dry_run=dry_run)  # type: ignore[arg-type]
-        _log.info("  rows_csv=%d unique_cs=%d new=%d preserved=%d aliases=%d links=%d skipped=%d",
+        _log.info("  rows_csv=%d unique_cs=%d new=%d preserved=%d aliases=%d links=%d "
+                  "skipped=%d sanitized=%d unknown_currency=%d",
                   s2.n_rows_csv, s2.n_cs_unique, s2.n_cs_new, s2.n_cs_preserved,
-                  s2.n_aliases_added, s2.n_links_inserted, s2.n_skipped)
+                  s2.n_aliases_added, s2.n_links_inserted, s2.n_skipped,
+                  s2.n_sanitized, s2.n_unknown_currency)
 
     if "delisted" in tables:
         path = raw_dir / "ifind_delisted_hk.csv"
@@ -503,8 +752,21 @@ def _run_loaders(conn: Optional[sqlite3.Connection], raw_dir: Path,
             _log.warning("CSV 不存在 (%s), 跳过; 先跑 delisted_pull.py", path)
         else:
             s3 = load_delisted(conn, path, dry_run=dry_run)  # type: ignore[arg-type]
-            _log.info("  rows_csv=%d matched=%d unmatched=%d skipped=%d",
-                      s3.n_rows_csv, s3.n_matched, s3.n_unmatched, s3.n_skipped)
+            _log.info("  rows_csv=%d matched=%d unmatched=%d skipped=%d date_invalid=%d",
+                      s3.n_rows_csv, s3.n_matched, s3.n_unmatched, s3.n_skipped,
+                      s3.n_date_invalid)
+
+    if "financials" in tables:
+        path = raw_dir / "ifind_financials_annual.csv"
+        _log.info("--- Financials (%s) ---", path.name)
+        if not path.exists():
+            _log.warning("CSV 不存在 (%s), 跳过; 先跑 full_data_pull.py", path)
+        else:
+            s4 = load_financials(conn, path, dry_run=dry_run)  # type: ignore[arg-type]
+            _log.info("  rows_csv=%d upserted=%d skipped_no_code=%d "
+                      "skipped_no_year=%d all_null=%d",
+                      s4.n_rows_csv, s4.n_upserted, s4.n_skipped_no_code,
+                      s4.n_skipped_no_year, s4.n_all_null)
 
     # ----- 数据质量评分 & 报告 -----
     if not dry_run and conn is not None:
