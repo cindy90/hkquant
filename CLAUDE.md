@@ -186,7 +186,7 @@
 - [x] Phase 5 — Agent 层（DONE：7 agent + tools + WorkflowExtras + 55 unit tests + 3 DONE-condition smoke + 320 全仓单测通过；ADR 0009 §Progress 7 项 Phase 5 条目全勾；NACS 三件套 regime_score/cluster_bonus/theme_heat 全部接入）
 - [x] Phase 6 — 编排 + Critic + Synthesizer（DONE：LangGraph 主图 + Bull-Bear-Devil 辩论 + Jaccard 早停 + Opus synthesizer + create_snapshot 强制 + 69 新单测 + 389 全仓单测通过；ADR 0010 §Progress Phase 6 全勾）
 - [x] Phase 7 — 报告 + API + UI 集成层 MVP（DONE：reporting (memo + PDF/DOCX) + FastAPI 31 routes + JWT/RBAC + middleware + SSE + WS chat + What-If + 27 新单测 + 449 全仓单测通过；ADR 0011 §Progress Phase 7 全勾；reviews/proposals/drift/backtest 延 Phase 7.5/8；SSO 延 Phase 9）
-- [ ] Phase 7.5 — 预测档案 + 生命周期追踪 **← 当前**
+- [x] Phase 7.5 — 预测档案 + 生命周期追踪（DONE 2026-05-16：tag `v0.7.5` + 全仓 554 单测通过；ADR 0011 Progress + ADR 0012 Progress 全勾）
   - [x] **7.5a** Schema + Registry PG 化（DONE 2026-05-16：19 张 v1.1+v1.2+v1.2.1 表 + 4 trigger + Registry Protocol/InMemory/PG 双实现 + Orchestrator HardEdge + SnapshotCreationFailed + 11 新单测；ADR 0012 §Progress 7.5a 已勾；Phase 7 in-memory PG 化挪到 7.5b）
   - [x] **7.5b** Outcome/Event/Attribution/Review 数据流闭环 + Phase 7 5 个 in-memory PG 化 + reviews/proposals/drift router（**ADR 0011 Progress 全勾**）
     - [x] 7.5b-1 (883e11e) 预测追踪流水线 5 模块 + 2 prompts + 30 新单测
@@ -195,7 +195,9 @@
   - [x] **7.5c** ipo_lifecycle/ 6 模块 + code_mapper + earnings_comparator + alerts + config YAML
     - [x] 7.5c-1 ipo_lifecycle/ 6 模块（states / state_machine / state_detectors 三重 LISTED / stale_detector / terminal_handlers / ah_special） + 28 新单测含 3 状态机仿真
     - [x] 7.5c-2 code_mapper (3 策略 + LOW→requires_review) + earnings_comparator (前 3 次强制 review) + alerts (24h dedup + actionable_info 强制) + config/{alerts,mapping_rules}.yaml + 29 新单测
-  - [ ] **7.5d** schedulers/ 4 模块 + Airflow DAG + 端到端晶泰 + tag `v0.7.5`
+  - [x] **7.5d** schedulers/ 4 模块 + Airflow DAG + 端到端晶泰 + tag `v0.7.5`
+    - [x] 7.5d-1 (8ae5cfa) schedulers/{base, high_freq, daily, event_driven} + advisory lock + config/schedulers.yaml + 12 新单测含 4 对抗测试
+    - [x] 7.5d-2 4 Airflow DAG + 端到端晶泰 2228.HK simulation（PRE_LISTING → PRICING → LISTED → 10 canonical checkpoint outcomes → review_drafts at T+30/90/180 → TERMINATED at T+360 + immutability 保持）+ tag `v0.7.5`
 - [ ] Phase 8 — 回测与校准
 - [ ] Phase 9 — 端到端验证
 - [ ] Phase 10 — 持续学习闭环
