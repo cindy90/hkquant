@@ -1,87 +1,64 @@
-# NACS 项目 pre-commit hooks
+# Pre-commit hooks for HK IPO Cornerstone Agent.
 #
-# 安装:
-#   pip install pre-commit
+# Install:
+#   uv tool install pre-commit
 #   pre-commit install
 #
-# 手动跑全仓:
+# Run all hooks across the repo:
 #   pre-commit run --all-files
 #
-# 临时绕过 (慎用):
+# Bypass (use sparingly):
 #   git commit --no-verify
 #
-# 升级 hooks 到最新版:
-#   pre-commit autoupdate
+# See PROJECT_SPEC.md §10.5.
 
 default_language_version:
-  python: python3
-
-# 默认仅对修改的文件跑; ruff/black 用 pass_filenames
+  python: python3.11
 default_stages: [pre-commit]
 
 repos:
-  # -------------------------------------------------------------------
-  # 通用清理 (官方 hooks)
-  # -------------------------------------------------------------------
+  # ---------------- General hygiene ----------------
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(data/raw|outputs|reports|themes|\.gitignore$)
+        exclude: ^(data/raw|data/processed|data/derived|outputs|reports|themes|legacy|new_project_spec|PROJECT_SPEC\.md|PROJECT_SPEC_UI\.md|\.gitignore$)
       - id: end-of-file-fixer
-        exclude: ^(data/raw|outputs|reports|themes)
+        exclude: ^(data/raw|data/processed|data/derived|outputs|reports|themes|legacy|new_project_spec)
       - id: check-yaml
-        exclude: ^themes/   # 一些主题 yaml 用了非标语法
+        exclude: ^(themes/)
       - id: check-toml
+      - id: check-json
       - id: check-added-large-files
-        args: ["--maxkb=2000"]   # SQLite >2MB 不该入仓
+        args: ["--maxkb=2000"]
       - id: check-merge-conflict
       - id: mixed-line-ending
         args: ["--fix=lf"]
 
-  # -------------------------------------------------------------------
-  # ruff - lint + import sort (pyupgrade/bugbear in select)
-  # 配置在 pyproject.toml::tool.ruff
-  # -------------------------------------------------------------------
+  # ---------------- ruff: lint + format ----------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.7.0
     hooks:
       - id: ruff
-        args: ["--fix"]   # 自动修可修的
-      # ruff format 不开 (避免与 black 冲突, 二选一)
+        args: ["--fix"]
+      - id: ruff-format
 
-  # -------------------------------------------------------------------
-  # black - 代码格式化
-  # 配置在 pyproject.toml::tool.black
-  # -------------------------------------------------------------------
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks:
-      - id: black
-        language_version: python3
-
-  # -------------------------------------------------------------------
-  # mypy - 静态类型 (仅 src/, ignore-missing-imports)
-  # 配置在 pyproject.toml::tool.mypy
-  # 注: 大型代码库初次跑会有大量类型问题, 默认 manual stage 不阻塞 commit
-  # 想强制开启请改为 [pre-commit]
-  # -------------------------------------------------------------------
+  # ---------------- mypy: strict on new package ----------------
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
+    rev: v1.13.0
     hooks:
       - id: mypy
-        files: ^src/
-        additional_dependencies: [types-requests]
-        stages: [manual]   # 改为 [pre-commit] 即开启强制
+        files: ^src/hk_ipo_agent/
+        additional_dependencies:
+          - pydantic>=2.7
+          - types-pyyaml
+          - types-python-dateutil
+        stages: [manual]   # opt-in for now; flip to [pre-commit] once Phase 1 typing is stable
 
-  # -------------------------------------------------------------------
-  # 数据完整性 - 自定义 local hook (no network)
-  # -------------------------------------------------------------------
-  - repo: local
+  # ---------------- Secrets scan ----------------
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
     hooks:
-      - id: nacs-config-validate
-        name: NACS config validate (configs/*.yaml)
-        entry: python -c "from src.config import load_config; import sys; [load_config(p) for p in sys.argv[1:]]"
-        language: system
-        files: ^configs/.*\.ya?ml$
-        pass_filenames: true
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: ^(\.env\.example|tests/fixtures/|PROJECT_SPEC\.md|PROJECT_SPEC_UI\.md|new_project_spec/)

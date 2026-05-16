@@ -1,0 +1,9 @@
+# Data source endpoints + rate limits. Populate in Phase 2.
+# See PROJECT_SPEC.md §15.2.
+ifind:
+  qps_limit: 10
+  retry_max: 3
+  timeout_seconds: 30
+hkex:
+  rate_limit_per_sec: 2
+  user_agent: "hk-ipo-agent/0.0 (research)"

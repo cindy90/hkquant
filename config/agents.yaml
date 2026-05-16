@@ -1,0 +1,7 @@
+# Per-agent runtime config (timeouts, max cost, retry). Populate in Phase 5.
+# See PROJECT_SPEC.md §3.6.
+defaults:
+  timeout_seconds: 300
+  max_retries: 3
+  max_cost_usd: 0.50
+agents: {}

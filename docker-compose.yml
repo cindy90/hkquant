@@ -1,0 +1,61 @@
+# Local infrastructure for HK IPO Cornerstone Agent (dev / test).
+# Production deployment requires §15.1 stack (managed PG, Qdrant cluster, Airflow).
+#
+# Bring up:    docker compose up -d
+# Tear down:   docker compose down
+# Tail logs:   docker compose logs -f
+#
+# Ports / credentials are overridable via .env (see .env.example).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hkipo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hkipo}
+      POSTGRES_USER: ${POSTGRES_USER:-hkipo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hkipo}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hkipo}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: hkipo-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_HTTP_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: hkipo-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  redis_data:

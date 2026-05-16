@@ -1,0 +1,7 @@
+# Pre-2025-08-04 IPO pricing rules. Populate in Phase 1 / 5.
+# See PROJECT_SPEC.md §1 (Policy Agent) and §12 risk register.
+effective_date_start: 2018-04-30   # mainboard chapter 18A introduction
+effective_date_end: 2025-08-03
+allocation_mechanism: legacy
+clawback_thresholds: {}
+public_float_minimum: {}

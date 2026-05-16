@@ -1,0 +1,7 @@
+# Post-2025-08-04 IPO pricing rules (35% clawback, Mechanism A/B).
+# Populate in Phase 1 / 5.
+effective_date_start: 2025-08-04
+effective_date_end: null
+allocation_mechanism: mechanism_a_or_b
+clawback_thresholds: { ratio: 0.35 }
+public_float_minimum: {}

@@ -1,9 +1,17 @@
-# --- 凭证 ---
+# ============================================================================
+# HK IPO Cornerstone Agent — .gitignore
+# Replaces the legacy NACS .gitignore. See PROJECT_SPEC.md §10.6.
+# ============================================================================
+
+# --- Credentials & secrets ---
 .env
 .env.*
 !.env.example
+.secrets.baseline.local
+*.pem
+*.key
 
-# --- Python 字节码 / 工具缓存 ---
+# --- Python bytecode / tool caches ---
 __pycache__/
 *.py[cod]
 *$py.class
@@ -11,33 +19,71 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+.coverage
+htmlcov/
 
-# --- IDE / 编辑器 ---
+# --- Virtual envs ---
+.venv/
+venv/
+env/
+
+# --- uv ---
+# uv.lock IS committed (deterministic builds).
+
+# --- IDE / editors ---
 .vscode/
 .idea/
 *.swp
+.cursor/
 
-# --- OS 噪音 ---
+# --- OS noise ---
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# --- 运行产物（可由 run_v7_backtest.py 重生成）---
+# --- Runtime artifacts ---
 outputs/
-
-# --- 每日抓数产物 (fetch_hk_market_data.py) ---
 daily/
+logs/
+*.log
 
-# --- 数据库 (默认忽略，但保留主库与里程碑备份) ---
+# --- Database (SQLite legacy + new ad-hoc) ---
 *.db
 *.sqlite
 *.sqlite3
 !data/nacs_real.db
 !data/nacs_real.db.bak_*
 
-# --- 临时数据 ---
+# --- Data: PDFs and large raw downloads are NOT committed ---
+data/raw/prospectuses/*.pdf
+data/raw/prospectuses/*.PDF
+data/processed/extractions/*.json
+data/processed/extractions/*.parquet
+data/knowledge_base/*.parquet
+data/benchmarks/backtest_runs/*
+
+# Keep .gitkeep so directory structure persists
+!data/**/.gitkeep
+
+# --- Vector store local data ---
+qdrant_storage/
+
+# --- Notebook outputs (commit only cleared cells) ---
+notebooks/.ipynb_checkpoints/
+
+# --- Build artifacts ---
+build/
+dist/
+*.whl
+
+# --- Temp / scratch ---
 *.tmp
 *.bak
+scratch/
 
-# --- 个人持仓清单（隐私）---
+# --- Personal watchlist (privacy) ---
 data/watchlist.json
+
+# --- New project spec working dir (local-only) ---
+# PROJECT_SPEC.md is the committed copy at repo root; the source folder stays local.
+new_project_spec/

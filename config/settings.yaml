@@ -1,0 +1,6 @@
+# Global settings (Phase 0 placeholder; populate in Phase 1).
+# See PROJECT_SPEC.md §3.2.
+environment: dev               # dev | prod
+log_level: INFO
+data_dir: ./data
+output_dir: ./outputs

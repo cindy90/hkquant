@@ -1,0 +1,6 @@
+# Chapter 18C thresholds before 2024-09-01.
+# Populate in Phase 1 / 5.
+effective_date_start: 2023-03-31
+effective_date_end: 2024-08-31
+market_cap_threshold_hkd: { commercialized: 6_000_000_000, pre_commercial: 10_000_000_000 }
+revenue_threshold_rmb: 250_000_000

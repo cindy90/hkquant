@@ -1,0 +1,3 @@
+# Ensemble weights by ListingType. Populate in Phase 4; calibrated in Phase 8.
+# See PROJECT_SPEC.md §3.2.
+weights: {}
