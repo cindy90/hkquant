@@ -1,0 +1,53 @@
+indicator_id,category,market_scope,api_func,params_format,returned_unit,description,verified_example,verified_date,notes
+pe_ttm,valuation,universal,basic_data,"YYYY-MM-DD,100",ratio,市盈率(TTM),"1316.HK→16.06; 603596.SH→22.03",2026-05-08,适用 A股+港股+美股
+ps_ttm,valuation,universal,basic_data,"YYYY-MM-DD,100",ratio,市销率(TTM),"1316.HK→0.36; 603596.SH→2.39",2026-05-08,适用 A股+港股+美股
+pb_latest,valuation,universal,basic_data,"YYYY-MM-DD,100",ratio,市净率(最新),"1316.HK→0.78; 603596.SH→3.57",2026-05-08,替代 pb_mrq / ths_pb_lf
+roe_ttm,profitability,universal,basic_data,"YYYY-MM-DD,100",percent,加权净资产收益率(TTM),"1316.HK→4.83; 603596.SH→16.22",2026-05-08,直接返回百分数
+ev1_to_ebitda,valuation,universal,basic_data,YYYY-MM-DD,ratio,EV/EBITDA(EV1口径),"603596.SH→17.09; 002284.SZ→15.18",2026-05-08,无 unit 后缀; 部分港股 None
+total_shares,share_struct,universal,basic_data,"YYYY-MM-DD,100",股,总股本,"1316.HK→约 25 亿股",2026-05-08,单位元(=股); /1e8 = 亿股
+ths_market_value_stock,valuation,A股,basic_data,"YYYY-MM-DD,100",元,A股总市值,"603596.SH→288.09 亿元",2026-05-08,A股专用; H股用 market_value
+market_value,valuation,港股,basic_data,"YYYY-MM-DD,100",HKD元,港股总市值(原币),"1316.HK→110.83 亿(HKD)",2026-05-08,港股 universal; 折 CNY 需 FX
+ths_market_value_hks,valuation,港股,basic_data,"YYYY-MM-DD,100",HKD元,港股总市值(_hks 后缀),—,2026-05-08,market_value 失败时回退
+ths_np_ttm_stock,profitability,A股,basic_data,空,元,A股归母净利TTM,—,2026-05-08,无 params; 单位元
+ths_np_ttm_hks,profitability,港股,basic_data,空,HKD元,港股归母净利TTM,—,2026-05-08,无 params; 港股原币
+ths_np_atoopc_stock,profitability,A股,basic_data,"YYYYMMDD,OC",元,归母净利(单期),"20251231,OC → FY25 归母",2026-05-08,OC=合并报表; PC=母公司
+ths_close_price,price,universal,basic_data,YYYY-MM-DD,元,日收盘价,—,2026-05-08,—
+latest,price,universal,realtime_quotes,—,元,实时最新价,"通过 realtime_quotes(ticker,'latest')",2026-05-08,字段名作 indicator
+USDCNH.FX,fx,外汇,history_quotes,"begin/end YYYY-MM-DD",汇率,美元离岸人民币,"~7.10",2026-05-08,history_quotes(close); options Currency:original
+USDHKD.FX,fx,外汇,history_quotes,"begin/end YYYY-MM-DD",汇率,美元港币,"~7.78",2026-05-08,USDCNH/USDHKD 推导 HKD→CNY
+HSI.HI,index,港股,history_quotes,"begin/end YYYY-MM-DD",点,恒生指数,—,2026-05-08,benchmark for HK beta
+HSCEI.HI,index,港股,history_quotes,"begin/end YYYY-MM-DD",点,恒生中国企业指数,—,2026-05-08,—
+HSTECH.HI,index,港股,history_quotes,"begin/end YYYY-MM-DD",点,恒生科技,—,2026-05-08,—
+000300.SH,index,A股,history_quotes,"begin/end YYYY-MM-DD",点,沪深300,—,2026-05-08,benchmark for A-share beta regression
+ths_oper_total_rev,financial,通用,basic_data,"YYYYMMDD,100,OC",元,营业总收入(单期),—,2026-05-08,—
+ths_oper_rev,financial,通用,basic_data,"YYYYMMDD,100,OC",元,营业收入(单期),—,2026-05-08,—
+ths_op_profit,financial,通用,basic_data,"YYYYMMDD,100,OC",元,营业利润(单期),—,2026-05-08,—
+ths_total_profit,financial,通用,basic_data,"YYYYMMDD,100,OC",元,利润总额,—,2026-05-08,—
+ths_net_profit,financial,通用,basic_data,"YYYYMMDD,100,OC",元,净利润,—,2026-05-08,—
+ths_np_atoopc,financial,通用,basic_data,"YYYYMMDD,100,OC",元,归母净利,—,2026-05-08,—
+ths_total_assets,financial,通用,basic_data,"YYYYMMDD,100,OC",元,总资产,—,2026-05-08,—
+ths_total_liab,financial,通用,basic_data,"YYYYMMDD,100,OC",元,总负债,—,2026-05-08,—
+ths_total_se,financial,通用,basic_data,"YYYYMMDD,100,OC",元,股东权益合计,—,2026-05-08,—
+ths_se_atoopc,financial,通用,basic_data,"YYYYMMDD,100,OC",元,归属母公司股东权益,—,2026-05-08,—
+ths_cash_eqv_end_period,financial,通用,basic_data,"YYYYMMDD,100,OC",元,期末现金及等价物,—,2026-05-08,—
+ths_oper_cash_flow,financial,通用,basic_data,"YYYYMMDD,100,OC",元,经营活动现金流量净额,—,2026-05-08,—
+ths_invest_cash_flow,financial,通用,basic_data,"YYYYMMDD,100,OC",元,投资活动现金流量净额,—,2026-05-08,—
+ths_finan_cash_flow,financial,通用,basic_data,"YYYYMMDD,100,OC",元,筹资活动现金流量净额,—,2026-05-08,—
+ths_capex,financial,通用,basic_data,"YYYYMMDD,100,OC",元,资本性支出,—,2026-05-08,—
+ths_gross_profit_ttm,profitability,通用,basic_data,空,元,毛利TTM,—,2026-05-08,—
+ths_dividend_yield,valuation,通用,basic_data,"YYYY-MM-DD",percent,股息率,—,2026-05-08,—
+ths_pe_ttm,valuation,通用,basic_data,"YYYY-MM-DD",ratio,市盈率TTM(_ths_前缀版),—,2026-05-08,与 pe_ttm 等价 fallback
+ths_pb_lf,valuation,通用,basic_data,"YYYY-MM-DD",ratio,市净率LF,—,2026-05-08,与 pb_latest 等价 fallback
+ths_ps_ttm,valuation,通用,basic_data,"YYYY-MM-DD",ratio,市销率TTM,—,2026-05-08,与 ps_ttm 等价 fallback
+ths_ev_ebitda,valuation,通用,basic_data,"YYYY-MM-DD",ratio,EV/EBITDA,—,2026-05-08,与 ev1_to_ebitda 等价 fallback
+ths_stock_short_name_stock,meta,通用,basic_data,空,文本,股票简称,—,2026-05-08,—
+ths_ipo_date_stock,meta,通用,basic_data,空,日期,上市日期,—,2026-05-08,—
+ths_ipo_price_hks,ipo,港股,basic_data,空,HKD,港股发行价,—,2026-05-08,—
+ths_ipo_pe_hks,ipo,港股,basic_data,空,ratio,港股发行PE,—,2026-05-08,—
+ths_total_share_after_ipo_hks,ipo,港股,basic_data,空,股,IPO后总股本,—,2026-05-08,—
+ths_ipo_amt_hks,ipo,港股,basic_data,空,HKD元,港股募资总额,—,2026-05-08,—
+ths_subscript_times_hks,ipo,港股,basic_data,空,倍,公开发售认购倍数,—,2026-05-08,—
+ths_intl_subscript_times_hks,ipo,港股,basic_data,空,倍,国际配售认购倍数,—,2026-05-08,—
+ths_listing_recommend_hks,ipo,港股,basic_data,空,文本,保荐人,—,2026-05-08,—
+ths_underwriter_hks,ipo,港股,basic_data,空,文本,承销商/账簿管理人,—,2026-05-08,—
+ths_first_day_close_chg_hks,ipo,港股,basic_data,空,percent,首日涨跌幅,—,2026-05-08,—

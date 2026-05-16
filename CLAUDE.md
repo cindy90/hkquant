@@ -23,7 +23,7 @@
 | **Phase 1** 核心基础设施 | PROJECT_SPEC.md §6 (Pydantic) + §11 + ADR 0001-0004 | 实现 schemas / enums / LLM client / settings / ORM / Alembic 初始 migration |
 | **Phase 2** 数据层 | **ADR 0005 §1 + §4**（强制） + PROJECT_SPEC.md §3.4 | 1) 实现 `scripts/migrate_sqlite_to_pg.py` 把 NACS SQLite 迁到 PG（spec 没列但必须）；2) `historical_ipo_loader.py` 与 `cornerstone_profile_builder.py` 优先吃迁移后的数据，iFind 仅作补漏；3) `tests/unit/data/test_no_lookahead.py` 迁移防泄漏逻辑 |
 | **Phase 3** 招股书处理 | PROJECT_SPEC.md §3.5 + ADR 0004 | LlamaParse + PyMuPDF 双路径；citation 强制可溯源 |
-| **Phase 4** 估值模型层 | **ADR 0005 §2**（Regime Gate 后置硬门） + PROJECT_SPEC.md §3.7 | `valuation/ensemble.py` 必须实现 regime<0 → SKIP 截断；其他 NACS post-adjustments 在 Phase 8 校准 |
+| **Phase 4** 估值模型层 | **ADR 0005 §2**（Regime Gate 后置硬门） + **ADR 0008**（DCF agent 算法借鉴） + PROJECT_SPEC.md §3.7 | `valuation/ensemble.py` 必须实现 regime<0 → SKIP 截断；DCF/Comps 公式参考 DCF agent session-f.md/session-h.md（注释标明来源行号）；不复制代码 |
 | **Phase 5** Agent 层 | **ADR 0005 §2 + §5**（强制） + PROJECT_SPEC.md §7 | `policy_agent` 必须输出 `regime_score`；`cornerstone_signal_agent` 必须用 ultimate_holder 聚类；`sentiment_agent` 必须读 `themes/*.json`；3 个 prompts 的 `inherited_inputs` frontmatter 必须落地为实际工具调用 |
 | **Phase 6** 编排 + Critic + Synthesizer | PROJECT_SPEC.md §8 | LangGraph 主图必须保证 `synthesize → create_snapshot → report` 顺序 |
 | **Phase 7** 报告 + API + UI 集成层 | PROJECT_SPEC.md §16 全章（13 小节） | OpenAPI / SSE / WS / RBAC / 审计 / What-If / PDF 服务全部落地 |
@@ -182,9 +182,8 @@
 - [x] Phase 1 — 核心基础设施（DONE：`make migrate` 成功 + 90 tests passed + LLM client cost tracking 就位）
 - [x] Phase 2 — 数据层（含 SQLite → PostgreSQL ETL）（DONE：399/2014/2560/1592 行已 ETL 到 PG + 151 tests passed + ADR 0005 §Progress 5 个 Phase 2 条目全勾）
 - [x] Phase 3 — 招股书处理（DONE：9 个 prospectus 模块 + 6 prompts + 33 unit + 2 integration 测试；synthetic PDF 端到端通过 + citation 强制）
-- [ ] Phase 4 — 估值模型层 **← 当前**
-- [ ] Phase 4 — 估值模型层
-- [ ] Phase 5 — Agent 层
+- [x] Phase 4 — 估值模型层（DONE：10 个 valuation 模块 + Regime Gate 硬门 + 58 unit tests + 3 DONE-condition smoke + 265 全仓单测通过；ADR 0008 §Progress Phase 4 两项已勾）
+- [ ] Phase 5 — Agent 层 **← 当前**
 - [ ] Phase 6 — 编排 + Critic + Synthesizer
 - [ ] Phase 7 — 报告 + API + UI 集成层（v1.2.1）
 - [ ] Phase 7.5 — 预测档案 + 生命周期追踪

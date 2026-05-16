@@ -12,6 +12,11 @@ desktop client. This module is therefore designed to:
 4. Apply tenacity retry + per-call timeout + a token-bucket QPS limiter
    sourced from ``config/data_sources.yaml``.
 
+Indicator IDs + endpoint conventions inherited from the DCF agent's
+``shared/ifind_client.py`` (production-verified for HK IPO use). See
+``data/knowledge_base/ifind_indicator_catalog.csv`` for the verified
+indicator catalog and ADR 0008 for the dual-track integration.
+
 Tests should never hit the real SDK — they mock ``IFindClient`` methods
 directly (see ``tests/conftest.py`` for the pattern used with LLMClient).
 """
@@ -46,6 +51,84 @@ log = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Common indicator strings (DCF agent verified) — see catalog CSV for full list
+# ---------------------------------------------------------------------------
+
+# HK IPO calendar columns (data_pool 'newshare')
+HK_IPO_CALENDAR_INDICATORS: str = ";".join(
+    [
+        "thscode",
+        "ths_stock_short_name_stock",
+        "ths_ipo_date_stock",
+        "ths_ipo_price_hks",
+        "ths_ipo_pe_hks",
+        "ths_total_share_after_ipo_hks",
+        "ths_ipo_amt_hks",
+    ]
+)
+
+# HK IPO basics (per-ticker snapshot)
+HK_IPO_BASICS_INDICATORS: str = ";".join(
+    [
+        "ths_stock_short_name_stock",
+        "ths_ipo_date_stock",
+        "ths_ipo_price_hks",
+        "ths_ipo_pe_hks",
+        "ths_subscript_times_hks",
+        "ths_intl_subscript_times_hks",
+        "ths_ipo_amt_hks",
+        "ths_listing_recommend_hks",
+        "ths_underwriter_hks",
+        "ths_first_day_close_chg_hks",
+    ]
+)
+
+# Quarterly / period-end financials (single period snapshot)
+FINANCIAL_INDICATORS_SINGLE_PERIOD: str = ";".join(
+    [
+        "ths_oper_total_rev",
+        "ths_oper_rev",
+        "ths_oper_cost",
+        "ths_op_profit",
+        "ths_total_profit",
+        "ths_net_profit",
+        "ths_np_atoopc",
+        "ths_total_assets",
+        "ths_total_liab",
+        "ths_total_se",
+        "ths_se_atoopc",
+        "ths_cash_eqv_end_period",
+        "ths_oper_cash_flow",
+        "ths_invest_cash_flow",
+        "ths_finan_cash_flow",
+        "ths_capex",
+    ]
+)
+
+# Valuation snapshot (universal: HK / A / US)
+VALUATION_SNAPSHOT_INDICATORS: str = ";".join(
+    [
+        "pe_ttm",
+        "ps_ttm",
+        "pb_latest",
+        "ev1_to_ebitda",
+        "roe_ttm",
+        "market_value",
+        "total_shares",
+    ]
+)
+
+# HK macro index tickers (via history_quotes endpoint)
+HK_MACRO_QUOTE: dict[str, str] = {
+    "HSI": "HSI.HI",
+    "HSCEI": "HSCEI.HI",
+    "HSTECH": "HSTECH.HI",
+    "USDHKD": "USDHKD.FX",
+    "USDCNH": "USDCNH.FX",
+}
+
+
+# ---------------------------------------------------------------------------
 # Lazy iFinDPy loader (NOT imported at module-load time)
 # ---------------------------------------------------------------------------
 
@@ -53,7 +136,7 @@ log = get_logger(__name__)
 def _load_ifindpy() -> Any:
     """Import iFinDPy on demand. Raises MissingDependencyError if absent."""
     try:
-        import iFinDPy  # type: ignore[import-not-found]  # noqa: PLC0415 — intentional lazy import
+        import iFinDPy  # noqa: PLC0415 — intentional lazy import
     except ImportError as exc:
         raise MissingDependencyError(
             "iFinDPy is not installed. It ships with the Tonghuashun "
@@ -182,46 +265,126 @@ class IFindClient:
         ticker: str,
         as_of_date: date,
         *,
-        fields: list[str],
-        years: int = 5,
+        report_date: date,
+        consolidate: str = "OC",
+        indicators: str | None = None,
     ) -> Any:
-        """Pull annual financials, masking any period ending >= as_of_date.
+        """Period-end financial snapshot for one ticker.
 
-        Returns the raw iFind result (typically a pandas-like object). The
-        repository layer (Phase 2 builders) normalizes into FinancialSnapshotRow.
+        Args:
+            ticker:        e.g. ``"2228.HK"`` or ``"600519.SH"``
+            as_of_date:    look-ahead guard; refuses calls where as_of_date < report_date
+            report_date:   the fiscal-period end (e.g. ``date(2024,12,31)`` for FY24)
+            consolidate:   ``"OC"`` consolidated / ``"PC"`` parent-company only
+            indicators:    semicolon-joined indicator IDs;
+                           defaults to ``FINANCIAL_INDICATORS_SINGLE_PERIOD``
         """
         self._require_as_of(as_of_date)
+        if report_date > as_of_date:
+            raise LookAheadError(
+                f"report_date {report_date} > as_of_date {as_of_date}",
+                ticker=ticker,
+            )
+        inds = indicators or FINANCIAL_INDICATORS_SINGLE_PERIOD
+        params = f"{report_date.strftime('%Y%m%d')},100,{consolidate}"
         return await self._call(
             IFindRequest(
                 method="THS_BasicData",
-                args=(ticker, ",".join(fields)),
-                kwargs={"years": years},
+                args=(ticker, inds),
+                kwargs={"params": params},
                 as_of_date=as_of_date,
             ),
-            lambda sdk: sdk.THS_BasicData(ticker, ",".join(fields), years),
+            lambda sdk: sdk.THS_BasicData(ticker, inds, params),
         )
 
     async def get_ipo_history(
         self,
         as_of_date: date,
         *,
-        market: str = "HK",
         start: date,
+        pool_filter: str = "AHK",
     ) -> Any:
-        """List IPOs listed in [start, as_of_date]. Future IPOs are masked out."""
+        """HK IPO calendar via ``data_pool('newshare', ...)`` (DCF agent verified).
+
+        Args:
+            as_of_date:  look-ahead guard
+            start:       window start (inclusive)
+            pool_filter: ``"AHK"`` = all HK new shares; see iFind data browser
+                         for sub-board filters (mainboard / GEM / etc.)
+        """
         self._require_as_of(as_of_date)
         if start > as_of_date:
             raise ValueError("start must be <= as_of_date")
+        params = f"{pool_filter};{start.isoformat()};{as_of_date.isoformat()}"
         return await self._call(
             IFindRequest(
-                method="THS_iFindDataQuery_IPOHistory",
-                args=(market, start, as_of_date),
+                method="THS_DataPool",
+                args=("newshare", params, HK_IPO_CALENDAR_INDICATORS),
                 kwargs={},
                 as_of_date=as_of_date,
             ),
             lambda sdk: sdk.THS_DataPool(
-                "ipo",
-                f"date:{start.isoformat()},{as_of_date.isoformat()};exchange:{market}",
+                "newshare", params, HK_IPO_CALENDAR_INDICATORS
+            ),
+        )
+
+    async def get_ipo_basics(
+        self,
+        tickers: str | list[str],
+        as_of_date: date,
+    ) -> Any:
+        """Per-ticker IPO snapshot (sponsor, underwriter, subscription multiples).
+
+        DCF agent ``hk_ipo_basics`` equivalent.
+        """
+        self._require_as_of(as_of_date)
+        joined = ",".join(tickers) if isinstance(tickers, list) else tickers
+        return await self._call(
+            IFindRequest(
+                method="THS_BasicData",
+                args=(joined, HK_IPO_BASICS_INDICATORS),
+                kwargs={},
+                as_of_date=as_of_date,
+            ),
+            lambda sdk: sdk.THS_BasicData(joined, HK_IPO_BASICS_INDICATORS, ""),
+        )
+
+    async def get_hk_history_prices(
+        self,
+        tickers: str | list[str],
+        as_of_date: date,
+        *,
+        start: date,
+        adjust: str = "F",
+        currency: str = "HKD",
+    ) -> Any:
+        """HK daily OHLCV history up to ``as_of_date``.
+
+        Args:
+            adjust:   ``"N"`` raw / ``"F"`` forward-adjusted / ``"B"`` backward-adjusted
+            currency: ``"HKD"`` / ``"CNY"`` / ``"USD"``
+        """
+        self._require_as_of(as_of_date)
+        if start > as_of_date:
+            raise ValueError("start must be <= as_of_date")
+        cps_map = {"N": "00100", "F": "00102", "B": "00103"}
+        cps = cps_map[adjust]
+        options = f"Interval:D,CPS:{cps},baseDate:1900-01-01,Currency:{currency}"
+        indicators = "open;high;low;close;volume;amount;turnoverRatio;changeRatio"
+        joined = ",".join(tickers) if isinstance(tickers, list) else tickers
+        return await self._call(
+            IFindRequest(
+                method="THS_HistoryQuotes",
+                args=(joined, indicators, options, start, as_of_date),
+                kwargs={},
+                as_of_date=as_of_date,
+            ),
+            lambda sdk: sdk.THS_HistoryQuotes(
+                joined,
+                indicators,
+                options,
+                start.isoformat(),
+                as_of_date.isoformat(),
             ),
         )
 
@@ -232,18 +395,40 @@ class IFindClient:
         *,
         market: str = "HK",
     ) -> Any:
-        """List peers within ``industry_code`` listed before ``as_of_date``."""
+        """List peers within ``industry_code`` listed before ``as_of_date``.
+
+        Phase 4 valuation/comparable.py consumer.
+        """
         self._require_as_of(as_of_date)
+        params = f"code:{industry_code};exchange:{market};date:{as_of_date.isoformat()}"
         return await self._call(
             IFindRequest(
-                method="THS_iFindDataQuery_Industry",
-                args=(industry_code, market, as_of_date),
+                method="THS_DataPool",
+                args=("industry", params),
                 kwargs={},
                 as_of_date=as_of_date,
             ),
-            lambda sdk: sdk.THS_DataPool(
-                "industry",
-                f"code:{industry_code};exchange:{market};date:{as_of_date.isoformat()}",
+            lambda sdk: sdk.THS_DataPool("industry", params, "thscode;name"),
+        )
+
+    async def get_valuation_snapshot(
+        self,
+        tickers: str | list[str],
+        as_of_date: date,
+    ) -> Any:
+        """PE/PS/PB/EV-EBITDA/market cap snapshot. Universal across HK/A/US."""
+        self._require_as_of(as_of_date)
+        joined = ",".join(tickers) if isinstance(tickers, list) else tickers
+        params = f"{as_of_date.isoformat()},100"
+        return await self._call(
+            IFindRequest(
+                method="THS_BasicData",
+                args=(joined, VALUATION_SNAPSHOT_INDICATORS, params),
+                kwargs={},
+                as_of_date=as_of_date,
+            ),
+            lambda sdk: sdk.THS_BasicData(
+                joined, VALUATION_SNAPSHOT_INDICATORS, params
             ),
         )
 
@@ -254,20 +439,87 @@ class IFindClient:
         *,
         lookback_days: int = 365,
     ) -> Any:
-        """Historical A/H premium timeseries up to (and including) ``as_of_date``."""
+        """Historical A/H premium timeseries up to ``as_of_date``.
+
+        Returns paired daily closes for the H + A tickers; caller computes
+        the premium ratio. Phase 4 valuation/ah_premium.py consumer.
+        """
         self._require_as_of(as_of_date)
+        from datetime import timedelta  # noqa: PLC0415
+
         h_ticker, a_ticker = ticker_pair
+        start = as_of_date - timedelta(days=lookback_days)
+        joined = f"{h_ticker},{a_ticker}"
+        # Closes only; agent computes the premium itself.
+        options = "Interval:D,CPS:00102,baseDate:1900-01-01,Currency:original"
         return await self._call(
             IFindRequest(
-                method="THS_iFindDataQuery_AHPremium",
-                args=(h_ticker, a_ticker, as_of_date, lookback_days),
+                method="THS_HistoryQuotes",
+                args=(joined, "close", options, start, as_of_date),
                 kwargs={},
                 as_of_date=as_of_date,
             ),
             lambda sdk: sdk.THS_HistoryQuotes(
-                f"{h_ticker},{a_ticker}",
-                "ths_close_price_stock",
-                f"DateFormat:0,Tradeday:0,Currtype:HK_HKD;StartDate:{as_of_date.toordinal() - lookback_days};EndDate:{as_of_date.isoformat()}",
+                joined, "close", options, start.isoformat(), as_of_date.isoformat()
+            ),
+        )
+
+    async def get_macro_index_history(
+        self,
+        as_of_date: date,
+        *,
+        start: date,
+        index_keys: list[str] | None = None,
+    ) -> Any:
+        """HSI / HSCEI / HSTECH / FX history. ``index_keys`` are keys of ``HK_MACRO_QUOTE``.
+
+        Used by Phase 7.5 benchmarks.py + Phase 8 regime_detection.py.
+        """
+        self._require_as_of(as_of_date)
+        if start > as_of_date:
+            raise ValueError("start must be <= as_of_date")
+        keys = index_keys or list(HK_MACRO_QUOTE.keys())
+        tickers = ",".join(HK_MACRO_QUOTE[k] for k in keys if k in HK_MACRO_QUOTE)
+        options = "Interval:D,Currency:original"
+        return await self._call(
+            IFindRequest(
+                method="THS_HistoryQuotes",
+                args=(tickers, "close;volume;changeRatio", options, start, as_of_date),
+                kwargs={},
+                as_of_date=as_of_date,
+            ),
+            lambda sdk: sdk.THS_HistoryQuotes(
+                tickers,
+                "close;volume;changeRatio",
+                options,
+                start.isoformat(),
+                as_of_date.isoformat(),
+            ),
+        )
+
+    async def query_edb(
+        self,
+        indicator_ids: str | list[str],
+        as_of_date: date,
+        *,
+        start: date,
+    ) -> Any:
+        """Macro EDB time series. ``indicator_ids`` joined with ``;``."""
+        self._require_as_of(as_of_date)
+        joined = (
+            ";".join(indicator_ids)
+            if isinstance(indicator_ids, list)
+            else indicator_ids
+        )
+        return await self._call(
+            IFindRequest(
+                method="THS_EDBQuery",
+                args=(joined, start, as_of_date),
+                kwargs={},
+                as_of_date=as_of_date,
+            ),
+            lambda sdk: sdk.THS_EDBQuery(
+                joined, start.isoformat(), as_of_date.isoformat()
             ),
         )
 

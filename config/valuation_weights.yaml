@@ -1,3 +1,42 @@
-# Ensemble weights by ListingType. Populate in Phase 4; calibrated in Phase 8.
-# See PROJECT_SPEC.md §3.2.
-weights: {}
+# Ensemble weights by ListingType. Initial Phase 4 defaults — calibrated in Phase 8.
+# See PROJECT_SPEC.md §3.2 and ADR 0005 §2 (Regime Gate is applied AFTER weighting).
+#
+# Convention: weights for each listing_type must sum to 1.0 across applicable
+# models; ensemble.py will renormalize across models that returned
+# `applicable=True` so values are interpretable as proportions.
+
+weights:
+  "18C-COMM":
+    comparable: 0.35
+    dcf: 0.30
+    pre_ipo_anchor: 0.20
+    industry: 0.15
+
+  "18C-PRE":
+    milestones: 0.40
+    pre_ipo_anchor: 0.30
+    comparable: 0.20
+    industry: 0.10
+
+  "18A":
+    milestones: 0.45
+    pre_ipo_anchor: 0.25
+    comparable: 0.20
+    industry: 0.10
+
+  "MB-TECH":
+    comparable: 0.35
+    dcf: 0.35
+    pre_ipo_anchor: 0.20
+    industry: 0.10
+
+  "AH":
+    ah_premium: 0.45
+    comparable: 0.25
+    dcf: 0.20
+    pre_ipo_anchor: 0.10
+
+  "MB-OTHER":
+    comparable: 0.40
+    dcf: 0.35
+    pre_ipo_anchor: 0.25

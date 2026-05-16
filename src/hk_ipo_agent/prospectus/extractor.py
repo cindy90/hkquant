@@ -15,7 +15,8 @@ provide measurable signal.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,13 @@ from ..common.enums import ListingType
 from ..common.exceptions import ExtractionError
 from ..common.llm_client import LLMClient
 from ..common.logging import LogContext, get_logger
+from ..common.schemas import (
+    Ch18CQualification,
+    Citation,
+    FinancialSnapshot,
+    RiskFactor,
+    ShareholderEntry,
+)
 from ..common.settings import load_llm_models_config
 from .schema import ProspectusExtraction
 
@@ -199,15 +207,23 @@ class ProspectusExtractor:
         extraction: ProspectusExtraction,
         chunks: list[dict[str, Any]],
     ) -> None:
-        # Phase 3: structural stub — wires the LLM call but the prompt is
-        # placeholder quality. Phase 5 iterates the prompt content.
         prompt = self._build_prompt("financials_extractor.md", chunks)
         response = await self._call_with_fallback(prompt, _FinancialsResponse)
-        # Populate extraction.financials via Pydantic FinancialSnapshot — Phase 3
-        # leaves this as a structural pass-through; Phase 5 will normalize.
+        for raw in response.financials_json:
+            try:
+                snap = FinancialSnapshot.model_validate(raw)
+                extraction.financials.append(snap)
+            except Exception as exc:
+                log.warning("financials_item_skipped", error=str(exc), raw_keys=list(raw.keys()))
+                extraction.needs_human_review = True
+                extraction.review_reasons.append(f"financials_parse_error: {exc}")
+        if response.needs_review:
+            extraction.needs_human_review = True
+            if response.notes:
+                extraction.review_reasons.append(f"financials_note: {response.notes}")
         log.debug(
             "financials_extracted",
-            count=len(response.financials_json),
+            count=len(extraction.financials),
             needs_review=response.needs_review,
         )
 
@@ -229,7 +245,17 @@ class ProspectusExtractor:
     ) -> None:
         prompt = self._build_prompt("risks_extractor.md", chunks)
         response = await self._call_with_fallback(prompt, _RisksResponse)
-        log.debug("risks_extracted", count=len(response.risk_factors))
+        for raw in response.risk_factors:
+            try:
+                rf = RiskFactor.model_validate(raw)
+                extraction.risk_factors.append(rf)
+            except Exception as exc:
+                log.warning("risk_item_skipped", error=str(exc))
+                extraction.needs_human_review = True
+                extraction.review_reasons.append(f"risk_parse_error: {exc}")
+        if response.needs_review:
+            extraction.needs_human_review = True
+        log.debug("risks_extracted", count=len(extraction.risk_factors))
 
     async def _extract_shareholders(
         self,
@@ -238,7 +264,27 @@ class ProspectusExtractor:
     ) -> None:
         prompt = self._build_prompt("shareholders_extractor.md", chunks)
         response = await self._call_with_fallback(prompt, _ShareholdersResponse)
-        log.debug("shareholders_extracted", count=len(response.shareholders))
+        for raw in response.shareholders:
+            try:
+                entry = ShareholderEntry.model_validate(raw)
+                extraction.shareholders.append(entry)
+            except Exception as exc:
+                log.warning("shareholder_item_skipped", error=str(exc))
+                extraction.needs_human_review = True
+                extraction.review_reasons.append(f"shareholder_parse_error: {exc}")
+        if response.pre_ipo_valuation_rmb:
+            try:
+                extraction.pre_ipo_valuation_rmb = Decimal(response.pre_ipo_valuation_rmb)
+            except Exception:
+                log.warning("pre_ipo_valuation_parse_failed", value=response.pre_ipo_valuation_rmb)
+        if response.last_round_date:
+            try:
+                extraction.last_round_date = date.fromisoformat(response.last_round_date)
+            except Exception:
+                log.warning("last_round_date_parse_failed", value=response.last_round_date)
+        if response.needs_review:
+            extraction.needs_human_review = True
+        log.debug("shareholders_extracted", count=len(extraction.shareholders))
 
     async def _extract_ch18c(
         self,
@@ -252,6 +298,25 @@ class ProspectusExtractor:
             return  # skip — not an 18C listing
         prompt = self._build_prompt("ch18c_qualifier.md", chunks)
         response = await self._call_with_fallback(prompt, _Ch18CResponse)
+        try:
+            # Build a citation from the first source chunk for traceability.
+            first_chunk = chunks[0] if chunks else {}
+            citation = Citation(
+                page=int(first_chunk.get("page", 1)),
+                chunk_id=first_chunk.get("chunk_id"),
+            )
+            extraction.ch18c_qualification = Ch18CQualification(
+                is_commercialized=response.is_commercialized,
+                revenue_threshold_met=response.revenue_threshold_met,
+                rd_intensity_met=response.rd_intensity_met,
+                market_cap_threshold_hkd=Decimal(response.market_cap_threshold_hkd or "0"),
+                lead_investors=response.lead_investors,
+                citation=citation,
+            )
+        except Exception as exc:
+            log.warning("ch18c_parse_failed", error=str(exc))
+            extraction.needs_human_review = True
+            extraction.review_reasons.append(f"ch18c_parse_error: {exc}")
         log.debug("ch18c_qualified", commercialized=response.is_commercialized)
 
     # ------------------------------------------------------------------ internals

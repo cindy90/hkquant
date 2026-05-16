@@ -7,6 +7,47 @@ The project follows the Phase-based versioning of `PROJECT_SPEC.md` §4.
 
 ---
 
+## [v0.4] — Phase 4 完成: 估值模型层 (5 single + 2 industry + ensemble + Regime Gate) (2026-05-16)
+
+### Added
+- **`src/hk_ipo_agent/valuation/`** 估值层 10 个模块全部实装：
+  - `base.py` — `ValuationModel` ABC + `MarketData` 运行时上下文 + `PeerMultiples` + `distribution_from_samples()` + `_not_applicable()` 助手
+  - `monte_carlo.py` — **10000 路径 MC 引擎**（PROJECT_SPEC.md §3.7 要求）+ 7 个 `Distribution` 类（Constant / Normal / LogNormal / Uniform / Triangular / Bernoulli / FromArray）；64-bit seed 复现保证
+  - `comparable.py` — PS+PE 分位数（DCF agent session-h.md L1-3 借鉴；outlier filter `0 < m < 200`；PE 仅在盈利时启用；50/50 blend）
+  - `dcf.py` — 5y 显式预测 + Gordon TV（DCF agent session-f.md L120-200 借鉴；UFCF = NOPAT + DA − CapEx − ΔWC；EV→Equity bridge；wacc-g 守护）
+  - `pre_ipo_anchor.py` — last_round × (1 − discount)，Triangular(−0.20, 0.10, 0.50) 默认折扣分布
+  - `ah_premium.py` — AH 对仅适用；H = A × (1 − premium_pct)；历史经验分布优先 + 行业 fallback `Triangular(0.15, 0.30, 0.40)`
+  - `milestones.py` — 18C-pre / 18A 阶段实物期权 NPV；默认 4 阶段阶梯（PoC / Pilot / Commerc / Scale）；Bernoulli × LogNormal × Triangular 组合
+  - `ensemble.py` — 多模型加权融合 + **Regime Gate 硬门**（ADR 0005 §2：`regime_score < 0 → SKIP`，price_range 强制清零）；YAML 权重 + applicable 子集 renormalize
+  - `industry/ai_arr.py` — AI/SaaS ARR 倍数（LogNormal 中位 7x）；ASCII 词边界匹配避免 "AI" 误匹配 "retail"
+  - `industry/semiconductor.py` — EV/Sales + 周期相位调整（trough/mid/peak ×0.70/1.00/1.30）
+- **`config/valuation_weights.yaml`** — 6 个 `ListingType` 的初始权重，Phase 8 校准
+- **`docs/decisions/0008-dcf-agent-dual-track-integration.md`** — DCF agent 双轨联动决策（spec Phase 4 自建 + DCF agent skill 保留 + iFind 合并）
+- **`tests/unit/valuation/`** 58 新单测：
+  - 12× monte_carlo（分布 + run_mc + seed 复现）
+  - 8× base（distribution helper + MarketData + ABC）
+  - 5× comparable、4× dcf、4× pre_ipo_anchor、4× ah_premium、4× milestones
+  - 7× ensemble（含 Regime Gate 硬门）、7× industry
+  - **3× DONE-condition smoke test**（4+ 模型 / Regime Gate 硬门 / 18C-pre milestones）
+
+### Verified (Phase 4 DONE)
+- ✅ `ProspectusExtraction` → 4+ 独立 applicable 模型 → 10k MC → 加权 ensemble → `ValuationEnsembleOutput`（含 `implied_price_range`）
+- ✅ Regime Gate 硬门：`market_data.regime_score < 0` 强制清零 `implied_price_range`，notes 记录触发
+- ✅ Pre-commercial 18C/18A 走 milestones（DCF / Comparable 自动 not_applicable）
+- ✅ AH 对走 ah_premium 模型，非 AH 自动跳过
+- ✅ AI 行业匹配触发 `AIARRValuation`；半导体匹配触发 `SemiconductorValuation`
+- ✅ ruff strict + mypy strict 全通过（valuation/ 15 files + 全仓 160 files）
+- ✅ **265 unit tests pass**（v0.3 186 + 79 新增）
+
+### Notes
+- 公式来源全部注释标记 DCF agent session-f.md / session-h.md 行号（ADR 0008 §Negative mitigation）
+- iFind catalog（52 验证过的指标）已在 Phase 2 合并到 `data/knowledge_base/`，Phase 4 模型可立即消费 peer multiples
+- 行业骨架仅落地 ai_arr / semiconductor 2 个；biotech_18a / ev_battery / robotics 保留 TODO（Phase 8 校准时填）
+- NACS v8 post_adjustments（×0.70 18C 高估、AH 套保分层）**未**移植；Phase 8 重新校准后再决定是否启用（ADR 0005 §3）
+- Phase 7 投决备忘录 Excel 附件 adapter（`reporting/exporters/dcf_excel.py`）留待 Phase 7
+
+---
+
 ## [v0.3] — Phase 3 完成: 招股书处理 (Parse / Chunk / Embed / Qdrant / RAG QA) (2026-05-16)
 
 ### Added
