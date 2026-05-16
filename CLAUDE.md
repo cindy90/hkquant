@@ -178,9 +178,9 @@
 
 ## Phase 进度（手动维护，每个 Phase 完成时更新）
 
-- [x] Phase 0 — 项目骨架（**当前**；DONE 条件：`make install && make lint` 通过 + docker compose 起得来）
-- [ ] Phase 1 — 核心基础设施
-- [ ] Phase 2 — 数据层（含 SQLite → PostgreSQL ETL）
+- [x] Phase 0 — 项目骨架（DONE：`make install && make lint` 通过 + docker compose 起得来）
+- [x] Phase 1 — 核心基础设施（DONE：`make migrate` 成功 + 90 tests passed + LLM client cost tracking 就位）
+- [x] Phase 2 — 数据层（含 SQLite → PostgreSQL ETL）（DONE：399/2014/2560/1592 行已 ETL 到 PG + 151 tests passed + ADR 0005 §Progress 5 个 Phase 2 条目全勾） **← 当前**
 - [ ] Phase 3 — 招股书处理
 - [ ] Phase 4 — 估值模型层
 - [ ] Phase 5 — Agent 层

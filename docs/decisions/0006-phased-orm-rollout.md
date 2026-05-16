@@ -70,6 +70,6 @@ PROJECT_SPEC.md §4 Phase 1 列了：
 
 ## Progress
 
-- [ ] **Phase 1**：v1.0 基础 7 个 ORM 文件 + Alembic 初始 migration
+- [x] **Phase 1**：v1.0 基础 7 个 ORM 文件 + Alembic 初始 migration
 - [ ] **Phase 7**：v1.2.1 UI 支撑 3 个 ORM 文件（auth/chat/audit）+ migration
 - [ ] **Phase 7.5**：v1.1 + v1.2 ORM 文件（prediction/lifecycle/operations）+ migrations + immutable triggers

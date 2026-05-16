@@ -24,7 +24,7 @@ class ComparableCompany(UUIDMixin, TimestampMixin, Base):
     ticker: Mapped[str] = mapped_column(String(30), nullable=False)
     market: Mapped[str | None] = mapped_column(String(10))  # HK / A / US
     company_name: Mapped[str | None] = mapped_column(String(200))
-    industry_code: Mapped[str | None] = mapped_column(String(20))
+    industry_code: Mapped[str | None] = mapped_column(String(120))
     sub_industry: Mapped[str | None] = mapped_column(String(100))
 
     # Latest snapshot of valuation multiples for percentile screening.

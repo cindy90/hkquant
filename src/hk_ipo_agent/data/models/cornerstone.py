@@ -33,11 +33,11 @@ class CornerstoneInvestor(UUIDMixin, TimestampMixin, Base):
 
     __tablename__ = "cornerstone_investors"
 
-    name_zh: Mapped[str | None] = mapped_column(String(200))
-    name_en: Mapped[str | None] = mapped_column(String(200))
+    name_zh: Mapped[str | None] = mapped_column(String(500))
+    name_en: Mapped[str | None] = mapped_column(String(500))
     category: Mapped[str | None] = mapped_column(String(50))  # CornerstoneCategory value
-    parent_org: Mapped[str | None] = mapped_column(String(200))
-    ultimate_holder: Mapped[str | None] = mapped_column(String(200))
+    parent_org: Mapped[str | None] = mapped_column(String(300))
+    ultimate_holder: Mapped[str | None] = mapped_column(String(300))
     home_country: Mapped[str | None] = mapped_column(String(50))
     signal_strength_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
 

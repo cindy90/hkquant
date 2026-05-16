@@ -87,3 +87,5 @@ data/watchlist.json
 # --- New project spec working dir (local-only) ---
 # PROJECT_SPEC.md is the committed copy at repo root; the source folder stays local.
 new_project_spec/
+
+.claude/

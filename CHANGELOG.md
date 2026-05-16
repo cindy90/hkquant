@@ -7,6 +7,42 @@ The project follows the Phase-based versioning of `PROJECT_SPEC.md` §4.
 
 ---
 
+## [v0.2] — Phase 2 完成: 数据层 + NACS SQLite ETL (2026-05-16)
+
+### Added
+- **`src/hk_ipo_agent/data/repositories/`** (6 文件): `BaseRepository` + `IPOEventRepository` / `IPOPricingRepository` / `IPOPostMarketRepository` / `CornerstoneInvestorRepository` / `CornerstoneInvestmentRepository` / `ComparableCompanyRepository` / `SponsorRepository` / `ProspectusDocRepository` / `ProspectusExtractionRepository`。`BaseRepository.bulk_upsert()` 用 PostgreSQL `INSERT ... ON CONFLICT` 实现幂等批量插入
+- **`src/hk_ipo_agent/data/sources/ifind_client.py`**: 完整 iFinDPy SDK 异步包装；lazy import（无 iFinDPy 也可 import 类）+ 强制 `as_of_date` 防泄漏 + tenacity retry + token-bucket QPS 限流 + 4 个 endpoint（financials / ipo_history / comparable_companies / ah_premium）
+- **`src/hk_ipo_agent/data/sources/hkex_scraper.py`**: httpx 异步 HKEXnews 爬虫骨架；尊重 robots.txt + rate limit + 流式下载 PDF
+- **`src/hk_ipo_agent/data/builders/`** (5 文件): `HistoricalIPOLoader` / `CornerstoneProfileBuilder`（含 `cluster_report_for_ipo` 实现 ADR 0005 §2 Cluster Bonus 数据侧）/ `SponsorTrackBuilder`（24m 滚动 win rate）/ `ComparablePoolBuilder` / **`ThemeLoader`** (NEW，ADR 0005 §5 — 把 NACS `themes/` 5 个 JSON/CSV 拷贝到 `data/knowledge_base/themes/`)
+- **`scripts/migrate_sqlite_to_pg.py`** 完整实现（ADR 0005 §1）：UUID5 namespace 稳定映射 + 幂等 UPSERT + 7 张 SQLite 表 → PG + market_environment_cache JSON fixture 导出
+- **`tests/unit/data/`** (3 个新测试文件，22 测试): `test_etl_mappers.py`（UUID 稳定性 + 类型强制 + 映射逻辑）/ `test_no_lookahead.py`（5 测试覆盖 fiscal_year + period_end 双规则）/ `test_postmarket_consistency.py`（ADR 0007 §双写一致性）
+- **`tests/integration/test_db_repositories.py`** (9 测试): 端到端 CRUD 对 PG，含 NACS 语料完整性断言（399/2014/2560/1592 行） + Cluster Bonus 数据侧验证 + 优雅 skip 当 PG 不可达
+
+### Changed
+- **IPOEvent.industry_code / Company.industry_code / ComparableCompany.industry_code**: VARCHAR(20) → VARCHAR(120)（NACS gics_l2 最长 34 字符，留余量）
+- **CornerstoneInvestor.name_zh / name_en**: VARCHAR(200) → VARCHAR(500)；parent_org / ultimate_holder: 200 → 300（NACS 实际最长 429）
+- **ETL `ultimate_holder` 字段映射修正**: 原计划从 `cornerstone_master.parent_entity` 取，实际 NACS 该字段全空；改为从 `ipo_cornerstone_link.ultimate_holder` 按 cornerstone_id 投票聚合最频繁值。修正后 cluster bonus 检测在 50 IPO 样本中确认有效
+
+### Database
+- 2 个新 Alembic migrations:
+  - `20260516_0415_e82407eae19a_phase2_widen_industry_code` (industry_code: 20→120)
+  - `20260516_0417_7efd3de0efa7_phase2_widen_cornerstone_strings` (cornerstone names 200→500, parent_org/ultimate_holder 200→300)
+- PG corpus 实测填充：**399 IPO 事件 + 399 定价 + 398 后市表现 + 2,014 基石投资者（含 1,770 别名合并）+ 2,560 IPO-投资者关联 + 399 公司 + 1,592 财务快照 + 55 行 market env cache JSON fixture**
+
+### Verified (Phase 2 DONE)
+- ✅ `scripts/dev.py migrate` 等价 make migrate 成功 (3 个 alembic migrations all applied)
+- ✅ `scripts/migrate_sqlite_to_pg.py` 实跑 (幂等：再跑数字一致 + ON CONFLICT 不重复插入)
+- ✅ ruff strict + mypy --strict 全通过 (160 source files)
+- ✅ **151 tests pass** (142 unit + 9 integration) — 比 v0.1 的 90 testes +68%
+- ✅ ADR 0005 §Progress 中 5 个 Phase 2 条目全部勾选
+
+### Notes
+- ADR 0005 §1 表里给的旧数字 (1,314 cornerstones / 1,604 links / 1,051 aliases) 是 ADR 草稿期 NACS 早期快照；实际迁移时为 **2,014 / 2,560 / 1,770**。文档已就地更新
+- `iFind` 增量加载留待 Phase 2.1（需 iFinDPy 凭证就绪 + 同花顺 QuantAPI 客户端运行）
+- 5 张 NACS 表故意不迁移：`cornerstone_performance_asof` (Phase 7.5 重算) / `panel_snapshots` (替换为 prediction_snapshots) / `nacs_predictions` (NACS 特有) / `price_history` (空) / `sponsor_performance_asof` (空)
+
+---
+
 ## [v0.1] — Phase 1 完成: 核心基础设施 (2026-05-16)
 
 ### Added

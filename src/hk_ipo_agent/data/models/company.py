@@ -29,7 +29,7 @@ class Company(UUIDMixin, TimestampMixin, Base):
     hk_stock_code: Mapped[str | None] = mapped_column(String(10))
     a_share_code: Mapped[str | None] = mapped_column(String(10))
     us_adr_code: Mapped[str | None] = mapped_column(String(10))
-    industry_code: Mapped[str | None] = mapped_column(String(20))
+    industry_code: Mapped[str | None] = mapped_column(String(120))
     incorporation_country: Mapped[str | None] = mapped_column(String(50))
 
     snapshots: Mapped[list[FinancialSnapshotRow]] = relationship(
