@@ -7,6 +7,58 @@ The project follows the Phase-based versioning of `PROJECT_SPEC.md` §4.
 
 ---
 
+## [v0.7] — Phase 7 完成 MVP: 报告 + API + UI 集成层 (2026-05-16)
+
+### Added
+- **`src/hk_ipo_agent/reporting/`** 报告子系统：
+  - `templates/investment_memo.md.j2` — Jinja2 投决备忘录模板（v1.0）
+  - `report_builder.py` — `build_memo_markdown()` 从 PredictionSnapshot 渲染 markdown
+  - `charts.py` — matplotlib 3 个 chart（valuation_distribution / agent_scorecard / price_range）
+  - `exporters/pdf.py` — WeasyPrint PDF，缺失原生库时降级 HTML
+  - `exporters/docx.py` — python-docx 投决备忘录
+- **`src/hk_ipo_agent/api/`** 完整 FastAPI 应用：
+  - `main.py` — FastAPI app + lifespan（共享 LLMClient）+ 中间件挂载 + 31 个 routes
+  - `schemas.py` — API Request/Response Pydantic（独立于 common/schemas.py）
+  - `openapi.py` — OpenAPI 3.1 customization（BearerAuth + server URL）
+  - `dependencies.py` — re-export `require_role` / `require_permission` / `CurrentUser`
+  - `middleware/` 5 模块（CORS / request_id / rate_limit / error_handler 含 RFC 7807 / cost_guard）
+  - `auth/` 4 模块（JWT + RBAC + dependencies + audit_middleware，3 个 in-memory store）
+  - `routers/` 11 个实装 + 6 个 stub：
+    - **实装**：health / auth (login + me) / dashboard / ipos / snapshots (含 memo.md/.pdf/.docx) / analysis / prospectus / whatif / alerts / audit / chat
+    - **stub 501**：backtest (Phase 8) / drift / proposals / reviews / settings / system (Phase 7.5 / 9)
+  - `streaming/` SSE：event_types 注册表 + 内存 event_bus + connection_manager（15s 心跳） + GET /api/stream/events
+  - `websocket/` WS：in-memory chat store + chat_handler (Sonnet) + WS /api/ws/chat/{session_id}（token 查询参数认证）
+- **`src/hk_ipo_agent/synthesizer/whatif.py`** — What-If 引擎：接收 snapshot + modified_assumptions，重跑 valuation ensemble（含 regime_score / cluster / theme / liquidity_discount / peer multiples / mc_seed 覆盖），返回 delta_summary
+- **`docs/decisions/0011-phase7-scope-and-deferrals.md`** — ADR 0011：Phase 7 MVP 范围 + 延期项清单
+- **`OrchestratorSettings.system_version`** 已在 v0.6 加入，本期 stamp 到 health endpoint
+- **`tests/unit/api/`** 24 个新单测（auth / health+openapi / snapshots / whatif+others / streaming_bus）
+- **`tests/unit/reporting/`** 3 个新单测（markdown 渲染 / PDF bytes / DOCX bytes）
+
+### Verified (Phase 7 MVP DONE — ADR 0011)
+- ✅ FastAPI app 启动成功（31 routes 全部正确注册）
+- ✅ `/health` 不需要 auth；`X-Request-Id` header 自动注入
+- ✅ `/openapi.json` 返回 OpenAPI 3.1 schema 含 BearerAuth；UI 端 `openapi-typescript` 可消费
+- ✅ JWT login 流程：POST /api/auth/login → access_token → 受保护 endpoint 可访问
+- ✅ RBAC：admin token 可访问 /api/audit/logs；viewer token 触发 403
+- ✅ Snapshot list/detail/memo 三种格式（.md / .pdf / .docx）正确导出
+- ✅ What-If 引擎：成功 re-run ensemble 并返回 delta_summary
+- ✅ SSE event_bus 发布到订阅者（unregistered 类型 raise ValueError）
+- ✅ Phase 7 MVP 范围内的 stores（registry / audit / alerts / chat / event_bus / users）全部 in-memory，Phase 7.5 替换 PG
+- ✅ ruff strict + mypy strict 全通过（163 source files）
+- ✅ **449 unit tests pass**（v0.6 389 + 60 新增）
+
+### Notes
+- Phase 7 范围由 ADR 0011 定为 MVP：核心 10 router 实装 + 6 stub 返回 501
+- SSO providers（OKTA / AzureAD / Google）延期到 Phase 9；MVP 仅本地 JWT
+- DB-backed audit/users/chat/whatif 延期到 Phase 7.5（与 prediction_snapshot 一同替换 PG）
+- 真实 PDF 渲染需 WeasyPrint native libs（cairo/pango）；CI/test 环境降级返回 HTML bytes
+- 默认 dev 账号：`admin@hk.local / admin`、`reviewer@hk.local / reviewer`、`viewer@hk.local / viewer` —— **生产必须替换**
+- 招股书 PDF 走本地路径 `data/prospectuses/{id}.pdf`；签名 URL + S3 / R2 延期到 Phase 9
+- Redis Pub/Sub 多 worker 事件总线延期到 Phase 7.5
+- 工作量实际 ≈ 1 天（spec 估 3-4 天，因复用大量 Phase 1-6 schema + 沿用 in-memory 模式）
+
+---
+
 ## [v0.6] — Phase 6 完成: 编排 + Critic + Synthesizer + Snapshot (2026-05-16)
 
 ### Added

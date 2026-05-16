@@ -1,4 +1,22 @@
-"""Routes: /api/v1/backtest.
+"""backtest router — Phase 7.5/8 deferred per ADR 0011.
 
-TODO: implement per PROJECT_SPEC.md.
+Stubs return 501 Not Implemented so OpenAPI surface is complete.
+Real implementations land when their backing data layers are ready.
 """
+
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException, status
+
+router = APIRouter(prefix="/api/backtest", tags=["backtest"])
+
+
+@router.get("/")
+async def _not_implemented() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="backtest endpoints deferred to a later Phase per ADR 0011",
+    )
+
+
+__all__ = ("router",)

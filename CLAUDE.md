@@ -26,7 +26,7 @@
 | **Phase 4** 估值模型层 | **ADR 0005 §2**（Regime Gate 后置硬门） + **ADR 0008**（DCF agent 算法借鉴） + PROJECT_SPEC.md §3.7 | `valuation/ensemble.py` 必须实现 regime<0 → SKIP 截断；DCF/Comps 公式参考 DCF agent session-f.md/session-h.md（注释标明来源行号）；不复制代码 |
 | **Phase 5** Agent 层 | **ADR 0005 §2 + §5**（强制） + **ADR 0009**（港股研究agent 框架借鉴） + PROJECT_SPEC.md §7 | `policy_agent` 必须输出 `regime_score`；`cornerstone_signal_agent` 必须用 ultimate_holder 聚类；`sentiment_agent` 必须读 `themes/*.json`；3 个 prompts 的 `inherited_inputs` frontmatter 必须落地为实际工具调用；BaseAgent / ScoreCard / WorkflowExtras 参考港股研究agent (ADR 0009) |
 | **Phase 6** 编排 + Critic + Synthesizer | PROJECT_SPEC.md §8 + **ADR 0010** | LangGraph 主图必须保证 `synthesize → create_snapshot → report` 顺序；辩论 Jaccard 早停（≤3 轮）；Devil 元层质疑；HITL 默认 bypass（生产 env 强制开）；Phase 6 in-memory snapshot，Phase 7.5 替换 PG |
-| **Phase 7** 报告 + API + UI 集成层 | PROJECT_SPEC.md §16 全章（13 小节） | OpenAPI / SSE / WS / RBAC / 审计 / What-If / PDF 服务全部落地 |
+| **Phase 7** 报告 + API + UI 集成层 | PROJECT_SPEC.md §16 全章 + **ADR 0011** | MVP 实施：10 核心 router + middleware + auth (本地 JWT，无 SSO) + SSE/WS 骨架 + reporting + What-If；OpenAPI 3.1 完整可被 UI 消费；reviews/proposals/drift/backtest 延 Phase 7.5/8 |
 | **Phase 7.5** 预测档案 + 生命周期 | PROJECT_SPEC.md §3.11 / §3.11.1 / §3.11.2 + §10 | snapshot immutability 必须 DB trigger 强制；状态机三重验证 |
 | **Phase 8** 回测与校准 | **ADR 0005 §3**（强制） + PROJECT_SPEC.md §3.9 | `backtest/metrics.py` 实现 IC / L-S / t-stat；`calibration.py` 用 v8 5 轮迭代基线作单调性约束；`regime_detection.py` 用 `market_environment_cache` 初始训练集 |
 | **Phase 9** 端到端验证 | **ADR 0005 §Progress（归档段）** | 把 `themes/` / `data/nacs_real.db` / NACS 顶层脚本归档到 `legacy/`；勾选 ADR 0005 Progress 全部条目 |
@@ -185,10 +185,8 @@
 - [x] Phase 4 — 估值模型层（DONE：10 个 valuation 模块 + Regime Gate 硬门 + 58 unit tests + 3 DONE-condition smoke + 265 全仓单测通过；ADR 0008 §Progress Phase 4 两项已勾）
 - [x] Phase 5 — Agent 层（DONE：7 agent + tools + WorkflowExtras + 55 unit tests + 3 DONE-condition smoke + 320 全仓单测通过；ADR 0009 §Progress 7 项 Phase 5 条目全勾；NACS 三件套 regime_score/cluster_bonus/theme_heat 全部接入）
 - [x] Phase 6 — 编排 + Critic + Synthesizer（DONE：LangGraph 主图 + Bull-Bear-Devil 辩论 + Jaccard 早停 + Opus synthesizer + create_snapshot 强制 + 69 新单测 + 389 全仓单测通过；ADR 0010 §Progress Phase 6 全勾）
-- [ ] Phase 7 — 报告 + API + UI 集成层（v1.2.1） **← 当前**
-- [ ] Phase 6 — 编排 + Critic + Synthesizer
-- [ ] Phase 7 — 报告 + API + UI 集成层（v1.2.1）
-- [ ] Phase 7.5 — 预测档案 + 生命周期追踪
+- [x] Phase 7 — 报告 + API + UI 集成层 MVP（DONE：reporting (memo + PDF/DOCX) + FastAPI 31 routes + JWT/RBAC + middleware + SSE + WS chat + What-If + 27 新单测 + 449 全仓单测通过；ADR 0011 §Progress Phase 7 全勾；reviews/proposals/drift/backtest 延 Phase 7.5/8；SSO 延 Phase 9）
+- [ ] Phase 7.5 — 预测档案 + 生命周期追踪 **← 当前**
 - [ ] Phase 8 — 回测与校准
 - [ ] Phase 9 — 端到端验证
 - [ ] Phase 10 — 持续学习闭环

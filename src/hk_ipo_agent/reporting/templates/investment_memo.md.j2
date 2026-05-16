@@ -1,4 +1,99 @@
-{# Investment Memo template. TODO: author in Phase 7. #}
-# {{ company_name_zh }} ({{ stock_code }}) — Investment Memo
+{# Investment Memo template (Phase 7 v1.0). Rendered by report_builder.build_memo(). #}
+# {{ company_name_zh }}{% if company_name_en %} ({{ company_name_en }}){% endif %} — Investment Memo
 
-TODO
+- **股票代码 (HK)**: {{ stock_code or "(待上市)" }}
+- **上市类型**: {{ listing_type }}
+- **行业**: {{ industry_code }} — {{ industry_description }}
+- **分析时点 (as_of)**: {{ as_of_date }}
+- **快照 ID**: `{{ snapshot_id }}`
+- **系统版本**: `{{ system_version }}`
+
+---
+
+## 1. 决策摘要
+
+- **决策类型**: **{{ decision_type }}**
+- **置信度**: {{ confidence_pct }}%
+- **建议配置**: {% if allocation_pct %}{{ allocation_pct }}%{% else %}—{% endif %}
+- **价格区间 (RMB)**: low={{ price_range.low }} / fair={{ price_range.fair }} / high={{ price_range.high }}
+- **综合得分**: {{ scorecard.overall }} / 100
+
+### 支持理由
+{% for r in key_reasons_for %}
+- {{ r }}
+{% else %}
+- （无）
+{% endfor %}
+
+### 反对理由
+{% for r in key_reasons_against %}
+- {{ r }}
+{% else %}
+- （无）
+{% endfor %}
+
+---
+
+## 2. NACS 信号
+
+| 信号 | 数值 | 解读 |
+|---|---|---|
+| Regime Gate | {{ regime_score if regime_score is not none else "N/A" }} | {{ regime_interpretation }} |
+| Cluster Bonus | {{ cluster_bonus_multiplier or 1.0 }}x | {{ cluster_groups | length }} 个多成员 cluster |
+| Theme Heat | {{ theme_heat if theme_heat is not none else "N/A" }} | 主题: {{ theme_matched or "(无匹配)" }} |
+| AI Gilding | {{ "是" if ai_gilding_flag else "否" }} | {% if ai_gilding_flag %}AI 收入占比 < 10%，建议 × 0.85 折扣{% endif %} |
+
+---
+
+## 3. 7 个 Agent 评分
+
+{% for role, score in agent_overalls.items() %}
+- **{{ role }}**: {{ score }}
+{%- endfor %}
+
+---
+
+## 4. 估值集合
+
+- **applicable 模型**: {{ applicable_model_names | join(", ") }}
+- **权重**: {{ weights_used }}
+- **ensemble P25/P50/P75 (RMB)**: {{ ens_p25 }} / {{ ens_p50 }} / {{ ens_p75 }}
+- **notes**: {{ ensemble_notes | join("; ") }}
+
+---
+
+## 5. 辩论摘要 (Bull-Bear-Devil)
+
+- **轮数**: {{ debate_rounds_count }}
+- **共识**: {{ debate_consensus }}
+
+{% if unresolved_issues %}
+### 未解决问题
+{% for issue in unresolved_issues %}
+- {{ issue }}
+{% endfor %}
+{% endif %}
+
+---
+
+## 6. 监控触发规则
+
+{% for rule in trigger_rules %}
+- **[{{ rule.severity }}]** `{{ rule.condition }}` → {{ rule.action }}
+{%- endfor %}
+
+---
+
+## 7. 历史对照 (Cross-Check)
+
+{% for note in cross_check_notes %}
+- {{ note }}
+{% else %}
+- （无可用历史样本）
+{% endfor %}
+
+---
+
+*生成时间: {{ generated_at }}*
+*总成本: USD {{ total_cost_usd }}*
+*总耗时: {{ runtime_seconds }} 秒*
