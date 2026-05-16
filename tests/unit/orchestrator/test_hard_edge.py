@@ -129,13 +129,13 @@ async def test_create_snapshot_node_raises_on_registry_failure(monkeypatch) -> N
         async def get_snapshot(self, snapshot_id):  # type: ignore[no-untyped-def]
             raise KeyError(snapshot_id)
 
-        async def list_snapshots(self, limit: int = 100):  # noqa: ARG002
+        async def list_snapshots(self, limit: int = 100):
             return []
 
-        async def list_active_predictions(self, as_of_date=None, window_days=360):  # noqa: ARG002
+        async def list_active_predictions(self, as_of_date=None, window_days=360):
             return []
 
-        async def attach_review(self, snapshot_id, review):  # type: ignore[no-untyped-def]  # noqa: ARG002
+        async def attach_review(self, snapshot_id, review):  # type: ignore[no-untyped-def]
             return uuid4()
 
     set_registry(_FailingRegistry())  # type: ignore[arg-type]

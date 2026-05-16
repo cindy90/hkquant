@@ -24,12 +24,11 @@ from decimal import Decimal
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from hk_ipo_agent.common.enums import (
     AdjustmentStatus,
     AgentRole,
-    AlertLevel,
     DecisionType,
     ListingType,
 )
@@ -47,9 +46,10 @@ from hk_ipo_agent.common.schemas import (
     ValuationDistribution,
     ValuationEnsembleOutput,
 )
-from sqlalchemy.ext.asyncio import create_async_engine
 from hk_ipo_agent.common.settings import get_settings
-from hk_ipo_agent.data.database import async_session_factory  # noqa: F401  (kept for prod-style import)
+from hk_ipo_agent.data.database import (
+    async_session_factory,
+)
 from hk_ipo_agent.prediction_registry.registry import (
     InMemoryPredictionRegistry,
     PGPredictionRegistry,

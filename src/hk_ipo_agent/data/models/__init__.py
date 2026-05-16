@@ -45,7 +45,7 @@ from .ui_support import (
 )
 from .user import UserAccountRow, UserRoleRow
 
-__all__ = (
+__all__ = (  # noqa: RUF022  — grouped by schema version, not alphabetical
     # base
     "NAMING_CONVENTION",
     "Base",

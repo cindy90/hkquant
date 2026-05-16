@@ -191,7 +191,7 @@ def make_nodes(
         logger = get_logger(__name__)
         try:
             await registry.create_snapshot(snapshot)
-        except Exception as exc:  # noqa: BLE001 — re-wrapped below
+        except Exception as exc:
             logger.error(
                 "snapshot_creation_failed",
                 ipo_id=str(state["ipo_id"]),
