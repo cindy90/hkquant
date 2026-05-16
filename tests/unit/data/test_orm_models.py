@@ -51,20 +51,30 @@ def test_metadata_contains_all_v10_tables() -> None:
     assert not missing, f"Missing tables: {missing}"
 
 
-def test_no_v11_tables_yet() -> None:
-    """v1.1 / v1.2 / v1.2.1 ORM tables MUST NOT appear in Phase 1 (ADR 0006)."""
+def test_v11_v12_v121_tables_declared() -> None:
+    """v1.1 / v1.2 / v1.2.1 ORM tables land in Phase 7.5a (ADR 0012).
+
+    Was previously a "must NOT appear in Phase 1" guard from ADR 0006;
+    flipped to a positive presence assertion now that Phase 7.5a
+    declares the 19 new tables (prediction registry + lifecycle +
+    operations + UI integration).
+    """
     actual = set(metadata.tables)
-    forbidden = {
+    expected_post_phase_7_5a = {
+        # v1.1 — prediction registry (5)
         "prediction_snapshots",
         "prediction_outcomes",
         "post_ipo_events",
         "prediction_reviews",
+        "config_versions",
+        # v1.2 — lifecycle + operations (6)
         "ipo_lifecycle_states",
         "ipo_state_transitions",
         "code_mappings",
         "scheduler_runs",
         "alerts",
         "earnings_comparisons",
+        # v1.2.1 — UI integration (8)
         "user_accounts",
         "user_roles",
         "audit_logs",
@@ -73,10 +83,9 @@ def test_no_v11_tables_yet() -> None:
         "whatif_calculations",
         "realtime_events",
         "api_rate_limit_state",
-        "config_versions",
     }
-    leaked = forbidden & actual
-    assert not leaked, f"Phase 1 must not yet declare these tables: {leaked}"
+    missing = expected_post_phase_7_5a - actual
+    assert not missing, f"Phase 7.5a must declare these tables: {missing}"
 
 
 def test_naming_convention_applied() -> None:

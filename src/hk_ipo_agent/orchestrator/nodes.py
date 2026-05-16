@@ -28,7 +28,9 @@ from ..agents import (
     ValuationAgent,
 )
 from ..agents.workflow_extras import WorkflowExtras
+from ..common.exceptions import SnapshotCreationFailed
 from ..common.llm_client import LLMClient
+from ..common.logging import get_logger
 from ..common.schemas import (
     AgentOutput,
     DebateOutput,
@@ -164,7 +166,14 @@ def make_nodes(
         return {"decision": decision}
 
     async def create_snapshot_node(state: AnalysisState) -> dict[str, Any]:
-        """CLAUDE.md HARD constraint: snapshot MUST be created before report."""
+        """CLAUDE.md HARD constraint: snapshot MUST be created before report.
+
+        ADR 0012 (Phase 7.5a) hard edge: persistence failure raises
+        ``SnapshotCreationFailed`` so the LangGraph invocation propagates
+        the error rather than silently advancing to ``report``. The HITL
+        / report branches downstream are unreachable without a written
+        snapshot.
+        """
         extraction: ProspectusExtraction = state["extraction"]
         ipo_uuid = uuid5(NAMESPACE_URL, f"hkipo:{state['ipo_id']}")
         snapshot = build_snapshot(
@@ -179,7 +188,21 @@ def make_nodes(
             runtime_seconds=(state.get("runtime_meta") or {}).get("runtime_seconds", 0.0),
         )
         registry = get_registry()
-        await registry.create_snapshot(snapshot)
+        logger = get_logger(__name__)
+        try:
+            await registry.create_snapshot(snapshot)
+        except Exception as exc:  # noqa: BLE001 — re-wrapped below
+            logger.error(
+                "snapshot_creation_failed",
+                ipo_id=str(state["ipo_id"]),
+                snapshot_id=str(snapshot.id),
+                input_data_hash=snapshot.input_data_hash,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
+            raise SnapshotCreationFailed(
+                f"Failed to persist snapshot {snapshot.id} for ipo_id={state['ipo_id']}: {exc}"
+            ) from exc
         return {"snapshot_id": snapshot.id}
 
     # ------------------------------------------------------------------ report (terminal)

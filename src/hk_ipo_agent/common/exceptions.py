@@ -168,6 +168,21 @@ class SnapshotImmutabilityError(PredictionRegistryError):
     default_message = "prediction_snapshots is immutable; use prediction_reviews for notes"
 
 
+class SnapshotCreationFailed(PredictionRegistryError):
+    """Snapshot persistence failed inside the orchestrator hard edge.
+
+    Per ADR 0012 (Phase 7.5a) the orchestrator must propagate this so the
+    graph fails rather than silently advancing to ``report`` without an
+    audit trail. CLAUDE.md prediction-lifecycle constraint: "any complete
+    analysis MUST create a snapshot before emitting a decision."
+    """
+
+    default_message = (
+        "Snapshot creation failed in orchestrator hard edge "
+        "(synthesize → create_snapshot → report)"
+    )
+
+
 # ============================================================================
 # IPO lifecycle state machine (v1.2)
 # ============================================================================
