@@ -76,6 +76,8 @@
 
 ### Neutral
 - 现行 DCF agent **没有** Regime Gate / Pre-IPO Anchor / AH Premium / Milestones / Monte Carlo — 这些 spec 必须项纯由 Phase 4 自建，与 DCF agent 无冲突也无借鉴
+- **`ah_premium.py` Phase 4 采用经验分布采样替代 spec §3.7 的 6 因子回归**：AH 双重上市新股历史样本极少（<30 只），多因子回归在小样本下极易过拟合。Phase 4 先用 `FromArray(ah_premium_history_pct)` 经验采样（等效于非参数 bootstrap），fallback 为 `Triangular(0.15, 0.30, 0.40)` 行业基线。Phase 8 calibration 阶段待样本积累 ≥50 + iFind AH 溢价指数 ready 后，升级为 spec 要求的多因子回归（Beta差 / 流通市值差 / 流动性差 / 股息率 / 行业 / AH溢价指数）
+- **`comparable.py` Phase 4 暂无显式流动性折价调整**：spec §3.7 要求"跨市场可比带流动性折价"；Phase 4 接受任意市场的 peer_multiples（跨市场能力由 data layer 组装），但未对低流动性标的做额外折价。Phase 8 校准时将根据 bid-ask spread / 成交额 / 自由流通比率计算折价系数并注入 MC 假设
 
 ## Progress
 

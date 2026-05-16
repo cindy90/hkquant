@@ -18,6 +18,7 @@
 | [0006](0006-phased-orm-rollout.md) | Phase 1 ORM 范围决策 — v1.0 基础表本期落地，v1.1/v1.2/v1.2.1 表延后 | **Accepted** | **Phase 1, 7, 7.5** | ORM 切片由 Phase 1 / 7 / 7.5 分担落地；schemas.py 全量；Alembic migration 边界清晰 |
 | [0007](0007-ipo-postmarket-jsonb-extension.md) | IPOPostMarket 扩展 JSONB 字段对齐 CHECKPOINT_DAYS | **Accepted** | **Phase 1, 2, 7.5, 8** | spec §5 标量列保留 + JSONB 全 checkpoint 覆盖，双写约束 |
 | [0008](0008-dcf-agent-dual-track-integration.md) | DCF agent 联动 — 算法借鉴 + 双轨保留 | **Accepted** | **Phase 2, 4, 7** | Phase 4 按 spec 自建，公式参考 DCF agent；iFind catalog 合并到 Phase 2；Phase 7 加 Excel 附件 adapter |
+| [0009](0009-research-agent-framework-borrowing.md) | 港股研究agent 框架借鉴 — 模式参考 + 双轨保留 | **Accepted** | **Phase 5** | BaseAgent / ScoreCard / WorkflowExtras 模式借鉴；NACS 三件套必须 Phase 5 自建；7 agent 调研维度参考 |
 
 ---
 
@@ -32,7 +33,7 @@
 | Phase 2 数据层 | **★ 0005 §1 + §4** | **是** — `scripts/migrate_sqlite_to_pg.py` ETL + `tests/unit/data/test_no_lookahead.py` |
 | Phase 3 招股书处理 | 0003 / 0004 | 否 |
 | Phase 4 估值模型层 | **★ 0005 §2** / **★ 0008** | **是** — ensemble.py regime<0 → SKIP 硬门；DCF/Comps 公式参考 DCF agent (ADR 0008) |
-| Phase 5 Agent 层 | **★ 0005 §2 + §5** | **是** — 3 个 agent 必须接入 NACS 信号（Regime / Cluster Bonus / Theme Heat） |
+| Phase 5 Agent 层 | **★ 0005 §2 + §5** / **★ 0009** | **是** — 3 个 agent 必须接入 NACS 信号（Regime / Cluster Bonus / Theme Heat）；BaseAgent / ScoreCard / WorkflowExtras 参考港股研究agent (ADR 0009) |
 | Phase 6 编排 + Critic + Synthesizer | 0001 / 0002 | 否 |
 | Phase 7 报告 + API + UI 集成层 | **0008** | **是**（少量）— reporting/exporters/ 可加 dcf_excel.py adapter 调 DCF agent skill |
 | Phase 7.5 预测档案 + 生命周期 | — | 否（spec §3.11 自包含） |

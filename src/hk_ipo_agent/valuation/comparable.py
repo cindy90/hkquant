@@ -127,6 +127,14 @@ class ComparableValuation(ValuationModel):
             return np.mean(np.stack(results, axis=0), axis=0)  # type: ignore[no-any-return]
 
         samples = run_mc(assumptions, payoff, seed=market_data.extra.get("mc_seed"))
+
+        # Liquidity discount (spec §3.7: 跨市场可比带流动性折价调整).
+        # Phase 8 calibration will inject an empirical value from bid-ask spread /
+        # turnover ratio / free-float ratio. Until then defaults to 0.0 (no discount).
+        liquidity_discount: float = float(market_data.extra.get("liquidity_discount", 0.0))
+        if liquidity_discount > 0.0:
+            samples = samples * (1.0 - liquidity_discount)
+
         dist = distribution_from_samples(samples)
 
         key_assumptions = {
@@ -139,6 +147,7 @@ class ComparableValuation(ValuationModel):
             if (pe_clean.size > 0 and net_profit > 0.0)
             else None,
             "outlier_filter": f"{_MULTIPLE_LOW} < m < {_MULTIPLE_HIGH}",
+            "liquidity_discount": liquidity_discount,
         }
 
         return SingleModelValuation(

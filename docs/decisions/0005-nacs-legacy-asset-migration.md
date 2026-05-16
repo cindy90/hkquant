@@ -158,7 +158,7 @@ NACS 87 单元测试中，绝大多数耦合 NACS 模型代码，无法迁移。
 - [x] **Phase 2**：`data/builders/cornerstone_profile_builder.py` 复用 §1 中基石画像作为初始种子（**实际 2,014 投资者**，不是 ADR 初稿写的 1,314；coverage_stats + cluster_report_for_ipo 已在 PG 验证）
 - [x] **Phase 2**：`data/builders/theme_loader.py` 把 `themes/` 拷贝到 `data/knowledge_base/themes/`（NEW，spec §2 未列）
 - [x] **Phase 2**：`tests/unit/data/test_no_lookahead.py` 迁移完成（5 测试，覆盖 fiscal_year 与 period_end 两种规则）
-- [ ] **Phase 4**：`valuation/ensemble.py` 实现 Regime Gate post-adjustment（regime<0 → 截断 SKIP）
+- [x] **Phase 4**：`valuation/ensemble.py` 实现 Regime Gate post-adjustment（regime<0 → 截断 SKIP）
 - [ ] **Phase 5**：`agents/policy_agent.py` + `prompts/agents/policy.md` 接入 Regime Gate
 - [ ] **Phase 5**：`agents/cornerstone_signal_agent.py` + `prompts/agents/cornerstone_signal.md` 接入 Cluster Bonus
 - [ ] **Phase 5**：`agents/sentiment_agent.py` + `prompts/agents/sentiment.md` 接入 Theme Heat + AI Gilding

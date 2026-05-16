@@ -7,6 +7,55 @@ The project follows the Phase-based versioning of `PROJECT_SPEC.md` §4.
 
 ---
 
+## [v0.5] — Phase 5 完成: Agent 层 (7 expert agents + NACS 三件套 + tools) (2026-05-16)
+
+### Added
+- **`src/hk_ipo_agent/agents/`** 7 个 expert agent 全部实装（async + LangGraph-ready + 强制 citation + 强制 ScoreCard Pydantic 输出）：
+  - `base.py` — `BaseAgent` ABC + `AgentContext` 跨 agent 上下文 + frontmatter-aware `load_prompt()` + LLM 调用 wrapper（cost / runtime 自动归集）
+  - `workflow_extras.py` — `WorkflowExtras` 强类型容器，**首批 NACS 字段**: `regime_score` / `cluster_bonus_multiplier` / `cluster_groups` / `theme_heat` / `ai_gilding_flag`
+  - `scoring.py` — `BaseScoreCard` + 7 个子类（Fundamental / Industry / Valuation / Policy / Liquidity / Cornerstone / Sentiment）+ `extract_json_block()` / `schema_instruction()` 助手
+  - `policy_agent.py` — **NACS Regime Gate（ADR 0005 §2）**: 确定性算 median 30d return of HK IPOs in [pricing-120d, pricing-30d]，写入 `ctx.extras.regime_score`；负值触发估值 ensemble 硬门 SKIP
+  - `cornerstone_signal_agent.py` — **NACS Cluster Bonus（ADR 0005 §2）**: ultimate_holder 聚类，≥2 同源 → 1.10x / ≥2 cluster → 1.20x multiplier
+  - `sentiment_agent.py` — **NACS Theme Heat + AI Gilding（ADR 0005 §5）**: 读 `themes/heat_today.json` + `theme_definitions.json` + `ai_revenue_manual.json`；AI 占比 <10% 但声称 AI 触发 narrative_risk ≥70
+  - `fundamental_agent.py` — 业务质量 / 财务健康 / 治理三维；确定性原语含 revenue CAGR / gross margin / top-1 客户集中度
+  - `industry_agent.py` — 竞争位置 / 增长前景 / peer 估值；含 peer multiple summary（p25/p50/p75）
+  - `valuation_agent.py` — 驱动 Phase 4 `run_ensemble()` 全 6+ 模型（含 industry 特化），把 `ValuationEnsembleOutput` stash 到 `ctx.extras.misc['valuation_output']`
+  - `liquidity_agent.py` — 流通量 / 锁定期 / 港股通三维；按 listing_type 启发式 tier southbound eligibility
+- **`src/hk_ipo_agent/agents/tools/`** 4 个 agent-injectable tool：
+  - `prospectus_tool.py` — 包 `prospectus.qa.ProspectusQA`（citation 强制由其本身 raise）
+  - `ifind_tool.py` — 包 `IFindClient` 的 4 个 production-ready endpoint（ipo_history / macro / valuation_snapshot / ah_premium_history）
+  - `kb_tool.py` — `data/knowledge_base/` + `themes/` legacy 双路径读 themes JSON / market_env / AI revenue manual + `match_themes()` 关键词匹配
+  - `web_tool.py` — Phase 5 stub（is_stub=True）；真实 provider 待 Phase 9
+- **`prompts/agents/`** 7 个 prompts v1.0 全部补齐 frontmatter（role / version / inherited_inputs / score_card）+ body
+- **`docs/decisions/0009-research-agent-framework-borrowing.md`** — ADR 0009 港股研究agent 双轨借鉴方案
+- **`tests/unit/agents/`** 55 新单测：
+  - 6× workflow_extras（dict-style API + reserved keys）
+  - 9× scoring（json block + schema_instruction + 7 ScoreCard 校验）
+  - 3× base（frontmatter parser + AgentContext）
+  - 6× policy_agent（regime override + iFind aggregation + LLM stub）
+  - 8× cornerstone_agent（clustering ladder + agent run）
+  - 8× sentiment_agent（AI gilding + theme match + agent run）
+  - 12× other_agents（fundamental / industry / valuation / liquidity 各原语 + run）
+  - **3× DONE-condition smoke**（7 agents fanout + asyncio.gather + NACS 信号回填）
+
+### Verified (Phase 5 DONE)
+- ✅ 7 个 expert agent 通过 `asyncio.gather` 并发执行，每个产 `AgentOutput`（含 `scores` / `key_findings` / `data_sources_used` / `cost_usd` / `runtime_seconds`）
+- ✅ ADR 0005 §2 + §5 三件套全部回填到 `ctx.extras`：`policy_agent` 写 `regime_score`、`cornerstone_signal_agent` 写 `cluster_bonus_multiplier`、`sentiment_agent` 写 `theme_heat` + `ai_gilding_flag`
+- ✅ 每个 agent 都有"deterministic primitive + LLM narrative + ScoreCard 覆盖"三段式：核心信号代码强制覆盖（不信任 LLM），叙事由 LLM 生成
+- ✅ Citation 强制：所有 `Finding` 至少 1 个 page；prospectus_tool 沿用 Phase 3 `CitationRequiredError`
+- ✅ Frontmatter parser 支持 inline `# comment` 剥离
+- ✅ ruff strict + mypy strict 全通过（agents/ 16 files + 全仓 162 files）
+- ✅ **320 unit tests pass**（v0.4 265 + 55 新增）
+
+### Notes
+- BaseAgent 模式参考港股研究agent 但改造为 async + 强制 Pydantic（ADR 0009 §1）；不复制代码
+- WorkflowExtras 直接借鉴港股研究agent extras.py，扩展加入 4 个 NACS 字段
+- 多 provider 路由 / chromaDB / hkquant SQLite 全部**未**移植（spec 单 Claude / Qdrant / PG）
+- LangGraph 主图编排是 Phase 6 工作；Phase 5 提供独立可调用 agent，便于 Phase 6 fanout
+- KB 双路径读取（`data/knowledge_base/themes/` 优先，`themes/` legacy fallback）— Phase 9 归档时再迁移
+
+---
+
 ## [v0.4] — Phase 4 完成: 估值模型层 (5 single + 2 industry + ensemble + Regime Gate) (2026-05-16)
 
 ### Added

@@ -12,6 +12,14 @@ Negative values mean H trades at a premium to A.
 If ``ah_premium_history_pct`` is empty, fall back to industry baseline
 ``Triangular(low=0.15, mode=0.30, high=0.40)`` reflecting the common
 H-discount-vs-A range observed 2020-2026.
+
+Phase 8 upgrade path (see ADR 0008 Neutral section):
+    Spec §3.7 requires a multi-factor regression with at least 6 factors
+    (Beta差 / 流通市值差 / 流动性差 / 股息率 / 行业 / AH溢价指数当时点位).
+    Phase 4 uses empirical sampling because AH new-listing sample <30 makes
+    regression prone to overfitting. Phase 8 calibration will upgrade to the
+    full regression once sample size >= 50 and iFind AH premium index data
+    is available via ``data/sources/ifind_client.py``.
 """
 
 from __future__ import annotations
