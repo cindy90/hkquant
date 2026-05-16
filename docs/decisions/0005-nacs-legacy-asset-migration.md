@@ -159,9 +159,9 @@ NACS 87 单元测试中，绝大多数耦合 NACS 模型代码，无法迁移。
 - [x] **Phase 2**：`data/builders/theme_loader.py` 把 `themes/` 拷贝到 `data/knowledge_base/themes/`（NEW，spec §2 未列）
 - [x] **Phase 2**：`tests/unit/data/test_no_lookahead.py` 迁移完成（5 测试，覆盖 fiscal_year 与 period_end 两种规则）
 - [x] **Phase 4**：`valuation/ensemble.py` 实现 Regime Gate post-adjustment（regime<0 → 截断 SKIP）
-- [ ] **Phase 5**：`agents/policy_agent.py` + `prompts/agents/policy.md` 接入 Regime Gate
-- [ ] **Phase 5**：`agents/cornerstone_signal_agent.py` + `prompts/agents/cornerstone_signal.md` 接入 Cluster Bonus
-- [ ] **Phase 5**：`agents/sentiment_agent.py` + `prompts/agents/sentiment.md` 接入 Theme Heat + AI Gilding
+- [x] **Phase 5**：`agents/policy_agent.py` + `prompts/agents/policy.md` 接入 Regime Gate
+- [x] **Phase 5**：`agents/cornerstone_signal_agent.py` + `prompts/agents/cornerstone_signal.md` 接入 Cluster Bonus
+- [x] **Phase 5**：`agents/sentiment_agent.py` + `prompts/agents/sentiment.md` 接入 Theme Heat + AI Gilding
 - [ ] **Phase 8**：`backtest/metrics.py` 实现 IC / L-S / t-stat 三件套
 - [ ] **Phase 8**：`backtest/calibration.py` 用 v8 迭代基线作为单调性约束
 - [ ] **Phase 8**：`backtest/regime_detection.py` 用 market_environment_cache 作为初始训练集

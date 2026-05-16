@@ -129,6 +129,26 @@ class SchedulerSettings(BaseSettings):
     timezone: str = "Asia/Hong_Kong"
 
 
+class OrchestratorSettings(BaseSettings):
+    """Phase 6 LangGraph orchestrator settings. See ADR 0010."""
+
+    enable_hitl: bool = False
+    """Human-in-the-loop: if True, ``synthesize`` interrupts and waits for
+    human confirmation before proceeding to ``report``. Production env MUST
+    set this to True. Dev/test/CI default False."""
+
+    debate_max_rounds: int = 3
+    """Maximum number of Bull-Bear-Devil rounds. Earlier convergence via
+    Jaccard similarity threshold ends the loop sooner (ADR 0010 §1)."""
+
+    debate_jaccard_threshold: float = 0.6
+    """Bull/Bear token-set Jaccard similarity ≥ this → debate converges."""
+
+    system_version: str = "0.6.0"
+    """System version stamped onto every prediction snapshot. Bump on any
+    config / prompt / model change that affects decision output."""
+
+
 # ---------------------------------------------------------------------------
 # Top-level settings
 # ---------------------------------------------------------------------------
@@ -168,6 +188,7 @@ class Settings(BaseSettings):
     api: APISettings = Field(default_factory=APISettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     scheduler: SchedulerSettings = Field(default_factory=SchedulerSettings)
+    orchestrator: OrchestratorSettings = Field(default_factory=OrchestratorSettings)
 
     @classmethod
     def from_yaml_and_env(cls) -> Settings:

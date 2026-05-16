@@ -7,6 +7,62 @@ The project follows the Phase-based versioning of `PROJECT_SPEC.md` §4.
 
 ---
 
+## [v0.6] — Phase 6 完成: 编排 + Critic + Synthesizer + Snapshot (2026-05-16)
+
+### Added
+- **`src/hk_ipo_agent/orchestrator/`** LangGraph 主图 6 个模块：
+  - `states.py` — `AnalysisState` TypedDict + `operator.or_` reducer (agent_outputs) + 自定义 `_merge_extras` reducer (NACS 信号字段)
+  - `nodes.py` — 13 node 工厂 (`make_nodes()`)：6 个 NACS-aware fanout agent + valuation + debate + cross_check + synthesize + create_snapshot + hitl_wait + report
+  - `edges.py` — 3 个 conditional router (`route_after_snapshot` / `route_after_hitl` / `route_after_validation`)
+  - `graph.py` — `build_main_graph()` 主图组装；START → 6 parallel agents → valuation → debate → cross_check → synthesize → create_snapshot → (hitl?) → report
+  - `hitl.py` — `approve()` / `reject()` / `hitl_enabled()` 人工审核接口；默认 bypass (ADR 0010 §4)
+  - `checkpoint.py` — `get_checkpointer()` 返回 LangGraph `MemorySaver`（Phase 7 替换 PostgresSaver）
+- **`src/hk_ipo_agent/critic/`** 辩论 + 历史对照 5 个模块：
+  - `bull.py` / `bear.py` — Bull-Bear 论点生成（Sonnet）；Bear 必读 Regime Gate 上下文
+  - `devils_advocate.py` — 元层质询，**不站队**（ADR 0010 §2）
+  - `debate_graph.py` — **Jaccard 早停 + 3 轮硬上限**：char-level CJK-friendly tokenizer；当 `jaccard(bull, bear) ≥ 0.6` 触发收敛
+  - `cross_checker.py` — 历史样本对照（Phase 6 确定性，Phase 8 升级 LLM）
+- **`src/hk_ipo_agent/synthesizer/`** Opus 决策合成 5 个模块：
+  - `scoring.py` — `build_scorecard()` 综合 7 agent overall + NACS 修正（regime ±20 / cluster +5 / gilding -10 / theme heat ±5）
+  - `decision_engine.py` — 硬规则 + 软阈值：`regime_score < 0` / no_models / `ai_gilding + narrative_risk ≥ 70` → SKIP；overall ≥ 75 / 60 / 45 分别 PARTICIPATE / PARTIAL / WAIT
+  - `price_range.py` — 从 ensemble 派生 (low, fair, high)；regime gate 防御层强制清零；borderline regime ±10% 加宽
+  - `trigger_rules.py` — 监控触发规则；gilding / regime-skip 各有专属 rule
+  - `synthesizer.py` — Opus 4.7 顶层合成 + Pydantic constrained JSON 输出；LLM 不能覆盖硬规则
+- **`src/hk_ipo_agent/prediction_registry/`** Phase 6 最小集 2 模块：
+  - `snapshot.py` — `build_snapshot()` + `compute_input_hash()` (SHA-256 over 5 artifacts) + `verify_snapshot()` 重读完整性
+  - `registry.py` — `PredictionRegistry` in-memory append-only store + 进程级 singleton (`get_registry()`)；Phase 7.5 替换 PostgreSQL
+- **`docs/decisions/0010-debate-and-snapshot-design.md`** — ADR 0010：辩论 Jaccard 早停 + Devil 元层质疑 + Phase 6 in-memory snapshot + HITL bypass + `operator.or_` reducer
+- **`prompts/debate/{bull,bear,devils_advocate,cross_checker}.md`** + **`prompts/system/{synthesizer,orchestrator}.md`** v1.0 全部补齐
+- **`config/`** OrchestratorSettings 新增（`enable_hitl` / `debate_max_rounds` / `debate_jaccard_threshold` / `system_version`）
+- **`tests/unit/{critic,synthesizer,prediction_registry,orchestrator}/`** 69 新单测：
+  - 12× debate + cross_checker (Jaccard / tokenize / 早停 / max rounds)
+  - 22× synthesizer (scoring / decision_engine / price_range / trigger_rules)
+  - 11× prediction_registry (snapshot integrity / registry CRUD / singleton)
+  - 11× orchestrator (states reducer / graph compile / edges)
+  - **1× DONE-condition full-pipeline smoke**（START → 7 agents → valuation → debate → cross_check → synthesize → create_snapshot → report；验证 NACS extras 回填 + snapshot 强制创建）
+
+### Verified (Phase 6 DONE)
+- ✅ LangGraph 主图编译成功（13 nodes + START/END）
+- ✅ 6 个 NACS-aware fanout agent 通过 `operator.or_` reducer 合并到 `agent_outputs`，无覆盖；`extras` 通过自定义 `_merge_extras` 累积 NACS 信号
+- ✅ 辩论 Jaccard 早停：bull/bear 相似 → 1 轮收敛；分歧 → 跑满 max_rounds
+- ✅ Synthesizer 硬规则不可被 LLM 覆盖：regime gate / no models / AI gilding 三类强制 SKIP
+- ✅ **CLAUDE.md HARD invariant**: `synthesize → create_snapshot → report` 顺序不可破；snapshot 失败整流程失败
+- ✅ Snapshot SHA-256 hash 复算一致；Pydantic FrozenModel 拒绝任何 mutation
+- ✅ HITL 默认 bypass (`enable_hitl=False`)；生产环境可通过 env var 切换
+- ✅ ruff strict + mypy strict 全通过（Phase 6 共 16 新模块 + 全仓 162 source files）
+- ✅ **389 unit tests pass**（v0.5 320 + 69 新增）
+
+### Notes
+- 辩论 LLM 模型：Bull/Bear/Devil 全部 Sonnet 4；Synthesizer Opus 4.7（spec §1 强制）
+- Devil 元层质疑（ADR 0010 §2）专注 data quality / causal validity / unaddressed risks，不站队
+- Phase 6 in-memory snapshot 多 worker 不共享 → Phase 7.5 替换 PostgreSQL 后才能多进程部署
+- Jaccard 阈值 0.6 经验定；Phase 8 calibration 可用回测样本调优
+- `cross_checker.py` Phase 6 是确定性 statistics.median；Phase 8 升级到 LLM 智能最近邻匹配
+- ADR 0005 §Progress Phase 6 条目无变动（NACS 三件套已在 Phase 5 接入，本 Phase 仅消费）
+- 工作量实际 ≈ 3 天（spec §3.8 / §8 估 2-3 天）
+
+---
+
 ## [v0.5] — Phase 5 完成: Agent 层 (7 expert agents + NACS 三件套 + tools) (2026-05-16)
 
 ### Added
