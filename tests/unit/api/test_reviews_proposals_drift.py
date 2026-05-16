@@ -39,7 +39,7 @@ def _seed_snapshot_and_review(
     review_id = uuid.uuid4()
     ipo_id = uuid.uuid4()
 
-    with psycopg.connect(_sync_dsn()) as conn:  # noqa: SIM117
+    with psycopg.connect(_sync_dsn()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "TRUNCATE TABLE prediction_reviews, prediction_outcomes, post_ipo_events, "

@@ -81,7 +81,7 @@ async def _persist_calculation(
         async with async_session_factory()() as s:
             s.add(row)
             await s.commit()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning(
             "whatif_persist_failed",
             snapshot_id=str(snapshot_id), error=str(exc),

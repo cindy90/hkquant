@@ -89,7 +89,7 @@ class EventBus:
             async with self._sf() as s:  # type: ignore[misc]
                 s.add(row)
                 await s.commit()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "event_bus_persist_failed",
                 event_type=event.event_type.value, error=str(exc),

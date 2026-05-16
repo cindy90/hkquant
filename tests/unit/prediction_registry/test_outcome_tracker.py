@@ -28,7 +28,7 @@ from hk_ipo_agent.common.schemas import (
     ValuationEnsembleOutput,
 )
 from hk_ipo_agent.common.settings import get_settings
-from hk_ipo_agent.prediction_registry.benchmarks import BenchmarkPriceService, BenchmarkReturns
+from hk_ipo_agent.prediction_registry.benchmarks import BenchmarkReturns
 from hk_ipo_agent.prediction_registry.outcome_tracker import OutcomeTracker, TrackResult
 from hk_ipo_agent.prediction_registry.registry import PGPredictionRegistry
 from hk_ipo_agent.prediction_registry.snapshot import build_snapshot

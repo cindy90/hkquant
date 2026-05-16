@@ -7,13 +7,12 @@ the cached AsyncEngine reuse doesn't cause asyncpg teardown errors.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from datetime import UTC, datetime
 
 import psycopg
 import pytest
 import pytest_asyncio
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -31,9 +30,6 @@ from hk_ipo_agent.common.enums import (
 from hk_ipo_agent.common.settings import get_settings
 from hk_ipo_agent.data.models import (
     RealtimeEventRow,
-    UserAccountRow,
-    UserRoleRow,
-    WhatIfCalculationRow,
 )
 
 

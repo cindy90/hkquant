@@ -129,7 +129,7 @@ class OutcomeTracker:
             prices_payload = await self._prices.get_hk_history_prices(
                 stock_code, target_date, start=listing_date
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "outcome_price_fetch_failed",
                 snapshot_id=str(snapshot_id), stock_code=stock_code,
@@ -167,7 +167,7 @@ class OutcomeTracker:
                 )
                 events_in_window = [e.model_dump(mode="json") for e in events]
                 await self._persist_events(ipo_id=ipo_id, events=events)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning(
                     "outcome_event_scan_failed",
                     snapshot_id=str(snapshot_id), error=str(exc),
@@ -236,8 +236,7 @@ class OutcomeTracker:
                 peak = p
             else:
                 dd = (p - peak) / peak if peak else 0.0
-                if dd < max_dd:
-                    max_dd = dd
+                max_dd = min(max_dd, dd)
         return Decimal(str(max_dd)).quantize(Decimal("0.000001"))
 
     @staticmethod

@@ -127,7 +127,7 @@ async def _transition(
         await s.commit()
         # Re-fetch for fresh state.
         row = await s.get(PredictionReviewRow, review_id)
-    assert row is not None  # noqa: S101
+    assert row is not None
     return _row_to_view(row)
 
 

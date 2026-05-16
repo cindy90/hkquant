@@ -65,7 +65,7 @@ def test_days_since_listing_basic() -> None:
 
 
 def test_critical_threshold_is_minus_20_percent() -> None:
-    assert CRITICAL_LOSS_THRESHOLD == Decimal("-0.20")
+    assert Decimal("-0.20") == CRITICAL_LOSS_THRESHOLD
 
 
 def _build_snapshot():

@@ -153,7 +153,7 @@ class AttributionEngine:
         """
         ret = outcome.return_since_listing if outcome.return_since_listing is not None else outcome.return_since_ipo
         analyses: list[AgentErrorAnalysis] = []
-        for role_value, ao in snapshot.agent_outputs.items():
+        for _role_value, ao in snapshot.agent_outputs.items():
             score = ao.overall_score / 100.0  # normalise to [0, 1]
             # Miscalibration signal: agent scored 0.8 but stock fell 20% → +1.0 miscalibration
             miscalibration = score - (0.5 + min(max(ret, -0.5), 0.5))
@@ -274,7 +274,7 @@ class AttributionEngine:
                 temperature=0.2,
                 max_tokens=2048,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "attribution_diagnosis_failed",
                 snapshot_id=str(snapshot.id), error=str(exc),

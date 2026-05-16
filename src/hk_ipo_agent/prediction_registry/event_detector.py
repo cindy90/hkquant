@@ -116,7 +116,7 @@ class EventDetector:
             payload = await self._ifind.get_hk_history_prices(
                 stock_code, window_end, start=window_start
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "event_price_fetch_failed",
                 stock_code=stock_code, error=str(exc),
@@ -204,7 +204,7 @@ class EventDetector:
     ) -> list[PostIPOEvent]:
         try:
             filings = await self._anns.get_disclosure_filings(stock_code)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "event_announcements_fetch_failed",
                 stock_code=stock_code, ipo_id=str(ipo_id), error=str(exc),
@@ -254,7 +254,7 @@ class EventDetector:
                 temperature=0.0,
                 max_tokens=512,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "event_classification_failed",
                 ipo_id=str(ipo_id), title=title[:80], error=str(exc),
