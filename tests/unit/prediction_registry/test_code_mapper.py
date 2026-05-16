@@ -18,13 +18,11 @@ from unittest.mock import AsyncMock, MagicMock
 import psycopg
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from hk_ipo_agent.common.enums import CodeMappingConfidence, CodeMappingSource
 from hk_ipo_agent.common.settings import get_settings
-from hk_ipo_agent.data.models import CodeMappingRow
 from hk_ipo_agent.prediction_registry.code_mapper import CodeMapper, CodeMapping
 
 

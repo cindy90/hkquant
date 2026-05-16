@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import uuid as _uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any

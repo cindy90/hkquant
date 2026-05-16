@@ -98,7 +98,7 @@ def _seed_snapshot(predicted_revenue: float = 100.0, predicted_profit: float = 2
         total_cost_usd=Decimal("0.1"), runtime_seconds=5.0,
     )
     # Inject a financial snapshot blob into the input_data_snapshot dict.
-    snap = snap.model_copy(update={
+    return snap.model_copy(update={
         "input_data_snapshot": {
             **snap.input_data_snapshot,
             "extraction": {
@@ -112,7 +112,6 @@ def _seed_snapshot(predicted_revenue: float = 100.0, predicted_profit: float = 2
             },
         },
     })
-    return snap
 
 
 def _seed_ipo_and_snapshot_in_db(snap) -> None:

@@ -1,0 +1,43 @@
+# Scheduler config per PROJECT_SPEC.md §3.11.2 + CLAUDE.md v1.2.
+#
+# CLAUDE.md v1.2: production MUST use Airflow (APScheduler only for
+# dev / test). The cron expressions below are the source of truth for
+# the Airflow DAGs in `schedulers/airflow_dags/`.
+
+high_freq:
+  # Every 15 minutes during HKEX trading hours; every 30 minutes otherwise.
+  # Lightweight scan: state detectors + code_mapper + 2h event lookback.
+  schedule_cron: "*/15 * * * *"
+  timezone: "Asia/Hong_Kong"
+  retry_count: 3
+  retry_delay_seconds: 60
+  max_runtime_seconds: 600                  # 10 min hard cap
+  advisory_lock_name: "scheduler:high_freq"
+  on_failure_alert_after_runs: 4            # ~1 hour of consecutive failures
+
+daily:
+  # 02:30 HKT — outside trading window; pre-market open.
+  schedule_cron: "30 2 * * *"
+  timezone: "Asia/Hong_Kong"
+  retry_count: 2
+  retry_delay_seconds: 600
+  max_runtime_seconds: 3600                 # 1 hour hard cap
+  advisory_lock_name: "scheduler:daily"
+  # CLAUDE.md v1.2: "daily_scheduler 失败 6h 内未恢复 → critical alert"
+  sla_seconds: 21600
+  on_failure_alert_after_runs: 1            # any failure escalates
+
+event_driven:
+  # Not on cron — invoked by webhook adapters. The Airflow DAG is a
+  # safety-net sweep of the buffered queue every 5 min.
+  fallback_sweep_cron: "*/5 * * * *"
+  timezone: "Asia/Hong_Kong"
+  retry_count: 1
+  max_runtime_seconds: 300
+  advisory_lock_name: "scheduler:event_driven"
+  queue_pull_limit: 100
+
+# Global defaults inherited when a scheduler section omits a field.
+defaults:
+  log_level: INFO
+  scheduler_runs_retention_days: 90

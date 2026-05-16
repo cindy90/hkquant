@@ -173,7 +173,7 @@ class CodeMapper:
     ) -> CodeMapping | None:
         try:
             docs = await self._anns.get_listing_documents(company_name_zh)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("hkex_lookup_failed", ipo_id=str(ipo_id), error=str(exc))
             return None
         for doc in docs:
@@ -196,7 +196,7 @@ class CodeMapper:
         query = company_name_en or company_name_zh
         try:
             matches = await self._ifind.search_by_name(query)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("ifind_search_failed", ipo_id=str(ipo_id), error=str(exc))
             return None
         if not matches:
@@ -227,7 +227,7 @@ class CodeMapper:
             matches = await self._sponsors.find_by_sponsor_and_window(
                 sponsor_id, listing_date_range=(window_start, window_end),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("sponsor_lookup_failed", ipo_id=str(ipo_id), error=str(exc))
             return None
         if len(matches) != 1:  # Need exactly one match to claim LOW confidence.

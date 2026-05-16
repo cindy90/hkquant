@@ -16,7 +16,6 @@ from hk_ipo_agent.common.settings import get_settings
 from hk_ipo_agent.data.models import AlertRow
 from hk_ipo_agent.prediction_registry.alerts import (
     DEDUP_WINDOW,
-    AlertConfigError,
     AlertRouter,
     load_alerts_config,
 )
