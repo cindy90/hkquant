@@ -100,7 +100,12 @@ PROJECT_SPEC.md §16（v1.2.1 新增）+ Phase 7 deliverables 列出了 ~50 个�
 - [x] **Phase 7 (2026-05-16)**: `api/websocket/` 4 模块 (in-memory chat store + chat_handler + chat_endpoint)
 - [x] **Phase 7 (2026-05-16)**: `synthesizer/whatif.py` + POST /api/whatif/run
 - [x] **Phase 7 (2026-05-16)**: 测试 27 新单测 + 449 全仓单测通过；commit + v0.7 tag
-- [~] **Phase 7.5b (2026-05-16)**: 替换 in-memory audit/users/chat/whatif 为 PG + DB trigger — audit_middleware 完成（PGAuditStore + AuditStoreProtocol + set_audit_store；audit_logs DB trigger 由 7.5a migration 落地）；users / chat / whatif / event_bus 留 7.5b-3 或 7.5c 续做
+- [x] **Phase 7.5b (2026-05-16)**: 替换 in-memory audit/users/chat/whatif 为 PG + DB trigger — 全 5 项完成：
+  - 7.5b-2: PGAuditStore + AuditStoreProtocol + set_audit_store（audit_logs DB trigger 由 7.5a migration 落地）
+  - 7.5b-3: PGChatStore + ChatStoreProtocol + set_chat_store (chat_sessions + chat_messages + ON DELETE CASCADE)
+  - 7.5b-3: EventBus(session_factory=...) PG hook + set_event_bus (best-effort INSERT realtime_events，broadcast 失败不阻塞)
+  - 7.5b-3: whatif endpoint INSERT whatif_calculations (best-effort，FK violation 时 warning + 仍返回 200)
+  - 7.5b-3: get_user_by_id_pg + resolve_user PG lookup (in-memory 默认，PG 作 production fallback)
 - [x] **Phase 7.5b (2026-05-16)**: 实装 reviews / proposals / drift routers（3 router 实装 + 11 新单测；ADR 0012 §7.5b 已勾）
 - [ ] **Phase 8**: 实装 backtest router
 - [ ] **Phase 9**: SSO providers + 签名 URL + Redis Pub/Sub

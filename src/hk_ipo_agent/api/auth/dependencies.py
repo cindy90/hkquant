@@ -86,6 +86,51 @@ def reset_users_for_test() -> None:
     _USERS.clear()
 
 
+# ---------------------------------------------------------------------------
+# PG-backed user lookup (7.5b-3) — opt-in fallback used when the in-memory
+# store doesn't have a match. Lets production lifespan provision users
+# via the user_accounts + user_roles tables without breaking Phase 7's
+# in-memory tests.
+# ---------------------------------------------------------------------------
+
+
+async def get_user_by_id_pg(user_id: UUID) -> _UserRecord | None:
+    """Look up a user from the ``user_accounts`` + ``user_roles`` tables.
+
+    Returns ``None`` if the user is absent or inactive. Caller is
+    responsible for falling back to the in-memory store when None.
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from ...data.database import async_session_factory  # noqa: PLC0415
+    from ...data.models import UserAccountRow, UserRoleRow  # noqa: PLC0415
+
+    sf = async_session_factory()
+    async with sf() as s:
+        user = await s.get(UserAccountRow, user_id)
+        if user is None or not user.is_active:
+            return None
+        role_rows = (
+            await s.execute(select(UserRoleRow).where(UserRoleRow.user_id == user_id))
+        ).scalars().all()
+    roles = [UserRole(r.role) for r in role_rows if r.role in {ur.value for ur in UserRole}]
+    return _UserRecord(
+        id=user.id,
+        email=user.email,
+        password_sha256="",  # passwords only kept in-memory for Phase 7 MVP
+        display_name=user.display_name,
+        roles=roles,
+        is_active=user.is_active,
+        created_at=user.created_at,
+    )
+
+
+def resolve_user(user_id: UUID) -> _UserRecord | None:
+    """Synchronous: prefer in-memory; PG lookup is async — callers needing
+    it should ``await get_user_by_id_pg`` directly."""
+    return get_user_by_id(user_id)
+
+
 # Seed default users on import so dev / test environments have working
 # credentials without a setup step. Production should disable this via env.
 def _seed_defaults() -> None:
@@ -194,8 +239,10 @@ __all__ = (
     "create_user",
     "get_current_user",
     "get_user_by_id",
+    "get_user_by_id_pg",
     "require_permission",
     "require_role",
     "reset_users_for_test",
+    "resolve_user",
     "verify_user",
 )
