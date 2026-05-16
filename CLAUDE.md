@@ -188,7 +188,10 @@
 - [x] Phase 7 — 报告 + API + UI 集成层 MVP（DONE：reporting (memo + PDF/DOCX) + FastAPI 31 routes + JWT/RBAC + middleware + SSE + WS chat + What-If + 27 新单测 + 449 全仓单测通过；ADR 0011 §Progress Phase 7 全勾；reviews/proposals/drift/backtest 延 Phase 7.5/8；SSO 延 Phase 9）
 - [ ] Phase 7.5 — 预测档案 + 生命周期追踪 **← 当前**
   - [x] **7.5a** Schema + Registry PG 化（DONE 2026-05-16：19 张 v1.1+v1.2+v1.2.1 表 + 4 trigger + Registry Protocol/InMemory/PG 双实现 + Orchestrator HardEdge + SnapshotCreationFailed + 11 新单测；ADR 0012 §Progress 7.5a 已勾；Phase 7 in-memory PG 化挪到 7.5b）
-  - [ ] **7.5b** Outcome/Event/Attribution/Review 数据流闭环 + Phase 7 5 个 in-memory PG 化 + reviews/proposals/drift router（**ADR 0011 Progress 收尾**）
+  - [~] **7.5b** Outcome/Event/Attribution/Review 数据流闭环 + Phase 7 5 个 in-memory PG 化 + reviews/proposals/drift router（**ADR 0011 Progress 部分收尾**）
+    - [x] 7.5b-1 (883e11e) 预测追踪流水线 5 模块 + 2 prompts + 30 新单测
+    - [x] 7.5b-2 audit_middleware PG 化（PGAuditStore + AuditStoreProtocol + set_audit_store）+ reviews/proposals/drift router 实装 + 11 新单测；ADR 0011 "实装 reviews/proposals/drift" 全勾
+    - [ ] 7.5b-3 (or 7.5c head) chat manager + whatif endpoint + event_bus + users PG 化收尾
   - [ ] **7.5c** ipo_lifecycle/ 6 模块 + code_mapper + earnings_comparator + alerts + config YAML
   - [ ] **7.5d** schedulers/ 4 模块 + Airflow DAG + 端到端晶泰 + tag `v0.7.5`
 - [ ] Phase 8 — 回测与校准
