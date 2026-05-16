@@ -1,10 +1,22 @@
 """Build comparable companies pool.
 
-Phase 2: ingest seed comparable companies from iFind for known industry codes.
-NACS legacy didn't track a separate ``comparable_companies`` table, so this
-builder starts fresh from iFind.
+**Status of the pool after Phase 2**: the ``comparable_companies`` PG table
+exists (created by Phase 1 migration + widened by Phase 2 migration) but
+is **intentionally empty** as of Phase 2 close. NACS SQLite has no
+comparable-company corpus to seed from, and the design is to build the
+pool **dynamically on-demand** in Phase 4 when ``valuation/comparable.py``
+needs peers for an IPO under analysis. This avoids stale peer snapshots
+and aligns with PROJECT_SPEC.md §3.4 "支持跨市场（A/H/US ADR）的可比".
 
-Phase 4 (valuation/comparable.py) will read from this builder's output.
+Phase 4 implementation plan:
+1. ``valuation/comparable.py`` calls ``ComparablePoolBuilder.refresh_industry()``
+   when needed (industry not yet in PG, or snapshot older than N days).
+2. ``refresh_industry()`` invokes iFind ``get_comparable_companies()`` and
+   upserts into the PG table.
+3. Cache invalidation triggered by daily scheduler (Phase 7.5).
+
+Phase 2 scope: builder interface + iFind passthrough stub. Real ingest logic
+gates on iFind credentials (see Phase 2.1 / ``data/sources/ifind_client.py``).
 """
 
 from __future__ import annotations

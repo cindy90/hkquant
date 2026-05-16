@@ -40,6 +40,7 @@ The project follows the Phase-based versioning of `PROJECT_SPEC.md` §4.
 - ADR 0005 §1 表里给的旧数字 (1,314 cornerstones / 1,604 links / 1,051 aliases) 是 ADR 草稿期 NACS 早期快照；实际迁移时为 **2,014 / 2,560 / 1,770**。文档已就地更新
 - `iFind` 增量加载留待 Phase 2.1（需 iFinDPy 凭证就绪 + 同花顺 QuantAPI 客户端运行）
 - 5 张 NACS 表故意不迁移：`cornerstone_performance_asof` (Phase 7.5 重算) / `panel_snapshots` (替换为 prediction_snapshots) / `nacs_predictions` (NACS 特有) / `price_history` (空) / `sponsor_performance_asof` (空)
+- **`comparable_companies` 表故意为空**：NACS 没有可比公司语料可种子。设计为 Phase 4 `valuation/comparable.py` 按需通过 iFind 动态构建并写入此表；Phase 2 只就位 ORM 表 + builder 接口 + iFind 通路。详见 [`comparable_pool_builder.py`](src/hk_ipo_agent/data/builders/comparable_pool_builder.py) 文档
 
 ---
 
