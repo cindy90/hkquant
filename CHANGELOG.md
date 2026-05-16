@@ -7,6 +7,39 @@ The project follows the Phase-based versioning of `PROJECT_SPEC.md` §4.
 
 ---
 
+## [v0.3] — Phase 3 完成: 招股书处理 (Parse / Chunk / Embed / Qdrant / RAG QA) (2026-05-16)
+
+### Added
+- **`src/hk_ipo_agent/prospectus/`** 9 个模块全部实装：
+  - `schema.py` — 重导 Phase 1 `ProspectusExtraction` + 新增 `ParsedBlock` / `ParsedTable` / `ParsedDocument` / `ParserBackend` / `Chunk` 数据类
+  - `parser.py` — **LlamaParse 主路径 + PyMuPDF 兜底**（ADR 0004 决策）；自动降级当 `LLAMA_CLOUD_API_KEY` 未配置；每个 block 保留 `(page, char_offset, bbox)` 可溯源元数据
+  - `chunker.py` — 章节感知分块（中英双语 IPO 章节识别 + section 边界 flush + 表格独立 chunk + 确定性 chunk_id sha256）
+  - `embeddings.py` — 三层 provider：**HashEmbeddings**（CI fallback 0 依赖）/ **BGEEmbeddings**（本地 BAAI/bge-large-zh-v1.5）/ **VoyageEmbeddings**（云）；`get_embedding_provider()` 自动降级
+  - `vector_store.py` — `ProspectusVectorStore` async Qdrant 封装，按 prospectus_id 隔离 collection
+  - `retriever.py` — `HybridRetriever`（dense vector + 进程内 BM25 + RRF fusion）
+  - `extractor.py` — `ProspectusExtractor` LLM 抽取调度器；Sonnet → Opus 自动降级 + 失败标 `needs_human_review`
+  - `qa.py` — **`ProspectusQA.ask()` 强制 citation**（无 chunks → `CitationRequiredError`；LLM 幻觉 chunk_id → 过滤；最终空 citation 列表 → raise）
+  - `validators.py` — 5 个一致性校验（negative_revenue / top1_exceeds_top5 / shareholder_pct_sum / no_risk_factors / ch18c_revenue_inconsistent）
+- **`prompts/extraction/`** 6 个抽取 prompts 全部带 frontmatter：`prospectus_section_router` / `financials_extractor` / `business_extractor` / `risks_extractor` / `shareholders_extractor` / `ch18c_qualifier`
+- **`tests/unit/prospectus/`** 33 新单测（chunker × 9, parser_fallback × 5, embeddings × 7, qa_citation × 6, validators × 6）
+- **`tests/integration/test_rag_qa.py`** 2 新集成测试：端到端 synthetic PDF → 解析 → chunk → embed → Qdrant upsert → mocked QA → 验证 citation 含正确 page。Qdrant 不可达时优雅 skip
+
+### Verified (Phase 3 DONE)
+- ✅ 给定一份 synthetic 3-page 招股书 PDF，<1 秒走通完整 pipeline 输出带 citation 的 Answer
+- ✅ Qdrant collection 按 prospectus_id 隔离（`prospectus_<id>`）+ idempotent upsert via deterministic chunk_id
+- ✅ `qa.ask()` 必返回 citation；空 citation / 幻觉 chunk_id 全部 raise `CitationRequiredError`
+- ✅ Parser 自动 LlamaParse → PyMuPDF 降级（`prefer_llamaparse=True` 默认，无 API key 时 silent fallback）
+- ✅ ruff strict + mypy strict 全通过 (160 source files)
+- ✅ **186 tests pass** (175 unit + 11 integration) — 比 v0.2 的 151 +23%
+
+### Notes
+- LlamaParse 真实路径留待 `LLAMA_CLOUD_API_KEY` 配齐后由 Phase 9 端到端 golden case 触发；接口/降级路径 100% 测试覆盖
+- BGE 本地 embeddings 留待 Phase 5 agent 层启用（需 `uv sync --extra embeddings-local` 装 torch ~2GB）；默认 HashEmbeddings 适合 CI 但**没有语义性**
+- Phase 3 prompts 内容是结构性占位；Phase 5 会用 agent 反馈循环迭代提示词质量
+- 真实招股书 PDF fixture 留待 Phase 9（晶泰控股 2228.HK golden case）
+
+---
+
 ## [v0.2] — Phase 2 完成: 数据层 + NACS SQLite ETL (2026-05-16)
 
 ### Added

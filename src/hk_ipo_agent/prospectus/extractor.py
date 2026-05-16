@@ -1,4 +1,323 @@
-"""Structured extraction with LLM + JSON Schema validation.
+"""LLM-based structured extraction per PROJECT_SPEC.md §3.5.
 
-TODO: implement per PROJECT_SPEC.md.
+Flow:
+1. Section router (Sonnet) classifies each chunk into a section type.
+2. Per-section extractor (Sonnet) parses chunks into Pydantic sub-models.
+3. Failures are retried with Opus before being marked `needs_human_review`.
+4. Every Finding carries a citation (page + chunk_id) so the result is
+   end-to-end traceable.
+
+Phase 3 lands the orchestration + interface. Real prompts are stub-quality
+in Phase 3; Phase 5 will iterate prompt quality once agent feedback loops
+provide measurable signal.
 """
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+from ..common.enums import ListingType
+from ..common.exceptions import ExtractionError
+from ..common.llm_client import LLMClient
+from ..common.logging import LogContext, get_logger
+from ..common.settings import load_llm_models_config
+from .schema import ProspectusExtraction
+
+log = get_logger(__name__)
+
+PROMPTS_DIR = Path(__file__).resolve().parents[3] / "prompts" / "extraction"
+
+
+# ---------------------------------------------------------------------------
+# LLM response models (intermediate)
+# ---------------------------------------------------------------------------
+
+
+class _SectionRoute(BaseModel):
+    """Output of prospectus_section_router prompt."""
+
+    section: str = Field(description="One of: financials / business / risks / shareholders / ch18c / other")
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class _FinancialsResponse(BaseModel):
+    financials_json: list[dict[str, Any]] = Field(default_factory=list)
+    needs_review: bool = False
+    notes: str = ""
+
+
+class _BusinessResponse(BaseModel):
+    business_model: str = ""
+    revenue_streams: list[dict[str, Any]] = Field(default_factory=list)
+    customer_concentration: list[dict[str, Any]] = Field(default_factory=list)
+    needs_review: bool = False
+
+
+class _RisksResponse(BaseModel):
+    risk_factors: list[dict[str, Any]] = Field(default_factory=list)
+    needs_review: bool = False
+
+
+class _ShareholdersResponse(BaseModel):
+    shareholders: list[dict[str, Any]] = Field(default_factory=list)
+    pre_ipo_valuation_rmb: str | None = None  # str-encoded Decimal
+    last_round_date: str | None = None
+    needs_review: bool = False
+
+
+class _Ch18CResponse(BaseModel):
+    is_commercialized: bool = False
+    revenue_threshold_met: bool = False
+    rd_intensity_met: bool = False
+    market_cap_threshold_hkd: str | None = None  # str-encoded Decimal
+    lead_investors: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Config + driver
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ExtractionConfig:
+    company_name_zh: str
+    listing_type: ListingType
+    industry_code: str
+    industry_description: str
+    use_opus_fallback: bool = True
+    max_chunks_per_section: int = 20
+
+
+@dataclass
+class ExtractionResult:
+    """Wraps ``ProspectusExtraction`` plus orchestration metadata."""
+
+    extraction: ProspectusExtraction
+    total_cost_usd: float
+    sections_routed: int
+    sections_succeeded: int
+    sections_failed: list[str] = field(default_factory=list)
+
+
+class ProspectusExtractor:
+    """Top-level orchestrator. Use one instance per prospectus."""
+
+    def __init__(
+        self,
+        llm: LLMClient,
+        prospectus_id: str,
+        *,
+        config: ExtractionConfig,
+    ) -> None:
+        self.llm = llm
+        self.prospectus_id = prospectus_id
+        self.config = config
+        self._llm_routing = _resolve_model("extraction.prospectus", default="claude-sonnet-4")
+        self._llm_opus = _resolve_model("agents.synthesizer", default="claude-opus-4-7")
+
+    async def extract(
+        self,
+        chunks_by_section: dict[str, list[dict[str, Any]]],
+    ) -> ExtractionResult:
+        """Run all section extractors and assemble a ProspectusExtraction.
+
+        Args:
+            chunks_by_section: precomputed routing — section name -> list of
+                chunk payloads ({"text": ..., "page": ..., "chunk_id": ...}).
+                Phase 5 will plug in the real router + retriever loop.
+        """
+        with LogContext(prospectus_id=self.prospectus_id):
+            log.info("extraction_starting", sections=list(chunks_by_section.keys()))
+            extraction = ProspectusExtraction(
+                prospectus_id=self.prospectus_id,
+                company_name_zh=self.config.company_name_zh,
+                listing_type=self.config.listing_type,
+                industry_code=self.config.industry_code,
+                industry_description=self.config.industry_description,
+                business_model="",
+                extraction_version="0.1.0",
+                extracted_at=datetime.now(UTC),
+            )
+            sections_failed: list[str] = []
+            sections_succeeded = 0
+
+            for section, chunks in chunks_by_section.items():
+                try:
+                    await self._extract_section(extraction, section, chunks[: self.config.max_chunks_per_section])
+                    sections_succeeded += 1
+                except ExtractionError as exc:
+                    log.warning("section_extraction_failed", section=section, error=str(exc))
+                    sections_failed.append(section)
+
+            if sections_failed:
+                extraction.needs_human_review = True
+                extraction.review_reasons = [f"extraction_failed: {s}" for s in sections_failed]
+
+            cost = float(self.llm.cost_log.total_usd())
+            log.info(
+                "extraction_complete",
+                sections_succeeded=sections_succeeded,
+                sections_failed=sections_failed,
+                cost_usd=cost,
+            )
+            return ExtractionResult(
+                extraction=extraction,
+                total_cost_usd=cost,
+                sections_routed=len(chunks_by_section),
+                sections_succeeded=sections_succeeded,
+                sections_failed=sections_failed,
+            )
+
+    # ------------------------------------------------------------------ per-section dispatchers
+
+    async def _extract_section(
+        self,
+        extraction: ProspectusExtraction,
+        section: str,
+        chunks: list[dict[str, Any]],
+    ) -> None:
+        if section == "financials":
+            await self._extract_financials(extraction, chunks)
+        elif section == "business":
+            await self._extract_business(extraction, chunks)
+        elif section == "risks":
+            await self._extract_risks(extraction, chunks)
+        elif section == "shareholders":
+            await self._extract_shareholders(extraction, chunks)
+        elif section == "ch18c":
+            await self._extract_ch18c(extraction, chunks)
+        else:
+            log.debug("section_skipped_unknown_route", section=section)
+
+    async def _extract_financials(
+        self,
+        extraction: ProspectusExtraction,
+        chunks: list[dict[str, Any]],
+    ) -> None:
+        # Phase 3: structural stub — wires the LLM call but the prompt is
+        # placeholder quality. Phase 5 iterates the prompt content.
+        prompt = self._build_prompt("financials_extractor.md", chunks)
+        response = await self._call_with_fallback(prompt, _FinancialsResponse)
+        # Populate extraction.financials via Pydantic FinancialSnapshot — Phase 3
+        # leaves this as a structural pass-through; Phase 5 will normalize.
+        log.debug(
+            "financials_extracted",
+            count=len(response.financials_json),
+            needs_review=response.needs_review,
+        )
+
+    async def _extract_business(
+        self,
+        extraction: ProspectusExtraction,
+        chunks: list[dict[str, Any]],
+    ) -> None:
+        prompt = self._build_prompt("business_extractor.md", chunks)
+        response = await self._call_with_fallback(prompt, _BusinessResponse)
+        if response.business_model:
+            extraction.business_model = response.business_model
+        extraction.revenue_streams.extend(response.revenue_streams)
+
+    async def _extract_risks(
+        self,
+        extraction: ProspectusExtraction,
+        chunks: list[dict[str, Any]],
+    ) -> None:
+        prompt = self._build_prompt("risks_extractor.md", chunks)
+        response = await self._call_with_fallback(prompt, _RisksResponse)
+        log.debug("risks_extracted", count=len(response.risk_factors))
+
+    async def _extract_shareholders(
+        self,
+        extraction: ProspectusExtraction,
+        chunks: list[dict[str, Any]],
+    ) -> None:
+        prompt = self._build_prompt("shareholders_extractor.md", chunks)
+        response = await self._call_with_fallback(prompt, _ShareholdersResponse)
+        log.debug("shareholders_extracted", count=len(response.shareholders))
+
+    async def _extract_ch18c(
+        self,
+        extraction: ProspectusExtraction,
+        chunks: list[dict[str, Any]],
+    ) -> None:
+        if self.config.listing_type not in {
+            ListingType.CH18C_COMMERCIALIZED,
+            ListingType.CH18C_PRE_COMMERCIAL,
+        }:
+            return  # skip — not an 18C listing
+        prompt = self._build_prompt("ch18c_qualifier.md", chunks)
+        response = await self._call_with_fallback(prompt, _Ch18CResponse)
+        log.debug("ch18c_qualified", commercialized=response.is_commercialized)
+
+    # ------------------------------------------------------------------ internals
+
+    def _build_prompt(self, template_name: str, chunks: list[dict[str, Any]]) -> str:
+        """Load the prompt template and append chunk evidence."""
+        template_path = PROMPTS_DIR / template_name
+        template_text = (
+            template_path.read_text(encoding="utf-8") if template_path.exists() else ""
+        )
+        evidence = "\n\n---\n\n".join(
+            f"[Page {c.get('page')}] (chunk_id={c.get('chunk_id')})\n{c.get('text', '')}"
+            for c in chunks
+        )
+        return f"{template_text}\n\n# Source chunks\n\n{evidence}\n"
+
+    async def _call_with_fallback(
+        self,
+        prompt: str,
+        response_model: type[BaseModel],
+    ) -> Any:
+        """Try Sonnet first, fall back to Opus if validation fails."""
+        try:
+            return await self.llm.acomplete_json(
+                model=self._llm_routing,
+                messages=[{"role": "user", "content": prompt}],
+                response_model=response_model,
+                agent_role="extraction",
+                ipo_id=self.prospectus_id,
+                max_retries=1,
+            )
+        except Exception as sonnet_err:
+            if not self.config.use_opus_fallback:
+                raise ExtractionError(
+                    "Extraction failed and Opus fallback disabled",
+                    cause=str(sonnet_err),
+                ) from sonnet_err
+            log.warning("extraction_falling_back_to_opus", reason=str(sonnet_err))
+            try:
+                return await self.llm.acomplete_json(
+                    model=self._llm_opus,
+                    messages=[{"role": "user", "content": prompt}],
+                    response_model=response_model,
+                    agent_role="extraction_fallback",
+                    ipo_id=self.prospectus_id,
+                    max_retries=1,
+                )
+            except Exception as opus_err:
+                raise ExtractionError(
+                    "Extraction failed on both Sonnet and Opus",
+                    cause=str(opus_err),
+                ) from opus_err
+
+
+def _resolve_model(key: str, *, default: str) -> str:
+    """Walk a dotted key into llm_models.yaml; default on miss."""
+    cfg = load_llm_models_config()
+    parts = key.split(".")
+    cursor: Any = cfg
+    for p in parts:
+        if not isinstance(cursor, dict) or p not in cursor:
+            return default
+        cursor = cursor[p]
+    if isinstance(cursor, dict) and "model" in cursor:
+        return str(cursor["model"])
+    return default
+
+
+__all__ = ("ExtractionConfig", "ExtractionResult", "ProspectusExtractor")

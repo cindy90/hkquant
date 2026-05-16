@@ -1,11 +1,32 @@
 ---
 role: shareholders_extractor
-version: 0.0
+version: 0.1
 last_updated: 2026-05-16
-input_schema: TBD
-output_schema: TBD
+input_schema: list[ChunkPayload]
+output_schema: ShareholdersResponse
 ---
 
-# Extract shareholder structure + pre-IPO investors
+# Role
+Extract pre-IPO shareholder structure + last private round valuation.
 
-TODO: author this prompt in the corresponding Phase per PROJECT_SPEC.md §3.10.
+# Required output (JSON)
+
+```json
+{
+  "shareholders": [
+    {
+      "name": "...",
+      "pct_pre_ipo": 0.215,
+      "is_controlling": true,
+      "is_pre_ipo_investor": false,
+      "last_round_valuation_rmb": null,
+      "last_round_date": null,
+      "has_buyback_clause": false,
+      "citation": {"page": 215, "chunk_id": "..."}
+    }
+  ],
+  "pre_ipo_valuation_rmb": "8500000000.00",
+  "last_round_date": "2023-06-15",
+  "needs_review": false
+}
+```
