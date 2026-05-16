@@ -192,9 +192,9 @@
     - [x] 7.5b-1 (883e11e) 预测追踪流水线 5 模块 + 2 prompts + 30 新单测
     - [x] 7.5b-2 (d2d2508) audit_middleware PG 化 + reviews/proposals/drift router 实装 + 11 新单测
     - [x] 7.5b-3 chat manager + event_bus + whatif endpoint + users PG 化（4 个 store 双实现 + Protocol + setter + 10 新单测）
-  - [~] **7.5c** ipo_lifecycle/ 6 模块 + code_mapper + earnings_comparator + alerts + config YAML
+  - [x] **7.5c** ipo_lifecycle/ 6 模块 + code_mapper + earnings_comparator + alerts + config YAML
     - [x] 7.5c-1 ipo_lifecycle/ 6 模块（states / state_machine / state_detectors 三重 LISTED / stale_detector / terminal_handlers / ah_special） + 28 新单测含 3 状态机仿真
-    - [ ] 7.5c-2 code_mapper + earnings_comparator + alerts + config/{alerts,mapping_rules}.yaml
+    - [x] 7.5c-2 code_mapper (3 策略 + LOW→requires_review) + earnings_comparator (前 3 次强制 review) + alerts (24h dedup + actionable_info 强制) + config/{alerts,mapping_rules}.yaml + 29 新单测
   - [ ] **7.5d** schedulers/ 4 模块 + Airflow DAG + 端到端晶泰 + tag `v0.7.5`
 - [ ] Phase 8 — 回测与校准
 - [ ] Phase 9 — 端到端验证

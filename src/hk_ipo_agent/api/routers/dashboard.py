@@ -21,6 +21,9 @@ async def get_summary(user: CurrentUserDep) -> DashboardSummary:
     reg = get_registry()
     snapshots = await reg.list_snapshots()
     audit = get_audit_store()
+    # AuditStoreProtocol doesn't guarantee __len__; use query() for count.
+    recent_audit = await audit.query(limit=1)
+    audit_count = len(recent_audit)
     return DashboardSummary(
         critical_alerts_count=0,
         pending_reviews_count=0,
@@ -39,7 +42,7 @@ async def get_summary(user: CurrentUserDep) -> DashboardSummary:
         system_health={
             "api": "ok",
             "snapshots_total": str(len(snapshots)),
-            "audit_records": str(len(audit)),
+            "audit_records": str(audit_count),
         },
         cost_summary={"today_usd": Decimal("0")},
     )

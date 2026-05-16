@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Annotated
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -55,8 +55,8 @@ async def whatif_run(
 
 async def _persist_calculation(
     *,
-    snapshot_id,
-    user_id,
+    snapshot_id: UUID,
+    user_id: UUID | None,
     payload: WhatIfRequest,
     response: WhatIfResponse,
 ) -> None:

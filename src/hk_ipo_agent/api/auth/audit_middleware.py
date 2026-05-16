@@ -21,7 +21,7 @@ from uuid import UUID, uuid4
 
 from fastapi import Request, Response
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -111,7 +111,7 @@ class PGAuditStore:
 
     def __init__(
         self,
-        session_factory: async_sessionmaker | None = None,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
     ) -> None:
         self._sf = session_factory or async_session_factory()
 

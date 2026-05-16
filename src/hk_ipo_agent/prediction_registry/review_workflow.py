@@ -27,7 +27,7 @@ from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..common.enums import AdjustmentStatus
 from ..common.logging import get_logger
@@ -68,7 +68,7 @@ class ReviewWorkflow:
         *,
         registry: _RegistryProtocol,
         attribution: AttributionEngine,
-        session_factory: async_sessionmaker,
+        session_factory: async_sessionmaker[AsyncSession],
     ) -> None:
         self._registry = registry
         self._attribution = attribution

@@ -234,7 +234,11 @@ class AttributionEngine:
         bull_validated = bull_total if ret > 0.05 else 0
         unaddressed: list[str] = []
         if ret < -0.10:
-            unaddressed.extend(r.bear_argument[:120] for r in rounds if "未" in r.resolution or "保留" in r.resolution)
+            unaddressed.extend(
+                r.bear_argument[:120]
+                for r in rounds
+                if r.resolution is not None and ("未" in r.resolution or "保留" in r.resolution)
+            )
         return DebateQualityAnalysis(
             bear_predictions_validated=bear_validated,
             bear_predictions_total=bear_total,

@@ -1,0 +1,87 @@
+# Earnings comparison field-mapping rules per PROJECT_SPEC.md §3.11.
+#
+# Prospectus extractions and post-listing filings often use slightly
+# different accounting standards (IFRS vs adjusted, RMB vs HKD, etc.).
+# These rules let operators express the conversion + which KPIs matter
+# per industry type, so the EarningsComparator can compare like-with-like.
+#
+# CLAUDE.md v1.2 constraint: the first 3 comparisons per system MUST
+# flag `requires_human_review=True` so operators can validate the
+# mapping rules before relying on the auto-output.
+
+default:
+  # Fields the comparator pulls from extraction.financial_snapshots[-1].
+  prediction_fields:
+    revenue: revenue_rmb
+    net_profit: adjusted_net_profit_rmb     # fall back to net_profit_rmb if absent
+    gross_margin: gross_margin
+  # FX conversion (multiplied with predicted before deviation calc).
+  fx_to_filing_currency: 1.0
+  # KPIs that matter for this industry — surfaced in qualitative_deviations
+  # when filing.extra_kpis contains them.
+  watch_kpis: []
+  # Tolerance bands (used by EarningsComparator._assess if customised).
+  bands:
+    beat: 0.05
+    miss: -0.05
+    significant_miss: -0.20
+
+ai_software:
+  prediction_fields:
+    revenue: revenue_rmb
+    net_profit: adjusted_net_profit_rmb
+    gross_margin: gross_margin
+  watch_kpis:
+    - arr_rmb                  # annual recurring revenue
+    - dbnr                     # dollar-based net retention
+    - rd_pct_of_revenue
+  bands:
+    beat: 0.08
+    miss: -0.05
+    significant_miss: -0.25
+
+semiconductor:
+  prediction_fields:
+    revenue: revenue_rmb
+    net_profit: adjusted_net_profit_rmb
+    gross_margin: gross_margin
+  watch_kpis:
+    - unit_shipments
+    - asp_rmb
+    - inventory_days
+  bands:
+    beat: 0.05
+    miss: -0.05
+    significant_miss: -0.20
+
+biotech_18a:
+  # Pre-commercial 18A names usually have zero revenue; profit comparisons
+  # are noise. The comparator should focus on cash runway + pipeline progress.
+  prediction_fields:
+    revenue: revenue_rmb         # often null
+    net_profit: net_profit_rmb   # always negative
+    gross_margin: gross_margin
+  watch_kpis:
+    - cash_balance_rmb
+    - rd_expense_rmb
+    - clinical_trial_milestones  # list of {phase, drug, status}
+  bands:
+    beat: 0.20                   # cash burn slower than predicted
+    miss: -0.20
+    significant_miss: -0.50
+
+specialty_tech_18c:
+  # 18C names are often pre-commercial; expect ARR / TAM commentary.
+  prediction_fields:
+    revenue: revenue_rmb
+    net_profit: adjusted_net_profit_rmb
+    gross_margin: gross_margin
+  watch_kpis:
+    - paying_customer_count
+    - arr_rmb
+    - dbnr
+    - cash_runway_months
+  bands:
+    beat: 0.10
+    miss: -0.10
+    significant_miss: -0.30

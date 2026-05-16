@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ...common.enums import AlertLevel, IPOLifecycleStateType
 from ...data.models import IPOLifecycleStateRow
@@ -42,7 +42,7 @@ class StaleSignal:
 class StaleDetector:
     """Scans active (non-terminal) lifecycle rows for stale ones."""
 
-    def __init__(self, session_factory: async_sessionmaker) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._sf = session_factory
 
     async def scan(self, *, as_of: datetime | None = None) -> list[StaleSignal]:

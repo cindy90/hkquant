@@ -14,7 +14,7 @@ from typing import Any, Protocol, runtime_checkable
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ...common.enums import ChatMessageRole
 from ...common.schemas import ChatMessage, ChatSession
@@ -134,7 +134,7 @@ class PGChatStore:
     sort key the API uses to stream messages in order.
     """
 
-    def __init__(self, session_factory: async_sessionmaker | None = None) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession] | None = None) -> None:
         self._sf = session_factory or async_session_factory()
 
     async def create_session(

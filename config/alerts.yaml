@@ -1,0 +1,52 @@
+# Alert routing config per PROJECT_SPEC.md §3.11 + CLAUDE.md v1.2.
+#
+# Each severity tier maps to a list of channel slugs. The lifespan in
+# `api/main.py` wires real clients to these slugs in production; the
+# MVP just logs each routed alert at INFO level (good enough for dev
+# and for verifying the dedup window).
+#
+# Channels: "log" (always available), "slack", "email", "pagerduty", "sms".
+# CLAUDE.md v1.2 constraint: actionable_info is *required* — the
+# AlertRouter raises ValueError if a caller emits without it.
+
+levels:
+  info:
+    - log
+  warning:
+    - log
+    - slack       # routed to #hk-ipo-warnings (or equivalent)
+  critical:
+    - log
+    - slack       # #hk-ipo-critical
+    - email       # ops mailing list
+    - pagerduty   # 24/7 on-call
+
+# Dedup window (hours). MUST stay at 24 per CLAUDE.md v1.2.
+# Changes to this value require an ADR.
+dedup_window_hours: 24
+
+# Routing matrix per category. Optional override; missing categories
+# fall back to the level routing above.
+categories:
+  scheduler_failure:
+    critical:
+      - pagerduty
+      - email
+  prediction_snapshot_integrity:
+    critical:
+      - pagerduty
+      - email
+      - slack
+  stale_pre_listing:   # PRE_LISTING > 180d
+    critical:
+      - slack
+      - email
+  stale_pricing:       # PRICING > 21d
+    warning:
+      - slack
+  earnings_human_review_required:
+    warning:
+      - slack
+  code_mapping_low_confidence:
+    warning:
+      - slack

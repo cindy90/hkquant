@@ -19,7 +19,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ...common.enums import IPOLifecycleStateType, TransitionTrigger
 from ...common.exceptions import LifecycleError
@@ -39,7 +39,7 @@ class StateMachineError(LifecycleError):
 class StateMachine:
     """Read + transition the lifecycle state for one IPO at a time."""
 
-    def __init__(self, session_factory: async_sessionmaker) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._sf = session_factory
 
     async def get_state(

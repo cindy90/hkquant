@@ -20,7 +20,7 @@ from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ...common.enums import AdjustmentStatus, IPOLifecycleStateType
 from ...common.logging import get_logger
@@ -60,7 +60,7 @@ class TerminalHandler:
     def __init__(
         self,
         *,
-        session_factory: async_sessionmaker,
+        session_factory: async_sessionmaker[AsyncSession],
         registry: _RegistryProtocol,
     ) -> None:
         self._sf = session_factory

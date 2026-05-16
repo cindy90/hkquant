@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ...common.enums import RealtimeEventType
 from ...common.logging import get_logger
@@ -40,7 +40,7 @@ class EventBus:
         self,
         *,
         max_queue: int = 1000,
-        session_factory: async_sessionmaker | None = None,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
     ) -> None:
         self._subscribers: list[asyncio.Queue[RealtimeEvent]] = []
         self._lock = asyncio.Lock()
