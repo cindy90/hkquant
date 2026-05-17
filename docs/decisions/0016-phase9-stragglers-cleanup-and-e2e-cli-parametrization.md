@@ -175,5 +175,4 @@ git rm -r workflows/
 - [ ] **ADR 0005 §Progress**：加 3 条 "Phase 9a (post-tag stragglers)" 补归档
 - [ ] **CLAUDE.md**：Phase 9 行补脚注指向本 ADR
 - [ ] **全仓 `make lint && make typecheck && make test`** 0 regression
-- [ ] **后续任务（独立 commit / 独立 PR）**：参数化 e2e CLI（见上节
-  第三类规格）
+- [x] **第三类（参数化 e2e CLI）**：实装 `src/hk_ipo_agent/pipelines/{__init__,pdf_to_snapshot}.py` 抽出 PDF → snapshot 5-step pipeline；`scripts/analyze_pdf.py` 参数化 CLI（`--pdf` / `--stock-code` / `--company-name` / `--listing-type` / `--industry-code` / `--max-pages` / `--max-chunks-per-section` / `--budget-usd` / `--regime-score` / `--no-report` / `--out-dir` / `--dry-run`）；原 `scripts/run_e2e_test.py` 退化为 `tests/e2e/test_yifei_case.py`（3 测试：classify_chunk / group_chunks / 翼菲 PDF parse+chunk mocked extract+graph 全 pipeline，自动 skip 当 PDF 不在）；`_write_detailed_report` + `_dump_full_state_json` 报告扩展。lint clean / 3 e2e passed / dry-run 验收 UTF-8 中文正常输出
