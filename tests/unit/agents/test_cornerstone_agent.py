@@ -95,7 +95,7 @@ async def test_cornerstone_agent_writes_multiplier_to_extras(
         {"name": "A2", "category": "sovereign", "ultimate_holder": "中投"},
     ]
     ctx = _ctx(mock_llm_client, cornerstones=cornerstones)
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await CornerstoneSignalAgent().run(ctx)
@@ -108,7 +108,7 @@ async def test_cornerstone_agent_no_cluster_zero_bonus(
     mock_llm_client, mock_llm_response
 ) -> None:
     ctx = _ctx(mock_llm_client, cornerstones=[])
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await CornerstoneSignalAgent().run(ctx)
@@ -119,7 +119,7 @@ async def test_cornerstone_agent_no_cluster_zero_bonus(
 @pytest.mark.asyncio
 async def test_cornerstone_agent_emits_data_sources(mock_llm_client, mock_llm_response) -> None:
     ctx = _ctx(mock_llm_client)
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await CornerstoneSignalAgent().run(ctx)

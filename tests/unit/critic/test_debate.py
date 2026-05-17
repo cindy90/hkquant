@@ -103,7 +103,7 @@ def _stub_agent_outputs() -> dict[str, AgentOutput]:
 async def test_run_debate_converges_early(mock_llm_client, mock_llm_response) -> None:
     """Bull and Bear emit identical text → Jaccard ≈ 1.0 → converge in 1 round."""
     # Both Bull and Bear get the same prompt-driven text.
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="同样的论点，AI growth 强劲，估值合理")
     )
 
@@ -135,7 +135,7 @@ async def test_run_debate_runs_max_rounds_without_convergence(
             text=f"unique_response_{counter['i']}_xyz_qwerty_alpha_bravo"
         )
 
-    mock_llm_client._client.messages.create = AsyncMock(side_effect=side_effect)
+    mock_llm_client._client.chat.completions.create = AsyncMock(side_effect=side_effect)
     debate_out, _cost = await run_debate(
         mock_llm_client,
         agent_outputs=_stub_agent_outputs(),
@@ -154,7 +154,7 @@ async def test_run_debate_empty_max_rounds_zero(
     mock_llm_client, mock_llm_response
 ) -> None:
     """max_rounds=0 produces empty debate."""
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="ignored")
     )
     debate_out, _cost = await run_debate(

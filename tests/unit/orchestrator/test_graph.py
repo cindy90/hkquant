@@ -30,7 +30,7 @@ def _md() -> MarketData:
 
 
 def test_graph_compiles(monkeypatch) -> None:
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test")
     g = build_main_graph(llm_client=LLMClient(daily_budget_usd=Decimal("100")), market_data=_md())
     nodes = set(g.get_graph().nodes.keys())
     # All 13 expected nodes plus __start__ / __end__.

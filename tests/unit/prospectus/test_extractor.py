@@ -34,7 +34,7 @@ def extraction_config() -> ExtractionConfig:
 
 @pytest.fixture
 def mock_llm(monkeypatch: pytest.MonkeyPatch) -> LLMClient:
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-extractor")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test-extractor")
     return LLMClient(daily_budget_usd=Decimal("100"))
 
 

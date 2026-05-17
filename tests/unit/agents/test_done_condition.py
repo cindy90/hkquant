@@ -119,7 +119,7 @@ async def test_done_condition_seven_agents_fanout(
 ) -> None:
     """All 7 agents run in parallel and produce valid AgentOutputs."""
     ctx = _full_context(mock_llm_client)
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
 
@@ -176,7 +176,7 @@ async def test_done_condition_parallel_runs_no_deadlock(
 ) -> None:
     """asyncio.gather across 7 agents completes without exception."""
     ctx = _full_context(mock_llm_client)
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
 
@@ -200,7 +200,7 @@ async def test_done_condition_policy_emits_regime_finding(
 ) -> None:
     """PolicyAgent's first Finding must reference the Regime Gate window."""
     ctx = _full_context(mock_llm_client)
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await PolicyAgent().run(ctx)

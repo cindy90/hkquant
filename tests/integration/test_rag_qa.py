@@ -91,7 +91,7 @@ def mocked_llm(monkeypatch: pytest.MonkeyPatch) -> LLMClient:
     """LLMClient with acomplete_json mocked to return a fixed answer."""
     from decimal import Decimal  # noqa: PLC0415
 
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-rag")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test-rag")
     return LLMClient(daily_budget_usd=Decimal("100"))
 
 
@@ -145,7 +145,7 @@ async def test_end_to_end_pdf_to_cited_answer(
         mocked_llm.acomplete_json = AsyncMock(return_value=fake_answer)  # type: ignore[method-assign]
 
         # 5. Run a QA query
-        qa = ProspectusQA(store=store, llm=mocked_llm, model="claude-sonnet-4")
+        qa = ProspectusQA(store=store, llm=mocked_llm, model="moonshot-v1-128k")
         # Force a retrieval result that contains our target_chunk
         # by patching the retriever to return a controlled hit-list:
         from hk_ipo_agent.prospectus.retriever import HybridResult  # noqa: PLC0415

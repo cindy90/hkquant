@@ -26,7 +26,7 @@ async def run_devils_advocate(
     bear_argument: str,
     ipo_id: str,
     round_number: int,
-    model: str = "claude-sonnet-4",
+    model: str = "moonshot-v1-128k",
 ) -> tuple[str, float, Any]:
     """Run one Devil turn. Returns ``(challenge, cost_delta, raw_resp)``."""
     body, _frontmatter = load_prompt("debate/devils_advocate.md")

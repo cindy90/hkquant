@@ -109,7 +109,7 @@ def _reset_registry_after_test() -> None:
 @pytest.mark.asyncio
 async def test_create_snapshot_node_succeeds_with_inmemory(monkeypatch) -> None:
     """Happy path: snapshot is persisted and snapshot_id returned."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test")
     set_registry(InMemoryPredictionRegistry())
     nodes = make_nodes(llm_client=LLMClient(daily_budget_usd=Decimal("100")), market_data=_md())
     result = await nodes["create_snapshot"](_state())
@@ -120,7 +120,7 @@ async def test_create_snapshot_node_succeeds_with_inmemory(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_create_snapshot_node_raises_on_registry_failure(monkeypatch) -> None:
     """ADR 0012 hard edge: registry failure must propagate as SnapshotCreationFailed."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test")
 
     class _FailingRegistry:
         async def create_snapshot(self, snapshot):  # type: ignore[no-untyped-def]
@@ -150,7 +150,7 @@ async def test_create_snapshot_node_raises_on_registry_failure(monkeypatch) -> N
 @pytest.mark.asyncio
 async def test_create_snapshot_node_hash_mismatch_blocks_persistence(monkeypatch) -> None:
     """Tampered hash on the snapshot object is caught before DB write."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test")
     set_registry(InMemoryPredictionRegistry())
 
     # Patch build_snapshot to return a tampered snapshot.

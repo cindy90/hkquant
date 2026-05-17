@@ -16,7 +16,7 @@ Pattern borrowed from
 - async IO
 - mandatory citations
 - strict Pydantic ``AgentOutput`` output
-- single-provider Anthropic LLM
+- single-provider KIMI/Moonshot LLM (OpenAI-compatible)
 - LangGraph-compatible state mutation via ``WorkflowExtras``
 """
 
@@ -142,13 +142,13 @@ class BaseAgent(ABC):
     Subclasses set:
     - ``role``: ``AgentRole`` enum
     - ``prompt_path``: relative path under ``prompts/`` (e.g. ``"agents/policy.md"``)
-    - ``model``: e.g. ``"claude-sonnet-4"`` (Phase 6 will read this from llm_models.yaml)
+    - ``model``: e.g. ``"moonshot-v1-128k"`` (Phase 6 will read this from llm_models.yaml)
     - ``score_card_class``: optional ``BaseScoreCard`` subclass for typed scores
     """
 
     role: ClassVar[AgentRole]
     prompt_path: ClassVar[str]
-    model: ClassVar[str] = "claude-sonnet-4"
+    model: ClassVar[str] = "moonshot-v1-128k"
     score_card_class: ClassVar[type[BaseScoreCard] | None] = None
 
     @abstractmethod
@@ -178,7 +178,7 @@ class BaseAgent(ABC):
         max_tokens: int = 4096,
         temperature: float = 0.2,
     ) -> LLMResponse:
-        """Plain text Anthropic call with cost attribution to this agent."""
+        """Plain text LLM call with cost attribution to this agent."""
         return await ctx.llm_client.acomplete(
             model=self.model,
             messages=[{"role": "user", "content": user}],

@@ -43,7 +43,7 @@ async def run_bull(
     prior_bear: str | None,
     ipo_id: str,
     round_number: int,
-    model: str = "claude-sonnet-4",
+    model: str = "moonshot-v1-128k",
 ) -> tuple[str, float, Any]:
     """Run one Bull turn. Returns ``(argument, cost_delta, raw_resp)``."""
     body, _frontmatter = load_prompt("debate/bull.md")

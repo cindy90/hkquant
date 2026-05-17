@@ -1,15 +1,16 @@
 # LLM routing per agent / extraction task. Populate in Phase 1.
 # See PROJECT_SPEC.md §3.2.
+# Using KIMI/Moonshot API (OpenAI-compatible): https://api.moonshot.ai/v1
 agents:
-  fundamental:        { model: claude-sonnet-4, max_tokens: 4096, temperature: 0.3 }
-  industry:           { model: claude-sonnet-4, max_tokens: 4096, temperature: 0.3 }
-  valuation:          { model: claude-sonnet-4, max_tokens: 4096, temperature: 0.2 }
-  policy:             { model: claude-sonnet-4, max_tokens: 4096, temperature: 0.2 }
-  liquidity:          { model: claude-sonnet-4, max_tokens: 4096, temperature: 0.3 }
-  cornerstone_signal: { model: claude-sonnet-4, max_tokens: 4096, temperature: 0.3 }
-  sentiment:          { model: claude-sonnet-4, max_tokens: 4096, temperature: 0.4 }
-  synthesizer:        { model: claude-opus-4-7, max_tokens: 8192, temperature: 0.2 }
+  fundamental:        { model: moonshot-v1-128k, max_tokens: 4096, temperature: 0.3 }
+  industry:           { model: moonshot-v1-128k, max_tokens: 4096, temperature: 0.3 }
+  valuation:          { model: moonshot-v1-128k, max_tokens: 4096, temperature: 0.2 }
+  policy:             { model: moonshot-v1-128k, max_tokens: 4096, temperature: 0.2 }
+  liquidity:          { model: moonshot-v1-128k, max_tokens: 4096, temperature: 0.3 }
+  cornerstone_signal: { model: moonshot-v1-128k, max_tokens: 4096, temperature: 0.3 }
+  sentiment:          { model: moonshot-v1-128k, max_tokens: 4096, temperature: 0.4 }
+  synthesizer:        { model: moonshot-v1-128k, max_tokens: 8192, temperature: 0.2 }
 
 extraction:
-  prospectus:         { model: claude-sonnet-4, max_tokens: 4096, temperature: 0.1 }
-  ch18c_qualifier:    { model: claude-sonnet-4, max_tokens: 2048, temperature: 0.1 }
+  prospectus:         { model: moonshot-v1-128k, max_tokens: 4096, temperature: 0.1 }
+  ch18c_qualifier:    { model: moonshot-v1-128k, max_tokens: 2048, temperature: 0.1 }

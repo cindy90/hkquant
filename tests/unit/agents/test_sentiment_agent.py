@@ -94,7 +94,7 @@ def _ctx(llm_client, *, industry="AI", company="测试", stock_code="09999.HK") 
 @pytest.mark.asyncio
 async def test_sentiment_agent_runs_without_kb(mock_llm_client, mock_llm_response) -> None:
     ctx = _ctx(mock_llm_client)
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await SentimentAgent().run(ctx)
@@ -126,7 +126,7 @@ async def test_sentiment_agent_with_kb_writes_theme_heat(
             return ["ai_server"]
 
     ctx.kb_tool = _KB()
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await SentimentAgent().run(ctx)

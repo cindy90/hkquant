@@ -1,4 +1,4 @@
-"""Tests for `hk_ipo_agent.common.llm_client` — Anthropic Claude wrapper."""
+"""Tests for `hk_ipo_agent.common.llm_client` — KIMI/Moonshot OpenAI-compatible wrapper."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from anthropic._exceptions import APIStatusError, APITimeoutError, RateLimitError
+from openai import APIStatusError, APITimeoutError, RateLimitError
 from pydantic import BaseModel
 
 from hk_ipo_agent.common.exceptions import (
@@ -31,37 +31,28 @@ from hk_ipo_agent.common.llm_client import (
 # ---------------------------------------------------------------------------
 
 
-def test_compute_cost_sonnet_known_prices() -> None:
-    # 1M input + 1M output for sonnet-4 = 3 + 15 = $18
+def test_compute_cost_moonshot_128k_known_prices() -> None:
+    # 1M input + 1M output for moonshot-v1-128k = 8.30 + 8.30 = $16.60
     cost = _compute_cost(
-        "claude-sonnet-4",
+        "moonshot-v1-128k",
         tokens_input=1_000_000,
         tokens_output=1_000_000,
         tokens_cache_read=0,
         tokens_cache_write=0,
     )
-    assert cost == Decimal("18.00")
+    assert cost == Decimal("16.60")
 
 
-def test_compute_cost_opus_known_prices() -> None:
-    # 1M input + 1M output for opus-4-7 = 15 + 75 = $90
+def test_compute_cost_moonshot_32k_known_prices() -> None:
+    # 1M input + 1M output for moonshot-v1-32k = 3.30 + 3.30 = $6.60
     cost = _compute_cost(
-        "claude-opus-4-7",
+        "moonshot-v1-32k",
         tokens_input=1_000_000,
         tokens_output=1_000_000,
         tokens_cache_read=0,
         tokens_cache_write=0,
     )
-    assert cost == Decimal("90.00")
-
-
-def test_compute_cost_prompt_caching_reduces_cost() -> None:
-    """Cache-read tokens should be 10x cheaper than fresh input."""
-    fresh = _compute_cost("claude-sonnet-4", 1_000_000, 0, 0, 0)
-    cached = _compute_cost("claude-sonnet-4", 0, 0, 1_000_000, 0)
-    # cache_read price is 0.30 vs input 3.00 = 10x cheaper
-    assert cached < fresh / 9
-    assert cached > Decimal("0.20")
+    assert cost == Decimal("6.60")
 
 
 def test_compute_cost_unknown_model_returns_zero() -> None:
@@ -74,7 +65,7 @@ def test_default_prices_table_has_required_keys() -> None:
             f"{model} missing keys"
         )
         for k, v in prices.items():
-            assert v > 0, f"{model}.{k} non-positive"
+            assert v >= 0, f"{model}.{k} negative"
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +77,7 @@ def test_cost_log_aggregates() -> None:
     log = CostLog()
     log.append(
         CostRecord(
-            model="claude-sonnet-4",
+            model="moonshot-v1-128k",
             agent_role="fundamental",
             ipo_id="ipo-1",
             tokens_input=100,
@@ -101,7 +92,7 @@ def test_cost_log_aggregates() -> None:
     )
     log.append(
         CostRecord(
-            model="claude-opus-4-7",
+            model="moonshot-v1-128k",
             agent_role="synthesizer",
             ipo_id="ipo-1",
             tokens_input=500,
@@ -126,39 +117,39 @@ def test_cost_log_aggregates() -> None:
 
 
 def _make_client(monkeypatch: pytest.MonkeyPatch) -> LLMClient:
-    """Build a client with a mocked AsyncAnthropic so tests never hit the wire."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-12345")
+    """Build a client with a mocked AsyncOpenAI so tests never hit the wire."""
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test-12345")
+    monkeypatch.setenv("KIMI_URL", "https://api.moonshot.ai/v1")
     return LLMClient(daily_budget_usd=Decimal("1.00"))
 
 
-def _fake_anthropic_response(
+def _fake_openai_response(
     *, text: str = "hi", in_tokens: int = 10, out_tokens: int = 20
 ) -> MagicMock:
-    """Build a mock that mimics an Anthropic Messages response object."""
+    """Build a mock that mimics an OpenAI ChatCompletion response object."""
     response = MagicMock()
-    response.id = "msg_test"
-    response.stop_reason = "end_turn"
+    response.id = "chatcmpl-test"
     response.usage = MagicMock(
-        input_tokens=in_tokens,
-        output_tokens=out_tokens,
-        cache_read_input_tokens=0,
-        cache_creation_input_tokens=0,
+        prompt_tokens=in_tokens,
+        completion_tokens=out_tokens,
     )
-    text_block = MagicMock()
-    text_block.type = "text"
-    text_block.text = text
-    response.content = [text_block]
+    message = MagicMock()
+    message.content = text
+    choice = MagicMock()
+    choice.message = message
+    choice.finish_reason = "stop"
+    response.choices = [choice]
     return response
 
 
 @pytest.mark.asyncio
 async def test_acomplete_success_records_cost(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _make_client(monkeypatch)
-    fake_call: Any = AsyncMock(return_value=_fake_anthropic_response(text="hello world"))
-    client._client.messages.create = fake_call  # type: ignore[attr-defined]
+    fake_call: Any = AsyncMock(return_value=_fake_openai_response(text="hello world"))
+    client._client.chat.completions.create = fake_call  # type: ignore[attr-defined]
 
     resp = await client.acomplete(
-        model="claude-sonnet-4",
+        model="moonshot-v1-128k",
         messages=[{"role": "user", "content": "ping"}],
         system="You are helpful.",
         agent_role="fundamental",
@@ -184,7 +175,7 @@ async def test_acomplete_blocks_when_budget_exceeded(
     # Manually inflate cost log past budget
     client.cost_log.append(
         CostRecord(
-            model="claude-opus-4-7",
+            model="moonshot-v1-128k",
             agent_role=None,
             ipo_id=None,
             tokens_input=0,
@@ -198,63 +189,40 @@ async def test_acomplete_blocks_when_budget_exceeded(
         )
     )
     fake_call: Any = AsyncMock()
-    client._client.messages.create = fake_call  # type: ignore[attr-defined]
+    client._client.chat.completions.create = fake_call  # type: ignore[attr-defined]
 
     with pytest.raises(LLMCostExceededError):
         await client.acomplete(
-            model="claude-sonnet-4",
+            model="moonshot-v1-128k",
             messages=[{"role": "user", "content": "ping"}],
         )
     fake_call.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_acomplete_wraps_system_with_cache_control(
+async def test_acomplete_system_message_prepended(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When cache_system_prompt=True (default), system text block carries cache_control."""
+    """System prompt is prepended as a system role message in OpenAI format."""
     client = _make_client(monkeypatch)
     captured: dict[str, Any] = {}
 
     async def fake_create(**kwargs: Any) -> MagicMock:
         captured.update(kwargs)
-        return _fake_anthropic_response()
+        return _fake_openai_response()
 
-    client._client.messages.create = fake_create  # type: ignore[attr-defined]
+    client._client.chat.completions.create = fake_create  # type: ignore[attr-defined]
 
     await client.acomplete(
-        model="claude-sonnet-4",
+        model="moonshot-v1-128k",
         messages=[{"role": "user", "content": "x"}],
         system="System guidance.",
     )
-    assert "system" in captured
-    system_blocks = captured["system"]
-    assert isinstance(system_blocks, list)
-    assert system_blocks[0]["type"] == "text"
-    assert system_blocks[0]["cache_control"] == {"type": "ephemeral"}
-
-
-@pytest.mark.asyncio
-async def test_acomplete_disables_cache_when_requested(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client = _make_client(monkeypatch)
-    captured: dict[str, Any] = {}
-
-    async def fake_create(**kwargs: Any) -> MagicMock:
-        captured.update(kwargs)
-        return _fake_anthropic_response()
-
-    client._client.messages.create = fake_create  # type: ignore[attr-defined]
-
-    await client.acomplete(
-        model="claude-sonnet-4",
-        messages=[{"role": "user", "content": "x"}],
-        system="No cache please.",
-        cache_system_prompt=False,
-    )
-    system_blocks = captured["system"]
-    assert "cache_control" not in system_blocks[0]
+    assert "messages" in captured
+    messages = captured["messages"]
+    assert messages[0]["role"] == "system"
+    assert messages[0]["content"] == "System guidance."
+    assert messages[1]["role"] == "user"
 
 
 # ---------------------------------------------------------------------------
@@ -274,14 +242,13 @@ async def test_acomplete_rate_limit_retries_exhausted_raises_typed(
 
     async def always_rate_limit(**_: Any) -> Any:
         call_count["n"] += 1
-        # Anthropic SDK constructs RateLimitError with response + body; use a stub
         raise RateLimitError("rate limited", response=MagicMock(), body=None)
 
-    client._client.messages.create = always_rate_limit  # type: ignore[attr-defined]
+    client._client.chat.completions.create = always_rate_limit  # type: ignore[attr-defined]
 
     with pytest.raises(LLMRateLimitError):
         await client.acomplete(
-            model="claude-sonnet-4",
+            model="moonshot-v1-128k",
             messages=[{"role": "user", "content": "x"}],
         )
     assert call_count["n"] == 2  # retried up to max_retries
@@ -298,11 +265,11 @@ async def test_acomplete_timeout_retries_exhausted_raises_typed(
     async def always_timeout(**_: Any) -> Any:
         raise APITimeoutError(request=MagicMock())
 
-    client._client.messages.create = always_timeout  # type: ignore[attr-defined]
+    client._client.chat.completions.create = always_timeout  # type: ignore[attr-defined]
 
     with pytest.raises(LLMTimeoutError):
         await client.acomplete(
-            model="claude-sonnet-4",
+            model="moonshot-v1-128k",
             messages=[{"role": "user", "content": "x"}],
         )
 
@@ -326,11 +293,11 @@ async def test_acomplete_non_429_api_status_error_no_retry(
         err.message = "bad"  # type: ignore[attr-defined]
         raise err
 
-    client._client.messages.create = server_error  # type: ignore[attr-defined]
+    client._client.chat.completions.create = server_error  # type: ignore[attr-defined]
 
     with pytest.raises(LLMError):
         await client.acomplete(
-            model="claude-sonnet-4",
+            model="moonshot-v1-128k",
             messages=[{"role": "user", "content": "x"}],
         )
     assert call_count["n"] == 1  # not retried
@@ -353,12 +320,12 @@ async def test_acomplete_json_parses_valid_response(
         name: str
 
     payload = '{"value": 42, "name": "ok"}'
-    client._client.messages.create = AsyncMock(  # type: ignore[attr-defined]
-        return_value=_fake_anthropic_response(text=payload)
+    client._client.chat.completions.create = AsyncMock(  # type: ignore[attr-defined]
+        return_value=_fake_openai_response(text=payload)
     )
 
     result = await client.acomplete_json(
-        model="claude-sonnet-4",
+        model="moonshot-v1-128k",
         messages=[{"role": "user", "content": "give me json"}],
         response_model=_Stub,
     )
@@ -378,12 +345,12 @@ async def test_acomplete_json_strips_code_fences(
         x: int
 
     fenced = "Here is the JSON:\n```json\n{\"x\": 99}\n```"
-    client._client.messages.create = AsyncMock(  # type: ignore[attr-defined]
-        return_value=_fake_anthropic_response(text=fenced)
+    client._client.chat.completions.create = AsyncMock(  # type: ignore[attr-defined]
+        return_value=_fake_openai_response(text=fenced)
     )
 
     result = await client.acomplete_json(
-        model="claude-sonnet-4",
+        model="moonshot-v1-128k",
         messages=[{"role": "user", "content": "x"}],
         response_model=_Stub,
     )
@@ -402,18 +369,18 @@ async def test_acomplete_json_retries_on_validation_failure(
 
     responses = iter(
         [
-            _fake_anthropic_response(text="not json at all"),
-            _fake_anthropic_response(text='{"value": 7}'),
+            _fake_openai_response(text="not json at all"),
+            _fake_openai_response(text='{"value": 7}'),
         ]
     )
 
     async def fake_create(**_: Any) -> Any:
         return next(responses)
 
-    client._client.messages.create = fake_create  # type: ignore[attr-defined]
+    client._client.chat.completions.create = fake_create  # type: ignore[attr-defined]
 
     result = await client.acomplete_json(
-        model="claude-sonnet-4",
+        model="moonshot-v1-128k",
         messages=[{"role": "user", "content": "x"}],
         response_model=_Stub,
         max_retries=2,
@@ -430,13 +397,13 @@ async def test_acomplete_json_raises_after_all_retries_exhausted(
     class _Stub(BaseModel):
         value: int
 
-    client._client.messages.create = AsyncMock(  # type: ignore[attr-defined]
-        return_value=_fake_anthropic_response(text="still not json")
+    client._client.chat.completions.create = AsyncMock(  # type: ignore[attr-defined]
+        return_value=_fake_openai_response(text="still not json")
     )
 
     with pytest.raises(LLMOutputValidationError):
         await client.acomplete_json(
-            model="claude-sonnet-4",
+            model="moonshot-v1-128k",
             messages=[{"role": "user", "content": "x"}],
             response_model=_Stub,
             max_retries=1,

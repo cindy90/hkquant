@@ -1,13 +1,12 @@
 """Unified async LLM client per PROJECT_SPEC.md §3.3.
 
-Wraps the official Anthropic AsyncClient and adds:
+Wraps the OpenAI-compatible AsyncClient (for KIMI/Moonshot API) and adds:
 - Exponential-backoff retry (max 3 attempts; honors Retry-After when present)
 - Per-call timeout (default 120s)
 - Token + USD cost tracking, persisted to a CostLog
-- Anthropic prompt caching helper (cache_control on system block)
 - structlog context (agent_role, ipo_id, model)
 
-Spec §1 mandates Claude as the only LLM. ADR 0002 ratifies model routing.
+KIMI API is OpenAI-compatible: https://api.moonshot.ai/v1
 """
 
 from __future__ import annotations
@@ -22,8 +21,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, TypeVar
 
-from anthropic import AsyncAnthropic
-from anthropic._exceptions import (
+from openai import AsyncOpenAI
+from openai import (
     APIConnectionError,
     APIStatusError,
     APITimeoutError,
@@ -52,26 +51,33 @@ T = TypeVar("T", bound=BaseModel)
 
 _log = get_logger(__name__)
 
-# Default per-1M-token USD prices (Sonnet 4 / Opus 4.7).
-# Override via cost table when Anthropic publishes updated pricing.
+# Default per-1M-token USD prices for KIMI/Moonshot models.
+# Updated based on Moonshot AI pricing (2024-2026).
+# moonshot-v1-128k: input ¥60/M tokens, output ¥60/M tokens (~$8.3 USD/M)
 DEFAULT_PRICES_USD_PER_MTOKENS: dict[str, dict[str, Decimal]] = {
-    "claude-sonnet-4": {
-        "input": Decimal("3.00"),
-        "input_cache_write": Decimal("3.75"),
-        "input_cache_read": Decimal("0.30"),
-        "output": Decimal("15.00"),
+    "moonshot-v1-128k": {
+        "input": Decimal("8.30"),
+        "input_cache_write": Decimal("0"),
+        "input_cache_read": Decimal("0"),
+        "output": Decimal("8.30"),
     },
-    "claude-opus-4-7": {
-        "input": Decimal("15.00"),
-        "input_cache_write": Decimal("18.75"),
-        "input_cache_read": Decimal("1.50"),
-        "output": Decimal("75.00"),
+    "moonshot-v1-32k": {
+        "input": Decimal("3.30"),
+        "input_cache_write": Decimal("0"),
+        "input_cache_read": Decimal("0"),
+        "output": Decimal("3.30"),
     },
-    "claude-haiku-4-5-20251001": {
-        "input": Decimal("1.00"),
-        "input_cache_write": Decimal("1.25"),
-        "input_cache_read": Decimal("0.10"),
-        "output": Decimal("5.00"),
+    "moonshot-v1-8k": {
+        "input": Decimal("1.70"),
+        "input_cache_write": Decimal("0"),
+        "input_cache_read": Decimal("0"),
+        "output": Decimal("1.70"),
+    },
+    "kimi-k2.6": {
+        "input": Decimal("10.00"),
+        "input_cache_write": Decimal("0"),
+        "input_cache_read": Decimal("0"),
+        "output": Decimal("10.00"),
     },
 }
 
@@ -151,7 +157,7 @@ def _compute_cost(
 
 
 class LLMClient:
-    """Async Claude client with retry + cost tracking + prompt caching.
+    """Async KIMI/Moonshot client (OpenAI-compatible) with retry + cost tracking.
 
     Construct once per process and inject; do not new up per call.
     """
@@ -160,6 +166,7 @@ class LLMClient:
         self,
         *,
         api_key: str | None = None,
+        base_url: str | None = None,
         timeout_seconds: int | None = None,
         max_retries: int | None = None,
         cost_log: CostLog | None = None,
@@ -168,13 +175,19 @@ class LLMClient:
         settings = get_settings()
         resolved_key = (
             api_key
-            or os.environ.get("ANTHROPIC_API_KEY")
-            or settings.llm.anthropic_api_key.get_secret_value()
+            or os.environ.get("KIMI_API_KEY")
+            or settings.llm.kimi_api_key.get_secret_value()
         )
         if not resolved_key:
-            raise LLMError("ANTHROPIC_API_KEY not configured")
+            raise LLMError("KIMI_API_KEY not configured")
 
-        self._client = AsyncAnthropic(api_key=resolved_key)
+        resolved_url = (
+            base_url
+            or os.environ.get("KIMI_URL")
+            or settings.llm.kimi_url
+        )
+
+        self._client = AsyncOpenAI(api_key=resolved_key, base_url=resolved_url)
         self.timeout_seconds = timeout_seconds or settings.llm.timeout_seconds
         self.max_retries = max_retries or settings.llm.max_retries
         self.cost_log = cost_log or CostLog()
@@ -195,31 +208,29 @@ class LLMClient:
         cache_system_prompt: bool = True,
         extra: dict[str, Any] | None = None,
     ) -> LLMResponse:
-        """One Messages call with retry + cost tracking + caching.
+        """One Chat Completions call with retry + cost tracking.
 
         Args:
-            model:               e.g. ``claude-sonnet-4``.
+            model:               e.g. ``moonshot-v1-128k``.
             messages:            user / assistant turns.
             system:              system prompt (str or block list).
             max_tokens:          model output cap.
             temperature:         sampling temperature.
             agent_role:          tag for cost attribution.
             ipo_id:              tag for cost attribution.
-            cache_system_prompt: wrap system prompt in cache_control for Anthropic
-                                 prompt caching (default True).
-            extra:               extra Anthropic API kwargs (e.g. tools).
+            cache_system_prompt: (ignored for KIMI, kept for API compatibility)
+            extra:               extra API kwargs (e.g. tools).
         """
         self._enforce_daily_budget()
 
-        system_payload = self._build_system(system, cache_system_prompt)
+        # Build messages list: prepend system message if provided
+        msg_list = self._build_messages(system, messages)
         api_kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": max_tokens,
             "temperature": temperature,
-            "messages": list(messages),
+            "messages": msg_list,
         }
-        if system_payload is not None:
-            api_kwargs["system"] = system_payload
         if extra:
             api_kwargs.update(extra)
 
@@ -244,10 +255,10 @@ class LLMClient:
         elapsed = time.monotonic() - started
 
         usage = getattr(raw, "usage", None)
-        tokens_input = int(getattr(usage, "input_tokens", 0) or 0)
-        tokens_output = int(getattr(usage, "output_tokens", 0) or 0)
-        tokens_cache_read = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
-        tokens_cache_write = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+        tokens_input = int(getattr(usage, "prompt_tokens", 0) or 0)
+        tokens_output = int(getattr(usage, "completion_tokens", 0) or 0)
+        tokens_cache_read = 0
+        tokens_cache_write = 0
         cost = _compute_cost(
             model, tokens_input, tokens_output, tokens_cache_read, tokens_cache_write
         )
@@ -271,8 +282,6 @@ class LLMClient:
             "llm_call_complete",
             tokens_input=tokens_input,
             tokens_output=tokens_output,
-            tokens_cache_read=tokens_cache_read,
-            tokens_cache_write=tokens_cache_write,
             cost_usd=str(cost),
             runtime_seconds=round(elapsed, 3),
             request_id=record.request_id,
@@ -281,7 +290,7 @@ class LLMClient:
         return LLMResponse(
             text=self._extract_text(raw),
             model=model,
-            stop_reason=getattr(raw, "stop_reason", None),
+            stop_reason=self._extract_finish_reason(raw),
             tokens_input=tokens_input,
             tokens_output=tokens_output,
             tokens_cache_read=tokens_cache_read,
@@ -295,7 +304,7 @@ class LLMClient:
     # ------------------------------------------------------------------ internals
 
     async def _call_with_retry(self, api_kwargs: dict[str, Any], log: Any) -> Any:
-        """Call the Anthropic Messages API with retry + per-call timeout.
+        """Call the OpenAI-compatible Chat Completions API with retry + per-call timeout.
 
         Retry policy is configured to raise RetryError (with last_attempt set)
         when attempts exhaust, so the caller can unwrap and translate to a
@@ -316,7 +325,7 @@ class LLMClient:
                 log.debug("llm_call_attempt", attempt=attempt_no)
                 try:
                     return await asyncio.wait_for(
-                        self._client.messages.create(**api_kwargs),
+                        self._client.chat.completions.create(**api_kwargs),
                         timeout=self.timeout_seconds,
                     )
                 except TimeoutError as exc:
@@ -326,7 +335,7 @@ class LLMClient:
                 except APIStatusError as exc:
                     # Other 4xx / 5xx — do not retry; raise as plain LLMError
                     raise LLMError(
-                        f"Anthropic API status {exc.status_code}: {exc.message}"
+                        f"KIMI API status {exc.status_code}: {exc.message}"
                     ) from exc
         raise LLMError("Retry loop exited without result")  # pragma: no cover
 
@@ -339,27 +348,46 @@ class LLMClient:
             )
 
     @staticmethod
-    def _build_system(
-        system: str | list[dict[str, Any]] | None, cache: bool
-    ) -> list[dict[str, Any]] | None:
-        if system is None:
-            return None
-        if isinstance(system, str):
-            block: dict[str, Any] = {"type": "text", "text": system}
-            if cache:
-                block["cache_control"] = {"type": "ephemeral"}
-            return [block]
-        return system
+    def _build_messages(
+        system: str | list[dict[str, Any]] | None,
+        messages: Iterable[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Build OpenAI-compatible message list with system message prepended."""
+        msg_list: list[dict[str, Any]] = []
+        if system is not None:
+            if isinstance(system, str):
+                msg_list.append({"role": "system", "content": system})
+            elif isinstance(system, list):
+                # Convert Anthropic-style block list to plain text
+                text_parts = []
+                for block in system:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text_parts.append(block.get("text", ""))
+                if text_parts:
+                    msg_list.append({"role": "system", "content": "\n".join(text_parts)})
+            else:
+                msg_list.append({"role": "system", "content": str(system)})
+        msg_list.extend(list(messages))
+        return msg_list
 
     @staticmethod
     def _extract_text(raw: Any) -> str:
-        """Concatenate text blocks from a Messages response."""
-        content = getattr(raw, "content", None) or []
-        parts: list[str] = []
-        for block in content:
-            if getattr(block, "type", None) == "text":
-                parts.append(getattr(block, "text", ""))
-        return "".join(parts)
+        """Extract text from an OpenAI ChatCompletion response."""
+        choices = getattr(raw, "choices", None) or []
+        if not choices:
+            return ""
+        message = getattr(choices[0], "message", None)
+        if message is None:
+            return ""
+        return getattr(message, "content", "") or ""
+
+    @staticmethod
+    def _extract_finish_reason(raw: Any) -> str | None:
+        """Extract finish_reason from an OpenAI ChatCompletion response."""
+        choices = getattr(raw, "choices", None) or []
+        if not choices:
+            return None
+        return getattr(choices[0], "finish_reason", None)
 
     # -------------------------------------------------------- structured output
 

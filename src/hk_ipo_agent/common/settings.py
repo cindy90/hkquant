@@ -83,6 +83,8 @@ class RedisSettings(BaseSettings):
 
 class LLMSettings(BaseSettings):
     anthropic_api_key: SecretStr = SecretStr("")
+    kimi_api_key: SecretStr = SecretStr("")
+    kimi_url: str = "https://api.moonshot.cn/v1"
     max_retries: int = 3
     timeout_seconds: int = 120
     cost_daily_budget_usd: float = 20.0

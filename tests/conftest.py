@@ -1,8 +1,8 @@
 """Shared pytest fixtures per PROJECT_SPEC.md §9.
 
 Available fixtures:
-- ``mock_llm_client``       — `LLMClient` whose Anthropic AsyncAnthropic is mocked.
-- ``mock_llm_response``     — factory producing fake Anthropic Messages responses.
+- ``mock_llm_client``       — `LLMClient` whose OpenAI AsyncClient is mocked.
+- ``mock_llm_response``     — factory producing fake OpenAI ChatCompletion responses.
 - ``sample_citation``       — a simple `Citation(page=42)`.
 - ``sample_finding``        — a single `Finding` with citation.
 - ``sample_extraction``     — minimal valid `ProspectusExtraction`.
@@ -56,7 +56,7 @@ from hk_ipo_agent.data.models import CornerstoneInvestor, IPOEvent
 
 @pytest.fixture
 def mock_llm_response() -> Callable[..., MagicMock]:
-    """Factory: build a mock Anthropic Messages response object.
+    """Factory: build a mock OpenAI ChatCompletion response object.
 
     Example:
         resp = mock_llm_response(text="hello", in_tokens=10, out_tokens=20)
@@ -69,22 +69,21 @@ def mock_llm_response() -> Callable[..., MagicMock]:
         out_tokens: int = 20,
         cache_read_tokens: int = 0,
         cache_creation_tokens: int = 0,
-        stop_reason: str = "end_turn",
-        request_id: str = "msg_test",
+        stop_reason: str = "stop",
+        request_id: str = "chatcmpl-test",
     ) -> MagicMock:
         response = MagicMock()
         response.id = request_id
-        response.stop_reason = stop_reason
         response.usage = MagicMock(
-            input_tokens=in_tokens,
-            output_tokens=out_tokens,
-            cache_read_input_tokens=cache_read_tokens,
-            cache_creation_input_tokens=cache_creation_tokens,
+            prompt_tokens=in_tokens,
+            completion_tokens=out_tokens,
         )
-        text_block = MagicMock()
-        text_block.type = "text"
-        text_block.text = text
-        response.content = [text_block]
+        message = MagicMock()
+        message.content = text
+        choice = MagicMock()
+        choice.message = message
+        choice.finish_reason = stop_reason
+        response.choices = [choice]
         return response
 
     return _factory
@@ -95,15 +94,16 @@ def mock_llm_client(
     monkeypatch: pytest.MonkeyPatch,
     mock_llm_response: Callable[..., MagicMock],
 ) -> LLMClient:
-    """A `LLMClient` with `messages.create` patched to a no-op AsyncMock.
+    """A `LLMClient` with `chat.completions.create` patched to a no-op AsyncMock.
 
-    Tests should override `client._client.messages.create` to a custom AsyncMock
+    Tests should override `client._client.chat.completions.create` to a custom AsyncMock
     when they need to control the response.
     """
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-fixture")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test-fixture")
+    monkeypatch.setenv("KIMI_URL", "https://api.moonshot.ai/v1")
     client = LLMClient(daily_budget_usd=Decimal("100"))
     default_create: Any = AsyncMock(return_value=mock_llm_response())
-    client._client.messages.create = default_create  # type: ignore[attr-defined]
+    client._client.chat.completions.create = default_create  # type: ignore[attr-defined]
     return client
 
 

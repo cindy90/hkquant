@@ -33,17 +33,20 @@ if TYPE_CHECKING:
 
 # Common HK IPO prospectus section markers (Chinese + English)
 SECTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"^第\s*[一二三四五六七八九十0-9]+\s*[节章部分]"), "numbered_section_zh"),
-    (re.compile(r"^(摘要|SUMMARY)\s*$", re.IGNORECASE), "summary"),
-    (re.compile(r"^(风险因素|RISK FACTORS?)\s*$", re.IGNORECASE), "risk_factors"),
-    (re.compile(r"^(业务|BUSINESS)\s*$", re.IGNORECASE), "business"),
-    (re.compile(r"^(财务资料|财务报表|FINANCIAL INFORMATION)\s*", re.IGNORECASE), "financials"),
-    (re.compile(r"^(管理|MANAGEMENT)\s*$", re.IGNORECASE), "management"),
-    (re.compile(r"^(主要股东|股本|SUBSTANTIAL SHAREHOLDERS?)\s*", re.IGNORECASE), "shareholders"),
-    (re.compile(r"^(基石投资者|CORNERSTONE INVESTORS?)\s*", re.IGNORECASE), "cornerstone"),
-    (re.compile(r"^(发售|未来计划|FUTURE PLANS AND USE OF PROCEEDS)\s*", re.IGNORECASE), "use_of_proceeds"),
-    (re.compile(r"^(中国监管|监管概要|REGULATORY OVERVIEW)\s*", re.IGNORECASE), "regulatory"),
-    (re.compile(r"^(附录|附件|APPENDIX)\s*", re.IGNORECASE), "appendix"),
+    (re.compile(r"^第\s*[一二三四五六七八九十0-9]+\s*[节章部分節]"), "numbered_section_zh"),
+    (re.compile(r"^(摘要|概要|SUMMARY)\s*$", re.IGNORECASE), "summary"),
+    (re.compile(r"^(风险因素|風險因素|RISK FACTORS?)\s*$", re.IGNORECASE), "risk_factors"),
+    (re.compile(r"^(业务|業務|BUSINESS)\s*$", re.IGNORECASE), "business"),
+    (re.compile(r"^(财务资料|財務資料|财务报表|財務報表|FINANCIAL INFORMATION)\s*", re.IGNORECASE), "financials"),
+    (re.compile(r"^(管理|管理層|MANAGEMENT)\s*$", re.IGNORECASE), "management"),
+    (re.compile(r"^(主要股东|主要股東|股本|股本及購股權|SUBSTANTIAL SHAREHOLDERS?)\s*", re.IGNORECASE), "shareholders"),
+    (re.compile(r"^(基石投资者|基石投資者|CORNERSTONE INVESTORS?)\s*", re.IGNORECASE), "cornerstone"),
+    (re.compile(r"^(未来计划|未來計劃|所得款項用途|FUTURE PLANS AND USE OF PROCEEDS)\s*", re.IGNORECASE), "use_of_proceeds"),
+    (re.compile(r"^(發售結構|发售结构|STRUCTURE OF THE .*(OFFERING|PLACEMENT))\s*", re.IGNORECASE), "use_of_proceeds"),
+    (re.compile(r"^(中国监管|中國監管|监管概要|監管概要|REGULATORY OVERVIEW)\s*", re.IGNORECASE), "regulatory"),
+    (re.compile(r"^(附录|附錄|附件|APPENDIX)\s*", re.IGNORECASE), "appendix"),
+    (re.compile(r"^(歷史及發展|历史及发展|HISTORY AND DEVELOPMENT)\s*", re.IGNORECASE), "business"),
+    (re.compile(r"^(行業概覽|行业概览|INDUSTRY OVERVIEW)\s*", re.IGNORECASE), "business"),
 )
 
 

@@ -115,7 +115,7 @@ def build_snapshot(
         debate_output=debate,
         decision=decision,
         system_version=settings.system_version,
-        model_versions=model_versions or {"synthesizer": "claude-opus-4-7"},
+        model_versions=model_versions or {"synthesizer": "moonshot-v1-128k"},
         config_snapshot=config_snapshot or {},
         total_cost_usd=total_cost_usd,
         runtime_seconds=runtime_seconds,

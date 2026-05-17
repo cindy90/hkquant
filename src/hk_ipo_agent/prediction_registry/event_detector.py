@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 
 PRICE_ANOMALY_SINGLE_DAY_THRESHOLD = 0.05  # |daily| > 5%
 PRICE_ANOMALY_5D_THRESHOLD = 0.10  # |5-day rolling| > 10%
-EVENT_CLASSIFIER_MODEL = "claude-sonnet-4-6"
+EVENT_CLASSIFIER_MODEL = "moonshot-v1-128k"
 
 
 class _AnnouncementSource(Protocol):

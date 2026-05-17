@@ -32,7 +32,8 @@ def test_load_prompt_returns_full_body_when_no_frontmatter() -> None:
 
 def test_agent_context_construction(monkeypatch) -> None:
     """AgentContext is a dataclass with sensible defaults."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test")
+    monkeypatch.setenv("KIMI_URL", "https://api.moonshot.ai/v1")
     ext = ProspectusExtraction(
         prospectus_id="P-1",
         company_name_zh="测试",

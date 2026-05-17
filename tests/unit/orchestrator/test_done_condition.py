@@ -71,7 +71,7 @@ async def test_done_condition_full_pipeline(
         '"key_reasons_against": ["concentration"], "narrative": "ok", '
         '"allocation_pct_suggested": 0.04}'
     )
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text=f"narrative\n```json\n{json_blob}\n```")
     )
 

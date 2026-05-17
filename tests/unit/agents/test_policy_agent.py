@@ -88,7 +88,7 @@ async def test_policy_agent_run_writes_regime_score_to_extras(
 ) -> None:
     ctx = _ctx(llm_client=mock_llm_client, regime_override=0.08)
     # Stub LLM to return a parseable scorecard.
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(
             text=(
                 "Some narrative.\n"
@@ -111,7 +111,7 @@ async def test_policy_agent_negative_regime_finding(
     mock_llm_client, mock_llm_response
 ) -> None:
     ctx = _ctx(llm_client=mock_llm_client, regime_override=-0.10)
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await PolicyAgent().run(ctx)
@@ -124,7 +124,7 @@ async def test_policy_agent_runtime_seconds_reported(
     mock_llm_client, mock_llm_response
 ) -> None:
     ctx = _ctx(llm_client=mock_llm_client, regime_override=0.0)
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await PolicyAgent().run(ctx)

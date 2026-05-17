@@ -43,7 +43,7 @@ class _StubAnnouncements:
 
 @pytest.fixture
 def llm_mock(monkeypatch) -> LLMClient:
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test")
     client = LLMClient(daily_budget_usd=Decimal("100"))
     # Default: return EARNINGS / MAJOR / "Q1 业绩".
     client.acomplete_json = AsyncMock(  # type: ignore[method-assign]

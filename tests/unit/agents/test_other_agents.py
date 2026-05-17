@@ -143,7 +143,7 @@ async def test_fundamental_agent_run_returns_output(mock_llm_client, mock_llm_re
         llm_client=mock_llm_client,
         extras=WorkflowExtras(),
     )
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await FundamentalAgent().run(ctx)
@@ -177,7 +177,7 @@ async def test_industry_agent_emits_data_source(mock_llm_client, mock_llm_respon
         llm_client=mock_llm_client,
         extras=extras,
     )
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await IndustryAgent().run(ctx)
@@ -203,7 +203,7 @@ async def test_valuation_agent_drives_ensemble(mock_llm_client, mock_llm_respons
         llm_client=mock_llm_client,
         extras=WorkflowExtras(),
     )
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await ValuationAgent().run(ctx)
@@ -238,7 +238,7 @@ async def test_liquidity_agent_emits_southbound_from_tier(
         llm_client=mock_llm_client,
         extras=WorkflowExtras(),
     )
-    mock_llm_client._client.messages.create = AsyncMock(
+    mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
     )
     out = await LiquidityAgent().run(ctx)

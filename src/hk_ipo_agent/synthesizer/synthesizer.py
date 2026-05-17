@@ -83,7 +83,7 @@ async def synthesize(
     debate: DebateOutput,
     extras: WorkflowExtras,
     cross_check_notes: list[str] | None = None,
-    model: str = "claude-opus-4-7",
+    model: str = "moonshot-v1-128k",
 ) -> tuple[FinalDecision, Decimal]:
     """Run the synthesizer; return ``(FinalDecision, total_cost_usd)``."""
     started = time.monotonic()

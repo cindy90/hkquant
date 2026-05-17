@@ -27,6 +27,7 @@ _REDACT_KEYS: tuple[str, ...] = (
     "token",
     "client_secret",
     "anthropic_api_key",
+    "kimi_api_key",
     "llama_cloud_api_key",
 )
 

@@ -43,7 +43,7 @@ from ..common.schemas import (
 
 logger = get_logger(__name__)
 
-DIAGNOSIS_MODEL = "claude-opus-4-7"
+DIAGNOSIS_MODEL = "moonshot-v1-128k"
 
 
 # ---------------------------------------------------------------------------

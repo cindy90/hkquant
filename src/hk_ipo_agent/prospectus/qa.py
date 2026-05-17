@@ -60,7 +60,7 @@ class ProspectusQA:
         store: ProspectusVectorStore,
         llm: LLMClient,
         *,
-        model: str = "claude-sonnet-4",
+        model: str = "moonshot-v1-128k",
     ) -> None:
         self.store = store
         self.llm = llm

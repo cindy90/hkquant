@@ -125,8 +125,8 @@ class ProspectusExtractor:
         self.llm = llm
         self.prospectus_id = prospectus_id
         self.config = config
-        self._llm_routing = _resolve_model("extraction.prospectus", default="claude-sonnet-4")
-        self._llm_opus = _resolve_model("agents.synthesizer", default="claude-opus-4-7")
+        self._llm_routing = _resolve_model("extraction.prospectus", default="moonshot-v1-128k")
+        self._llm_opus = _resolve_model("agents.synthesizer", default="moonshot-v1-128k")
 
     async def extract(
         self,

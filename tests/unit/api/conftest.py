@@ -46,7 +46,7 @@ from hk_ipo_agent.prediction_registry.snapshot import build_snapshot
 @pytest.fixture(autouse=True)
 def _reset_state(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Wipe in-memory stores between tests."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test")
     get_settings.cache_clear()
     reset_registry()
     reset_users_for_test()

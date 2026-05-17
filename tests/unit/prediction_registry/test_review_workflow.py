@@ -128,7 +128,7 @@ async def pg_workflow():
     """Returns (workflow, registry, session_factory) over a truncated PG."""
     import os  # noqa: PLC0415
 
-    os.environ.setdefault("ANTHROPIC_API_KEY", "sk-test-fixture")
+    os.environ.setdefault("KIMI_API_KEY", "sk-test-fixture")
     engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
     sf = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     async with sf() as s:

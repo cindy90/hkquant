@@ -11,7 +11,7 @@ goal is to prove that:
 3. The 30-minute wall-clock SLO leaves plenty of headroom — the smoke
    run completes in seconds.
 
-Skipped when ``ANTHROPIC_API_KEY`` is unset because LLMClient validation
+Skipped when ``KIMI_API_KEY`` is unset because LLMClient validation
 requires it (the API key is mocked but the env var has to be present
 to construct the client).
 """
@@ -44,7 +44,7 @@ from hk_ipo_agent.common.schemas import (
     ValuationDistribution,
 )
 
-# The autouse fixture below sets ANTHROPIC_API_KEY=sk-test before each
+# The autouse fixture below sets KIMI_API_KEY=sk-test before each
 # test runs, so the LLMClient can be constructed without a real key.
 # We don't gate the test on the env var.
 _ = os  # keep import for clarity that env handling is intentional
@@ -96,7 +96,7 @@ def _sample() -> BacktestInput:
 @pytest.fixture(autouse=True)
 def _reset_engine_cache(monkeypatch: pytest.MonkeyPatch):
     """Drop the cached AsyncEngine between tests."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("KIMI_API_KEY", "sk-test")
     from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
     from hk_ipo_agent.data.database import (  # noqa: PLC0415
         async_session_factory,

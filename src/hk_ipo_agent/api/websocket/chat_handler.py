@@ -21,7 +21,7 @@ async def reply(
     *,
     history: list[ChatMessage],
     user_message: str,
-    model: str = "claude-sonnet-4",
+    model: str = "moonshot-v1-128k",
 ) -> str:
     """Generate the assistant reply text given prior message history."""
     msgs = []
