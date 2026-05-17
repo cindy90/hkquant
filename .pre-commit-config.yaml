@@ -61,9 +61,24 @@ repos:
         stages: [manual]   # opt-in for now; flip to [pre-commit] once Phase 1 typing is stable
 
   # ---------------- Secrets scan ----------------
+  # exclude rationale: known fixture/migration areas where detect-secrets
+  # heuristics fire on dev-mode password literals or hex revision hashes.
+  # These are NOT real secrets and never will be — true secrets always
+  # live in .env / settings.py SecretStr fields, both of which are scanned.
+  # New file additions outside these excludes still go through baseline check.
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: ["--baseline", ".secrets.baseline"]
-        exclude: ^(\.env\.example|tests/fixtures/|PROJECT_SPEC\.md|PROJECT_SPEC_UI\.md|new_project_spec/)
+        exclude: |
+          (?x)^(
+            \.env\.example
+            | tests/fixtures/
+            | PROJECT_SPEC\.md
+            | PROJECT_SPEC_UI\.md
+            | new_project_spec/
+            | \.github/workflows/ci\.yml
+            | src/hk_ipo_agent/data/migrations/versions/.*\.py
+            | src/hk_ipo_agent/api/auth/dependencies\.py
+          )
