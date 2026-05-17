@@ -27,7 +27,9 @@ from .exceptions import ConfigurationError
 # R2-7: literal default JWT secret. Production startup must reject this value.
 # pragma: allowlist secret — this IS the literal that R2-7 guards against;
 # it's a placeholder by definition, not a real credential.
-_DEFAULT_JWT_SECRET_PLACEHOLDER = "change-me-min-32-chars-long-secret-here"  # pragma: allowlist secret
+_DEFAULT_JWT_SECRET_PLACEHOLDER = (
+    "change-me-min-32-chars-long-secret-here"  # pragma: allowlist secret
+)
 
 # R2-1 + R2-7: which Settings.environment strings count as "production".
 _PROD_ENV_ALIASES = frozenset({"prod", "production"})
