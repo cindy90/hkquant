@@ -10,19 +10,17 @@ from hk_ipo_agent.common.settings import DatabaseSettings, Settings, _load_yaml
 
 
 def test_database_url_async_psycopg() -> None:
+    # Test fixture credentials — not real secrets.
+    _PW = "s3cr3t"  # pragma: allowlist secret
     db = DatabaseSettings(
         host="db.example.com",
         port=5433,
         name="hki",
         user="alice",
-        password=SecretStr("s3cr3t"),  # pragma: allowlist secret
+        password=SecretStr(_PW),
     )
-    assert (  # pragma: allowlist secret
-        db.url == "postgresql+asyncpg://alice:s3cr3t@db.example.com:5433/hki"
-    )
-    assert (  # pragma: allowlist secret
-        db.sync_url == "postgresql+psycopg://alice:s3cr3t@db.example.com:5433/hki"
-    )
+    assert db.url == f"postgresql+asyncpg://alice:{_PW}@db.example.com:5433/hki"
+    assert db.sync_url == f"postgresql+psycopg://alice:{_PW}@db.example.com:5433/hki"
 
 
 def test_settings_default_values() -> None:
