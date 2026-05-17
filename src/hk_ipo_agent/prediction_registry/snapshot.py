@@ -29,7 +29,7 @@ from ..common.schemas import (
     ProspectusExtraction,
     ValuationEnsembleOutput,
 )
-from ..common.settings import get_settings
+from ..common.settings import get_settings, resolve_agent_model
 
 
 class SnapshotIntegrityError(Exception):
@@ -117,7 +117,8 @@ def build_snapshot(
         debate_output=debate,
         decision=decision,
         system_version=settings.system_version,
-        model_versions=model_versions or {"synthesizer": "moonshot-v1-128k"},
+        model_versions=model_versions
+        or {"synthesizer": resolve_agent_model("agents.synthesizer")},  # R4-1
         config_snapshot=config_snapshot or {},
         total_cost_usd=total_cost_usd,
         runtime_seconds=runtime_seconds,

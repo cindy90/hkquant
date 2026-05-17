@@ -285,6 +285,74 @@ def load_valuation_weights_config() -> dict[str, Any]:
     return _load_yaml(_CONFIG_DIR / "valuation_weights.yaml")
 
 
+def resolve_agent_model(
+    role_path: str,
+    *,
+    default: str = "moonshot-v1-128k",
+) -> str:
+    """R4-1 — single entry point for "what model does this role use?".
+
+    Walks a dotted key into ``config/llm_models.yaml`` and returns the
+    ``model`` string at that path. Replaces 13+ hardcoded "moonshot-v1-128k"
+    literals scattered across agents / critic / synthesizer / extractor
+    / snapshot / chat_handler / qa / prediction_registry detectors.
+
+    Examples::
+
+        resolve_agent_model("agents.fundamental")        -> "moonshot-v1-128k"
+        resolve_agent_model("agents.synthesizer")        -> "moonshot-v1-128k"
+        resolve_agent_model("extraction.prospectus")     -> "moonshot-v1-128k"
+        resolve_agent_model("agents.does_not_exist")     -> default
+
+    Any future provider migration (e.g. ADR 0017 → some-future-ADR)
+    becomes a single YAML change. See PLAN R4-1.
+    """
+    cfg = load_llm_models_config()
+    cursor: Any = cfg
+    for part in role_path.split("."):
+        if not isinstance(cursor, dict) or part not in cursor:
+            return default
+        cursor = cursor[part]
+    if isinstance(cursor, dict) and "model" in cursor:
+        return str(cursor["model"])
+    return default
+
+
+def resolve_agent_model_config(
+    role_path: str,
+    *,
+    default_model: str = "moonshot-v1-128k",
+    default_max_tokens: int = 4096,
+    default_temperature: float = 0.2,
+) -> dict[str, Any]:
+    """R4-3 — return the full ``{model, max_tokens, temperature}`` triple.
+
+    Sister of :func:`resolve_agent_model` for callers that also want to
+    pick up temperature / max_tokens from YAML instead of hardcoding.
+    """
+    cfg = load_llm_models_config()
+    cursor: Any = cfg
+    for part in role_path.split("."):
+        if not isinstance(cursor, dict) or part not in cursor:
+            return {
+                "model": default_model,
+                "max_tokens": default_max_tokens,
+                "temperature": default_temperature,
+            }
+        cursor = cursor[part]
+    if not isinstance(cursor, dict):
+        return {
+            "model": default_model,
+            "max_tokens": default_max_tokens,
+            "temperature": default_temperature,
+        }
+    return {
+        "model": str(cursor.get("model", default_model)),
+        "max_tokens": int(cursor.get("max_tokens", default_max_tokens)),
+        "temperature": float(cursor.get("temperature", default_temperature)),
+    }
+
+
 def load_regulations_config(filename: str) -> dict[str, Any]:
     """Read one file from ``config/regulations/`` (e.g. ``ipo_rules_post_20250804.yaml``).
 
@@ -322,4 +390,6 @@ __all__ = (
     "load_llm_models_config",
     "load_regulations_config",
     "load_valuation_weights_config",
+    "resolve_agent_model",
+    "resolve_agent_model_config",
 )

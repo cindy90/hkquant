@@ -26,6 +26,8 @@
 | [0014](0014-phase9-scope-and-substages.md) | Phase 9 范围 + 3 子阶段切片 | **Accepted** | **Phase 9** | NACS legacy 归档 / FullPipelineScorer + e2e 测试骨架 / 5 家案例 stub + tag v0.9 — 切成 9a→b→c 三子阶段 |
 | [0015](0015-phase10-scope-and-substages.md) | Phase 10 范围 + 3 子阶段切片 | **Accepted** | **Phase 10** | drift_detector + attribution_aggregator + counterfactual + version_manager / adjustment_proposer + applier (强制 human gate) + reports / CLI + LEARNING_PROTOCOL + e2e 闭环 — 切成 10a→b→c 三子阶段 + tag v1.0 |
 | [0016](0016-phase9-stragglers-cleanup-and-e2e-cli-parametrization.md) | Phase 9a 补归档 + 参数化 e2e CLI 入口 | **Accepted** | **Phase 9 (post-tag), Phase 10 prep** | 6 个 NACS 同源遗漏脚本归档/删除 + 删 workflows/ stub + 登记 `scripts/analyze_pdf.py` 参数化任务（堵住"一次性脚本积累"成因） |
+| [0017](0017-llm-provider-kimi-moonshot.md) | LLM Provider: Anthropic Claude → KIMI/Moonshot | **Accepted** | **R4 (post-v1.0)** | 记录 commit `2582dab` 的 provider 切换决策（cost / latency / OpenAI SDK 兼容）；ADR 0002 标 Superseded；保留 Anthropic API key env slot 作 future fallback；YAML-driven 单点切换 |
+| [0018](0018-ifind-incremental-loader-deferral.md) | iFind Incremental Loader Deferral | **Accepted** | **R3 (post-v1.0)** | 把 `HistoricalIPOLoader._upsert_from_ifind` + `ComparablePoolBuilder._ingest` 标 DEFERRED；ADR 0005 §Progress 对应条目 ✅ → ⚠️；stub 改 raise NotImplementedError 阻止 silent zero return |
 
 ---
 

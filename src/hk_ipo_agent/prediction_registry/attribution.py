@@ -40,10 +40,12 @@ from ..common.schemas import (
     ProposedAdjustment,
     ValuationErrorAnalysis,
 )
+from ..common.settings import resolve_agent_model
 
 logger = get_logger(__name__)
 
-DIAGNOSIS_MODEL = "moonshot-v1-128k"
+# R4-1 — resolve at module load so call sites stay terse; YAML-driven.
+DIAGNOSIS_MODEL = resolve_agent_model("registry.attribution")
 
 
 # ---------------------------------------------------------------------------

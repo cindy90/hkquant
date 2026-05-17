@@ -141,16 +141,30 @@ class BaseAgent(ABC):
     """Abstract base for every expert agent.
 
     Subclasses set:
-    - ``role``: ``AgentRole`` enum
+    - ``role``: ``AgentRole`` enum (used as YAML lookup key)
     - ``prompt_path``: relative path under ``prompts/`` (e.g. ``"agents/policy.md"``)
-    - ``model``: e.g. ``"moonshot-v1-128k"`` (Phase 6 will read this from llm_models.yaml)
     - ``score_card_class``: optional ``BaseScoreCard`` subclass for typed scores
+
+    R4-1 / R4-3: the model + max_tokens + temperature are now resolved
+    at call time from ``config/llm_models.yaml`` via
+    :func:`hk_ipo_agent.common.settings.resolve_agent_model_config`, keyed
+    on ``agents.<role.value>``. The legacy ``model`` ClassVar is kept as
+    a fallback for tests that subclass without a corresponding YAML row.
     """
 
     role: ClassVar[AgentRole]
     prompt_path: ClassVar[str]
-    model: ClassVar[str] = "moonshot-v1-128k"
+    model: ClassVar[str] = "moonshot-v1-128k"  # fallback only; YAML wins
     score_card_class: ClassVar[type[BaseScoreCard] | None] = None
+
+    def _resolved_model_config(self) -> dict[str, Any]:
+        """R4-1 / R4-3 — resolve this agent's runtime model config."""
+        from ..common.settings import resolve_agent_model_config
+
+        return resolve_agent_model_config(
+            f"agents.{self.role.value}",
+            default_model=self.model,
+        )
 
     @abstractmethod
     async def run(self, ctx: AgentContext) -> AgentOutput:
@@ -176,16 +190,21 @@ class BaseAgent(ABC):
         *,
         system: str,
         user: str,
-        max_tokens: int = 4096,
-        temperature: float = 0.2,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> LLMResponse:
-        """Plain text LLM call with cost attribution to this agent."""
+        """Plain text LLM call with cost attribution to this agent.
+
+        R4-1 / R4-3: model + max_tokens + temperature are resolved from
+        config/llm_models.yaml when not explicitly overridden by caller.
+        """
+        cfg = self._resolved_model_config()
         return await ctx.llm_client.acomplete(
-            model=self.model,
+            model=cfg["model"],
             messages=[{"role": "user", "content": user}],
             system=system,
-            max_tokens=max_tokens,
-            temperature=temperature,
+            max_tokens=max_tokens if max_tokens is not None else cfg["max_tokens"],
+            temperature=temperature if temperature is not None else cfg["temperature"],
             agent_role=self.role.value,
             ipo_id=ctx.ipo_id,
         )
@@ -197,8 +216,8 @@ class BaseAgent(ABC):
         system: str,
         user: str,
         response_model: type[BaseModel],
-        max_tokens: int = 4096,
-        temperature: float = 0.2,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> tuple[BaseModel, LLMResponse]:
         """Call the LLM and parse into ``response_model``.
 
@@ -209,16 +228,19 @@ class BaseAgent(ABC):
 
         For Phase 5 we accept this trade-off and reconstruct partial cost
         info from the cost log.
+
+        R4-1 / R4-3: model + max_tokens + temperature default to config/llm_models.yaml.
         """
+        cfg = self._resolved_model_config()
         before = ctx.llm_client.cost_log.total_usd()
         start = time.monotonic()
         model = await ctx.llm_client.acomplete_json(
-            model=self.model,
+            model=cfg["model"],
             messages=[{"role": "user", "content": user}],
             system=system,
             response_model=response_model,
-            max_tokens=max_tokens,
-            temperature=temperature,
+            max_tokens=max_tokens if max_tokens is not None else cfg["max_tokens"],
+            temperature=temperature if temperature is not None else cfg["temperature"],
             agent_role=self.role.value,
             ipo_id=ctx.ipo_id,
         )
@@ -226,7 +248,7 @@ class BaseAgent(ABC):
         # Build a partial LLMResponse for ergonomic reuse.
         pseudo = LLMResponse(
             text="",
-            model=self.model,
+            model=cfg["model"],
             stop_reason="end_turn",
             tokens_input=0,
             tokens_output=0,

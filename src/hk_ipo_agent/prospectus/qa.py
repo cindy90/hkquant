@@ -25,6 +25,7 @@ from ..common.exceptions import CitationRequiredError
 from ..common.llm_client import LLMClient
 from ..common.logging import LogContext, get_logger
 from ..common.schemas import Citation
+from ..common.settings import resolve_agent_model
 from .retriever import HybridResult, HybridRetriever
 
 if TYPE_CHECKING:
@@ -62,11 +63,12 @@ class ProspectusQA:
         store: ProspectusVectorStore,
         llm: LLMClient,
         *,
-        model: str = "moonshot-v1-128k",
+        model: str | None = None,
     ) -> None:
+        """R4-1: model defaults to ``resolve_agent_model("prospectus.qa")``."""
         self.store = store
         self.llm = llm
-        self.model = model
+        self.model = model if model is not None else resolve_agent_model("prospectus.qa")
         self.retriever = HybridRetriever(store)
 
     async def ask(

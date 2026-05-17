@@ -22,6 +22,7 @@ from ..common.schemas import (
     AgentOutput,
     ValuationEnsembleOutput,
 )
+from ..common.settings import resolve_agent_model
 
 
 def _agent_briefs(agent_outputs: dict[str, AgentOutput]) -> str:
@@ -43,9 +44,16 @@ async def run_bull(
     prior_bear: str | None,
     ipo_id: str,
     round_number: int,
-    model: str = "moonshot-v1-128k",
+    model: str | None = None,
 ) -> tuple[str, float, Any]:
-    """Run one Bull turn. Returns ``(argument, cost_delta, raw_resp)``."""
+    """Run one Bull turn. Returns ``(argument, cost_delta, raw_resp)``.
+
+    R4-1: ``model`` defaults to ``resolve_agent_model("debate.bull")`` /
+    ``"agents.bull"`` lookup, falling back to whatever the YAML resolver
+    picks. Callers may override for tests.
+    """
+    if model is None:
+        model = resolve_agent_model("debate.bull")
     body, _frontmatter = load_prompt("debate/bull.md")
     bear_block = f"\n\n# Previous Bear argument (to rebut)\n{prior_bear}\n" if prior_bear else ""
     user_msg = (
