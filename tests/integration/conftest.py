@@ -1,14 +1,9 @@
-"""Shared fixtures for end-to-end tests.
+"""Shared fixtures for integration tests.
 
-Phase 9b adds the ``_ensure_etl_data`` session fixture: when a unit test
-earlier in the run has truncated ``ipo_events`` (e.g. the audit /
-backtest router tests use CASCADE), we re-run the NACS → PG ETL so the
-e2e tests have data to work against.
-
-This pattern keeps the e2e tests order-independent without paying the
-ETL cost on every run — the fixture is session-scoped, so the ETL
-fires at most once per pytest invocation, and is skipped entirely when
-the data is already present.
+Phase 10c adds the ``_ensure_etl_data`` session fixture (mirrors
+``tests/e2e/conftest.py``): unit tests with TRUNCATE CASCADE leak into
+later integration runs, so we re-seed via subprocess if ipo_events is
+empty when integration runs start.
 """
 
 from __future__ import annotations
@@ -24,7 +19,6 @@ import pytest
 @functools.lru_cache(maxsize=1)
 def _pg_available() -> bool:
     import psycopg  # noqa: PLC0415
-
     from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
 
     url = get_settings().database.url
@@ -37,41 +31,41 @@ def _pg_available() -> bool:
 
 
 def _ipo_event_count() -> int:
-    """Sync count of ipo_events rows (psycopg, fast)."""
+    """Returns the minimum of (ipo_events, ipo_pricings, ipo_postmarket) so
+    a partial wipe (e.g. e2e tests that insert 1 ipo_events row but leave
+    pricings/postmarket empty) is also caught."""
     import psycopg  # noqa: PLC0415
-
     from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
 
     url = get_settings().database.url
     dsn = url.replace("postgresql+asyncpg://", "postgresql://", 1)
     try:
         with psycopg.connect(dsn, connect_timeout=2) as conn, conn.cursor() as cur:
-            cur.execute("SELECT count(*) FROM ipo_events")
-            return int(cur.fetchone()[0])
+            counts: list[int] = []
+            for tbl in ("ipo_events", "ipo_pricings", "ipo_postmarket"):
+                cur.execute(f"SELECT count(*) FROM {tbl}")
+                counts.append(int(cur.fetchone()[0]))
+            return min(counts)
     except Exception:
         return 0
 
 
 @pytest.fixture(scope="function", autouse=True)
 def _ensure_etl_data() -> Iterator[None]:
-    """Re-run ETL if the e2e tests find ipo_events empty.
+    """Re-run ETL if ipo_events is empty before each test.
 
-    Function-scoped: another test in the same module may have TRUNCATEd
-    (e.g. test_learning_cycle wipes everything between cases). The
-    check is cheap (sync psycopg count); the ETL itself only re-runs
-    when truly needed.
+    Function scope (not module) so a prior test that TRUNCATEd between
+    tests inside the same module doesn't leave the next test on empty.
+    Cheap check; ETL only re-runs when truly needed.
     """
     if not _pg_available():
-        # PG-required tests will skip themselves; nothing to do.
         yield
         return
     if _ipo_event_count() == 0:
         print(
-            "[e2e/conftest] ipo_events empty; re-running NACS ETL "
-            "(scripts/migrate_sqlite_to_pg.py)",
+            "[integration/conftest] ipo_events empty; re-running NACS ETL",
             file=sys.stderr,
         )
-        # Subprocess to keep test process clean.
         result = subprocess.run(
             [sys.executable, "scripts/migrate_sqlite_to_pg.py", "--no-backup"],
             capture_output=True,
@@ -81,7 +75,7 @@ def _ensure_etl_data() -> Iterator[None]:
         )
         if result.returncode != 0:
             print(
-                f"[e2e/conftest] ETL failed: {result.stderr[-500:]}",
+                f"[integration/conftest] ETL failed: {result.stderr[-500:]}",
                 file=sys.stderr,
             )
     yield

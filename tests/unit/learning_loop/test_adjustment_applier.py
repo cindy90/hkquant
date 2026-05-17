@@ -60,11 +60,12 @@ def _fresh_engine() -> Iterator[None]:
 
 @pytest_asyncio.fixture
 async def sf():
-    # Clean slate per test.
+    """Clean only the learning-loop tables (keep ipo_events for later
+    e2e tests that depend on the ETL-seeded data)."""
     with psycopg.connect(_sync_dsn()) as conn, conn.cursor() as cur:
         cur.execute(
             "TRUNCATE TABLE config_versions, prediction_reviews, prediction_outcomes, "
-            "post_ipo_events, prediction_snapshots, ipo_events "
+            "post_ipo_events, prediction_snapshots "
             "RESTART IDENTITY CASCADE"
         )
         conn.commit()

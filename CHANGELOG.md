@@ -7,6 +7,68 @@ The project follows the Phase-based versioning of `PROJECT_SPEC.md` §4.
 
 ---
 
+## [v1.0] — Phase 10 完成：持续学习闭环 + 项目主要 release (2026-05-17)
+
+🎉 **项目主要里程碑**: spec 全部 11 phases (Phase 0 → Phase 10) 完成。
+
+### Added
+- **`src/hk_ipo_agent/learning_loop/drift_detector.py`** — CUSUM + PSI
+  双指标 4 sub-detectors（accuracy drop / valuation bias /
+  bear miss rate / agent calibration drift）按 ListingType /
+  RegulatoryRegime 切片；输出 DriftSignal[]，纯 numpy 无新依赖.
+- **`src/hk_ipo_agent/learning_loop/attribution_aggregator.py`** —
+  AttributionAggregator + 3 slicing 策略（overall / listing_type /
+  agent_role）+ severity 分级（info / warning / critical）.
+- **`src/hk_ipo_agent/learning_loop/counterfactual.py`** —
+  if_bear_followed + if_single_model_used + run_counterfactual
+  composite + 自动 bull-bias summary.
+- **`src/hk_ipo_agent/learning_loop/version_manager.py`** —
+  VersionManager async over config_versions PG 表（bump_version /
+  get_active / list_versions / rollback），每次都写新行不删历史.
+- **`src/hk_ipo_agent/learning_loop/adjustment_proposer.py`** —
+  AdjustmentProposer + DriftSignal→AdjustmentType heuristic mapping
+  + persist_proposals_to_review (写入 prediction_reviews JSONB).
+- **`src/hk_ipo_agent/learning_loop/adjustment_applier.py`** —
+  **THE STRICTEST FILE**: 强制 human gate（reviewer 非空 + status=
+  ACCEPTED 才能 apply），5-IPO sanity backtest 验证，regression →
+  rollback + 标 REJECTED. 唯一允许写 production config/prompt 的模块.
+- **`src/hk_ipo_agent/learning_loop/reports.py`** — 月度学习报告
+  markdown 渲染（6+ sections：calibration / drift / findings /
+  counterfactual / pending / applied + notes）.
+- **`scripts/run_learning_cycle.py`** — 月度学习 CLI: load PG outcomes
+  → drift_detector → attribution_aggregator → counterfactual →
+  adjustment_proposer → persist + render report. **不自动 apply**.
+- **`scripts/review_proposals.py`** — 交互式人工 review CLI（list /
+  accept / reject）.
+- **`docs/LEARNING_PROTOCOL.md`** — 完整操作 protocol：可自动 propose
+  vs 必须人工设计的 AdjustmentType 矩阵 + SLOs + 6 条 hard rules +
+  端到端 recipe + alert 路由.
+- **`docs/decisions/0015-phase10-scope-and-substages.md`** — ADR 0015
+  Phase 10 3 子阶段切片.
+- **`tests/integration/conftest.py`** — function-scoped auto-ETL
+  fixture（与 e2e/conftest.py 对应）保证测试 order-independent.
+
+### Tests
+- 751 全套测试通过（unit 729 + integration 13 + e2e 9）— 0 failure.
+- +74 新单测 (drift 14 + attribution 7 + counterfactual 10 +
+  version 11 + proposer 14 + applier 9 + reports 9) + 3 新 e2e (full
+  propose→accept→apply happy / regression rollback / human-gate refusal).
+- 0 regression 贯穿 Phase 8 + 9 + 10.
+
+### Docs
+- ADR 0015 全勾.
+- CLAUDE.md Phase 10 marked DONE.
+
+### Project-level milestones reached
+- 11/11 phases ✓（Phase 0/1/2/3/4/5/6/7/7.5/8/9/10 全部完成）
+- 5 tags: v0.6 / v0.7 / v0.7.5 / v0.8 / v0.9 / **v1.0**
+- NACS v8 资产完整继承（ADR 0005 100% closure）
+- 374-sample 全量回测跑通 + 5 case study 文档
+- Prediction lifecycle 闭环完整实证（propose → accept → apply →
+  re-backtest → rollback path 全部测试通过）
+
+---
+
 ## [v0.9] — Phase 9 完成：端到端验证 + NACS legacy 归档 (2026-05-17)
 
 ### Added

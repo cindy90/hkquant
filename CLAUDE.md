@@ -207,4 +207,7 @@
   - [x] **9a** (22c36fa) NACS legacy 归档（themes / nacs_real.db + 4 backups / 4 顶层脚本 / configs / src/{config,nacs_model,data,data_sources}）+ legacy/README.md + 路径修复 + 642 单测 0 regression + ADR 0005 §Progress Phase 9 三项 ✓
   - [x] **9b** (234e9e2) FullPipelineScorer (backtest/full_scorer.py，30min SLO timeout + LookAhead skip) + 13 新单测 + 晶泰 2228.HK e2e case (5 测试，用真实 ipo_postmarket 数据) + 全 pipeline mock-graph smoke + 性能探针 scripts/perf_smoke.py（V8Lite ~0.8ms/IPO，2.3M× SLO headroom）+ tests/e2e/conftest.py auto-ETL fixture + 661 全仓单测 + e2e 全通过
   - [x] **9c** 5 家 case study 文档（docs/case_studies/{README, 2228_quantumpharm, 2533_black_sesame, 2432_dobot, 3750_catl_h, 9660_horizon_robotics}.md）+ CHANGELOG v0.9 + tag `v0.9`
-- [ ] Phase 10 — 持续学习闭环
+- [x] Phase 10 — 持续学习闭环（DONE：tag `v1.0` 项目主要 release + ADR 0015 全勾 + 751 全套测试 0 failure + e2e propose→accept→apply→rollback 闭环已实证）
+  - [x] **10a** (40596f5) drift_detector (CUSUM + PSI 4 sub-detector) + attribution_aggregator + counterfactual + version_manager (PG bump/get/rollback) + 42 新单测
+  - [x] **10b** (4e20118) adjustment_proposer (DriftSignal→AdjustmentType + persist_to_review) + adjustment_applier (**强制 human gate** + 5-IPO sanity backtest + rollback) + reports (6-section markdown) + 32 新单测
+  - [x] **10c** run_learning_cycle CLI + review_proposals CLI + LEARNING_PROTOCOL.md + 3 e2e 闭环测试（happy / regression rollback / human gate refusal）+ CHANGELOG v1.0 + tag `v1.0`

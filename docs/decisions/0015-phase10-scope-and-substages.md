@@ -144,6 +144,6 @@ prompt 调整必须走 `propose → review → apply` 闭环，**严禁系统自
 ## Progress
 
 - [x] **现在**: 本 ADR 0015 写就
-- [ ] **Phase 10a (~1.5d)**: drift_detector + attribution_aggregator + counterfactual + version_manager + ~20 新单测
-- [ ] **Phase 10b (~1d)**: adjustment_proposer + adjustment_applier (强制 human gate + 5-IPO 小回测验证) + reports + ~15 新单测
-- [ ] **Phase 10c (~0.5d)**: run_learning_cycle CLI + scripts/review_proposals.py + LEARNING_PROTOCOL.md + e2e 闭环测试 + CHANGELOG v1.0 + tag `v1.0`
+- [x] **Phase 10a (~1.5d)** (40596f5): drift_detector (CUSUM+PSI 4 sub-detectors) + attribution_aggregator (overall+listing+agent slicing) + counterfactual (if_bear + if_single_model) + version_manager (PG-backed bump/get/list/rollback) + 42 新单测
+- [x] **Phase 10b (~1d)** (4e20118): adjustment_proposer (DriftSignal→AdjustmentType heuristic mapping + persist_to_review) + adjustment_applier (**强制 human gate** + 5-IPO sanity backtest + rollback on regression) + reports (6-section markdown) + 32 新单测
+- [x] **Phase 10c (~0.5d)**: run_learning_cycle CLI + scripts/review_proposals.py + LEARNING_PROTOCOL.md (≤80 行) + e2e 闭环测试（propose+accept+apply happy / regression rollback / human gate） + CHANGELOG v1.0 + tag `v1.0`
