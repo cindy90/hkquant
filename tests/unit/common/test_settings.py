@@ -101,7 +101,13 @@ def test_settings_prod_requires_jwt_secret_override(monkeypatch: pytest.MonkeyPa
     """
     monkeypatch.setenv("HK_IPO__ENVIRONMENT", "prod")
     monkeypatch.setenv("HK_IPO__ORCHESTRATOR__ENABLE_HITL", "true")  # bypass R2-1
-    # Default jwt_secret unchanged.
+    # Explicitly set jwt_secret to the placeholder value. CI sets it to a
+    # non-default fixture via job-level env, which would mask the guard;
+    # this test must pin the exact placeholder it's checking for.
+    monkeypatch.setenv(
+        "HK_IPO__AUTH__JWT_SECRET",
+        "change-me-min-32-chars-long-secret-here",
+    )
     with pytest.raises(ConfigurationError, match="JWT secret"):
         Settings()
 
