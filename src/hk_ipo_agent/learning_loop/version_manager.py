@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, text
 
 from ..common.logging import get_logger
 
@@ -72,6 +72,19 @@ def hash_content(content: dict[str, Any]) -> str:
     """SHA-256 of canonical JSON — used as content_hash for de-dup."""
     canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _advisory_lock_key(target_path: str) -> int:
+    """R3-6 — derive a stable signed 64-bit advisory lock key from path.
+
+    PG ``pg_advisory_xact_lock(bigint)`` takes a signed 64-bit integer.
+    We use the high 8 bytes of SHA-256(target_path) and coerce to the
+    signed range. Same target_path → same lock slot, different paths
+    → effectively non-colliding (birthday bound ≈ 2^32 entries).
+    """
+    digest = hashlib.sha256(target_path.encode("utf-8")).digest()[:8]
+    # Treat as signed 64-bit (PG bigint).
+    return int.from_bytes(digest, byteorder="big", signed=True)
 
 
 # ===========================================================================
@@ -133,6 +146,12 @@ class VersionManager:
     ) -> ConfigVersion:
         """Write a new ``config_versions`` row with auto-bumped patch semver.
 
+        R3-6: read-current + compute-next + insert are now serialised on a
+        per-target_path advisory lock so two concurrent appliers can't both
+        compute "1.0.1" and have one trip the UNIQUE constraint. The lock
+        also covers the read so the second caller sees the first one's
+        commit and bumps to 1.0.2 instead of 1.0.1.
+
         Args:
             target_path: e.g. ``config/valuation_weights.yaml``.
             new_content: the full new content as a dict.
@@ -145,13 +164,32 @@ class VersionManager:
         """
         from ..data.models import ConfigVersionRow
 
-        current = await self.get_active_version(target_path)
-        new_version = (
-            bump_semver_patch(current.version) if current is not None else DEFAULT_SEED_VERSION
-        )
+        # R3-6 — derive a stable 64-bit lock key from target_path.
+        # pg_advisory_xact_lock takes a bigint; we use the high 8 bytes of
+        # sha256 to give us a unique, non-colliding slot per target_path.
+        lock_key = _advisory_lock_key(target_path)
         content_hash = hash_content(new_content)
 
         async with self._sf() as s:
+            # Take the transactional advisory lock. Released automatically
+            # at commit/rollback. Blocks (within the same PG cluster) any
+            # other connection that asks for the same lock_key.
+            await s.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": lock_key})
+
+            # Read CURRENT in the SAME transaction as the lock + INSERT.
+            stmt = (
+                select(ConfigVersionRow)
+                .where(ConfigVersionRow.target_path == target_path)
+                .order_by(desc(ConfigVersionRow.applied_at))
+                .limit(1)
+            )
+            current_row = (await s.execute(stmt)).scalar_one_or_none()
+            new_version = (
+                bump_semver_patch(current_row.version)
+                if current_row is not None
+                else DEFAULT_SEED_VERSION
+            )
+
             row = ConfigVersionRow(
                 target_path=target_path,
                 version=new_version,
@@ -163,7 +201,7 @@ class VersionManager:
                 applied_at=datetime.now(UTC),
             )
             s.add(row)
-            await s.commit()
+            await s.commit()  # releases advisory lock
             await s.refresh(row)
         logger.info(
             "config_version_bumped",

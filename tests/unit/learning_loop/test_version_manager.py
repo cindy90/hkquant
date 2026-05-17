@@ -20,6 +20,7 @@ from hk_ipo_agent.common.settings import get_settings
 from hk_ipo_agent.learning_loop.version_manager import (
     DEFAULT_SEED_VERSION,
     VersionManager,
+    _advisory_lock_key,
     bump_semver_patch,
     hash_content,
 )
@@ -186,3 +187,58 @@ async def test_version_manager_rollback_unknown_version_raises(sf) -> None:
     await vm.bump_version("config/x.yaml", {"w": 1})
     with pytest.raises(KeyError, match="not found"):
         await vm.rollback("config/x.yaml", "9.9.9")
+
+
+# ===========================================================================
+# R3-6 — Advisory lock for concurrent bumps
+# ===========================================================================
+
+
+def test_advisory_lock_key_is_deterministic() -> None:
+    """R3-6 — same path → same lock key (so concurrent callers
+    target the same PG advisory lock slot)."""
+    k1 = _advisory_lock_key("config/valuation_weights.yaml")
+    k2 = _advisory_lock_key("config/valuation_weights.yaml")
+    assert k1 == k2
+
+
+def test_advisory_lock_key_differs_per_path() -> None:
+    """R3-6 — different paths → different lock keys (so unrelated
+    bumps don't serialise against each other)."""
+    k_a = _advisory_lock_key("config/valuation_weights.yaml")
+    k_b = _advisory_lock_key("prompts/agents/fundamental.md")
+    assert k_a != k_b
+
+
+def test_advisory_lock_key_fits_signed_bigint() -> None:
+    """R3-6 — must fit PG bigint range (signed 64-bit)."""
+    k = _advisory_lock_key("config/valuation_weights.yaml")
+    assert -(2**63) <= k < 2**63
+
+
+@pg_required
+@pytest.mark.asyncio
+async def test_bump_version_concurrent_callers_advance_serially(sf) -> None:
+    """R3-6 — two coroutines bumping the same target_path must produce
+    distinct sequential versions (1.0.0, 1.0.1), not two collisions on
+    1.0.0 that trip the UNIQUE constraint.
+
+    Pre-fix get_active_version + bump_semver_patch + INSERT ran in
+    three independent sessions; concurrent callers raced and could
+    both observe version=None → both insert 1.0.0 → UNIQUE conflict.
+    Advisory lock serialises read+insert into one transaction.
+    """
+    import asyncio
+
+    vm = VersionManager(sf)
+    # Fire two concurrent bumps. Without serialisation they would race
+    # on the same target_path.
+    results = await asyncio.gather(
+        vm.bump_version("config/concurrent_test.yaml", {"w": 1}, applied_by="a"),
+        vm.bump_version("config/concurrent_test.yaml", {"w": 2}, applied_by="b"),
+    )
+    versions = sorted(r.version for r in results)
+    assert versions == [DEFAULT_SEED_VERSION, "1.0.1"], (
+        f"R3-6 advisory lock failed: concurrent bumps produced versions {versions}; "
+        f"expected sequential ['1.0.0', '1.0.1']."
+    )

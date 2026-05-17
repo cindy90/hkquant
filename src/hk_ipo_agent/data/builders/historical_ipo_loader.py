@@ -96,12 +96,22 @@ class HistoricalIPOLoader:
     ) -> tuple[int, int]:
         """Parse iFind result and upsert any IPO not already in PG.
 
-        TODO Phase 2.1: implement against the actual iFind response shape.
-        The repo migration is the source of truth for Phase 2; this is the
-        forward-going incremental loader.
+        R3-1: previously returned ``(0, 0)`` as a stub. That made the
+        ``ifind != None`` path silently equivalent to the ``ifind is None``
+        audit-only path — a caller wiring real credentials but hitting an
+        unimplemented response-shape parse would silently get "no new
+        IPOs" instead of an error. Per PLAN option B we now raise so the
+        failure is loud; full wiring is tracked under ADR 0018.
+
+        ADR 0005 §1 prediction "iFind 仅作补漏 / 一次性 ETL 为主" still
+        holds — the PG seed from migrate_sqlite_to_pg.py is the canonical
+        source. This method is the forward-going incremental loader and
+        ADR 0018 describes when / how it lands.
         """
-        log.warning(
-            "ifind_upsert_stub",
-            note="Phase 2.1 will wire this once iFind credentials are provisioned",
+        raise NotImplementedError(
+            "iFind incremental upsert not yet wired — see ADR 0018 and "
+            "docs/PLAN_post_v1.0.md §5 R3-1. Use audit-only mode "
+            "(HistoricalIPOLoader(ifind=None)) until then. "
+            f"got {len(getattr(ifind_result, '__dict__', {})) if ifind_result else 0} "
+            "field(s) in payload."
         )
-        return (0, 0)
