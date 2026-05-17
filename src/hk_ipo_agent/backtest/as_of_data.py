@@ -258,8 +258,8 @@ class AsOfDataProvider:
             )
 
     def with_as_of_filter(
-        self, stmt: Select, *, date_column: Any,
-    ) -> Select:
+        self, stmt: Select[Any], *, date_column: Any,
+    ) -> Select[Any]:
         """Helper for repository callers: append ``WHERE date_col <= as_of``.
 
         Use this when writing one-off queries that need leak-proofing

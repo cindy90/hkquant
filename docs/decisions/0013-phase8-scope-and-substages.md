@@ -167,5 +167,5 @@ ADR 锁定 4 个子阶段的切片，保证每子阶段独立 commit + 测试 + 
 - [x] **现在**: 本 ADR 0013 写就
 - [x] **Phase 8a (~1.5d)**: `backtest/as_of_data.py` + `regime_detection.py` + `data/fixtures/market_environment_cache.json` + 25 新单测 (commit `0b65ded`)
 - [x] **Phase 8b (~1d)**: `backtest/metrics.py` (Rank IC / L-S spread Welch t-stat) + `data/fixtures/nacs_v8_baselines.json` (5 iterations) + `monotonicity_constraint` + `compare_to_baseline` + 25 新单测 (含 pen-paper IC / 退化 case 拒绝 / canonical p1_lockup_v2 self-pass)
-- [ ] **Phase 8c (~2d)**: `backtest/runner.py` + `calibration.py` + `reports.py` + `scripts/run_backtest.py` + 50+ 样本全量回测 + 候选 weights yaml + ~20 新单测 + 1 integration test
-- [ ] **Phase 8d (~0.5d)**: `api/routers/backtest.py` 实装（ADR 0011 最后遗留）+ tag `v0.8`
+- [x] **Phase 8c (~2d)**: `backtest/runner.py` (BacktestScorer Protocol + V8LiteScorer + walk-forward harness + PG-backed input loader) + `calibration.py` (constrained grid search + monotonicity + version_manager hook) + `reports.py` (markdown with metrics/baseline/case study/calibration sections) + `scripts/run_backtest.py` CLI + 32 新单测 (runner 11 + calibration 13 + reports 8) + 2 integration smoke tests. **NOTE**: 50+ 样本全量回测脚本就绪 — 实际跑需 docker postgres 启动 + Phase 2 ETL 数据；harness 已可工作（in-memory smoke 通过）。Bayesian 优化退回 constrained grid search（ADR 0013 §Negative 允许，避免新依赖）。
+- [ ] **Phase 8d (~0.5d)**: `api/routers/backtest.py` 实装（ADR 0011 最后遗留）+ 运行 50+ 样本回测 + tag `v0.8`

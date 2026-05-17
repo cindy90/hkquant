@@ -6,6 +6,9 @@ import functools
 from collections.abc import Iterator
 
 import pytest
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 
 @pytest.fixture(autouse=True)
@@ -20,6 +23,23 @@ def _fresh_async_engine() -> Iterator[None]:
     yield
     get_engine.cache_clear()  # type: ignore[attr-defined]
     async_session_factory.cache_clear()  # type: ignore[attr-defined]
+
+
+@pytest_asyncio.fixture
+async def fresh_sf():
+    """Async sessionmaker tied to the configured DB.
+
+    Phase 8 tests use this for AsOfDataProvider — when docker is up the
+    tests hit PG; otherwise the pg_required-marked tests skip and the
+    rest of the suite uses the sf only as an IPC handle (no actual
+    queries fire in V8LiteScorer / runner harness paths).
+    """
+    from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
+
+    engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
+    sf = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+    yield sf
+    await engine.dispose()
 
 
 @functools.lru_cache(maxsize=1)

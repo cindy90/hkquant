@@ -218,7 +218,7 @@ def slice_by_regulatory_regime(
 
 def reset_cache() -> None:
     """Clear the lru_cached market_env fixture — testing only."""
-    _load_market_env_cache.cache_clear()  # type: ignore[attr-defined]
+    _load_market_env_cache.cache_clear()
 
 
 __all__ = (

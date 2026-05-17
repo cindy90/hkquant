@@ -201,7 +201,7 @@
 - [ ] Phase 8 — 回测与校准 **← 当前**（ADR 0013 4 子阶段）
   - [x] **8a** (0b65ded) as_of_data 防泄漏 + regime_detection + market_environment_cache JSON + 25 新单测
   - [x] **8b** metrics.py (Rank IC / L-S spread / Welch t-stat) + nacs_v8_baselines.json (5 iterations) + monotonicity_constraint + compare_to_baseline + 25 新单测（含 pen-paper IC + 退化 case 拒绝 + canonical p1_lockup_v2 self-pass）
-  - [ ] **8c** walk-forward runner + Bayesian calibration + reports + 50+ 样本全量回测
-  - [ ] **8d** backtest router 实装（ADR 0011 最后遗留）+ tag `v0.8`
+  - [x] **8c** runner.py (BacktestScorer Protocol + V8LiteScorer + walk-forward + PG loader) + calibration.py (constrained grid search + monotonicity，回退 Bayesian 避免新依赖) + reports.py (markdown 5 sections) + scripts/run_backtest.py CLI + 32 新单测（runner 11 + calibration 13 + reports 8）+ 2 integration smoke。50+ 样本全量回测 harness 就绪，实际跑放 8d
+  - [ ] **8d** backtest router 实装（ADR 0011 最后遗留）+ 跑 50+ 样本全量回测 + tag `v0.8`
 - [ ] Phase 9 — 端到端验证
 - [ ] Phase 10 — 持续学习闭环
