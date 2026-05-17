@@ -40,7 +40,7 @@ def _pg_available() -> bool:
     try:
         with psycopg.connect(dsn, connect_timeout=2):
             return True
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 

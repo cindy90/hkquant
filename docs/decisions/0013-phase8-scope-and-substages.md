@@ -165,7 +165,7 @@ ADR 锁定 4 个子阶段的切片，保证每子阶段独立 commit + 测试 + 
 ## Progress
 
 - [x] **现在**: 本 ADR 0013 写就
-- [ ] **Phase 8a (~1.5d)**: `backtest/as_of_data.py` + `regime_detection.py` + `data/fixtures/market_environment_cache.json` + ~12 新单测
-- [ ] **Phase 8b (~1d)**: `backtest/metrics.py` (IC / L-S / t-stat) + `data/fixtures/nacs_v8_baselines.json` + monotonicity_constraint + ~10 新单测
+- [x] **Phase 8a (~1.5d)**: `backtest/as_of_data.py` + `regime_detection.py` + `data/fixtures/market_environment_cache.json` + 25 新单测 (commit `0b65ded`)
+- [x] **Phase 8b (~1d)**: `backtest/metrics.py` (Rank IC / L-S spread Welch t-stat) + `data/fixtures/nacs_v8_baselines.json` (5 iterations) + `monotonicity_constraint` + `compare_to_baseline` + 25 新单测 (含 pen-paper IC / 退化 case 拒绝 / canonical p1_lockup_v2 self-pass)
 - [ ] **Phase 8c (~2d)**: `backtest/runner.py` + `calibration.py` + `reports.py` + `scripts/run_backtest.py` + 50+ 样本全量回测 + 候选 weights yaml + ~20 新单测 + 1 integration test
 - [ ] **Phase 8d (~0.5d)**: `api/routers/backtest.py` 实装（ADR 0011 最后遗留）+ tag `v0.8`

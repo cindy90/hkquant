@@ -6,7 +6,6 @@ from datetime import date
 
 import pytest
 
-from hk_ipo_agent.common.enums import RegulatoryRegime
 from hk_ipo_agent.backtest.regime_detection import (
     CH18C_THRESHOLD_REVISION,
     REGULATORY_CHANGE_POINTS,
@@ -17,7 +16,7 @@ from hk_ipo_agent.backtest.regime_detection import (
     reset_cache,
     slice_by_regulatory_regime,
 )
-
+from hk_ipo_agent.common.enums import RegulatoryRegime
 
 # ===========================================================================
 # Regulatory regime
@@ -43,7 +42,7 @@ def test_change_points_are_sorted_ascending() -> None:
 
 
 def test_ch18c_threshold_revision_constant() -> None:
-    assert CH18C_THRESHOLD_REVISION == date(2024, 9, 1)
+    assert date(2024, 9, 1) == CH18C_THRESHOLD_REVISION
 
 
 # ===========================================================================
