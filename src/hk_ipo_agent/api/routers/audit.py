@@ -47,6 +47,7 @@ async def list_audit_logs(
     user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_AUDIT))],
     user_id: UUID | None = None,
     resource_type: str | None = None,
+    resource_id: str | None = None,
     since: datetime | None = None,
     limit: int = Query(50, ge=1, le=500),
 ) -> PaginatedResponse:
@@ -57,6 +58,7 @@ async def list_audit_logs(
     records = await get_audit_store().query(
         user_id=user_id,
         resource_type=resource_type,
+        resource_id=resource_id,
         since=since,
         limit=limit,
     )

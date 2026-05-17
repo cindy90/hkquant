@@ -88,6 +88,7 @@ class AuditStoreProtocol(Protocol):
         *,
         user_id: UUID | None = None,
         resource_type: str | None = None,
+        resource_id: str | None = None,
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[AuditLog]: ...
@@ -114,6 +115,7 @@ class AuditStore:
         *,
         user_id: UUID | None = None,
         resource_type: str | None = None,
+        resource_id: str | None = None,
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[AuditLog]:
@@ -126,6 +128,8 @@ class AuditStore:
                     rt = r.resource_type
                     if rt is None or rt.value != resource_type:
                         continue
+                if resource_id and r.resource_id != resource_id:
+                    continue
                 if since and r.occurred_at < since:
                     continue
                 results.append(r)
@@ -183,6 +187,7 @@ class PGAuditStore:
         *,
         user_id: UUID | None = None,
         resource_type: str | None = None,
+        resource_id: str | None = None,
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[AuditLog]:
@@ -191,6 +196,8 @@ class PGAuditStore:
             stmt = stmt.where(AuditLogRow.user_id == user_id)
         if resource_type is not None:
             stmt = stmt.where(AuditLogRow.resource_type == resource_type)
+        if resource_id is not None:
+            stmt = stmt.where(AuditLogRow.resource_id == resource_id)
         if since is not None:
             stmt = stmt.where(AuditLogRow.occurred_at >= since)
         async with self._sf() as s:

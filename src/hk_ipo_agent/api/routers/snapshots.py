@@ -1,14 +1,17 @@
-"""Snapshot list / detail / memo-export endpoints per PROJECT_SPEC.md §16.2."""
+"""Snapshot list / detail / memo-export / outcomes endpoints per PROJECT_SPEC.md §16.2."""
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
+from sqlalchemy import select
 
 from ...common.enums import Permission
+from ...data.database import async_session_factory
+from ...data.models import PredictionOutcomeRow
 from ...prediction_registry.registry import get_registry
 from ...reporting import build_memo_markdown, export_docx, export_pdf
 from ..auth.dependencies import CurrentUser, require_permission
@@ -85,6 +88,48 @@ async def get_memo_docx(snapshot_id: UUID, user: _SnapDep) -> Response:
         content=docx_bytes,
         media_type=("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
     )
+
+
+@router.get("/{snapshot_id}/outcomes")
+async def get_snapshot_outcomes(
+    snapshot_id: UUID, user: _SnapDep
+) -> dict[str, Any]:
+    """Return all T+N outcomes for a snapshot, ordered by checkpoint_day.
+
+    R6-1: gated behind ``READ_SNAPSHOTS``.
+    """
+    _ = user
+    sf = async_session_factory()
+    async with sf() as session:
+        stmt = (
+            select(PredictionOutcomeRow)
+            .where(PredictionOutcomeRow.snapshot_id == snapshot_id)
+            .order_by(PredictionOutcomeRow.checkpoint_day.asc())
+        )
+        rows = (await session.execute(stmt)).scalars().all()
+
+    outcomes = [
+        {
+            "snapshot_id": str(r.snapshot_id),
+            "checkpoint_day": r.checkpoint_day,
+            "return_since_ipo": str(r.return_since_ipo) if r.return_since_ipo is not None else None,
+            "return_since_listing": str(r.return_since_listing) if r.return_since_listing is not None else None,
+            "max_drawdown": str(r.max_drawdown) if r.max_drawdown is not None else None,
+            "relative_return_hsi": str(r.relative_return_hsi) if r.relative_return_hsi is not None else None,
+            "relative_return_hstech": str(r.relative_return_hstech) if r.relative_return_hstech is not None else None,
+            "relative_return_industry": str(r.relative_return_industry) if r.relative_return_industry is not None else None,
+            "earnings_released": r.earnings_released,
+            "earnings_beat_extraction": r.earnings_beat_extraction,
+            "cornerstone_held_pct": str(r.cornerstone_held_pct) if r.cornerstone_held_pct is not None else None,
+            "cornerstone_reduced": r.cornerstone_reduced,
+            "price_in_predicted_range": r.price_in_predicted_range,
+            "decision_correct": r.decision_correct,
+            "recorded_at": r.recorded_at.isoformat(),
+        }
+        for r in rows
+    ]
+
+    return {"snapshot_id": str(snapshot_id), "outcomes": outcomes}
 
 
 __all__ = ("router",)

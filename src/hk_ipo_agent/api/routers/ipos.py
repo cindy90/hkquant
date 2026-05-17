@@ -1,12 +1,16 @@
-"""IPO list / detail endpoints per PROJECT_SPEC.md §16.2."""
+"""IPO list / detail / lifecycle endpoints per PROJECT_SPEC.md §16.2."""
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 
 from ...common.enums import ListingType, Permission
+from ...data.database import async_session_factory
+from ...data.models import IPOLifecycleStateRow, IPOStateTransitionRow
 from ...prediction_registry.registry import get_registry
 from ..auth.dependencies import CurrentUser, require_permission
 from ..schemas import IPOListItem, PaginatedResponse, PaginationMeta
@@ -58,6 +62,59 @@ async def list_ipos(
             has_next=offset + limit < len(items),
         ),
     )
+
+
+@router.get("/{ipo_id}/lifecycle")
+async def get_ipo_lifecycle(
+    ipo_id: UUID,
+    user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_IPO))],
+) -> dict[str, Any]:
+    """Return current lifecycle state + transition history for an IPO.
+
+    R6-1: gated behind ``READ_IPO``.
+    """
+    _ = user
+    sf = async_session_factory()
+    async with sf() as session:
+        # Current state
+        state_stmt = select(IPOLifecycleStateRow).where(
+            IPOLifecycleStateRow.ipo_id == ipo_id
+        )
+        state_row = (await session.execute(state_stmt)).scalar_one_or_none()
+
+        # Transitions (chronological)
+        trans_stmt = (
+            select(IPOStateTransitionRow)
+            .where(IPOStateTransitionRow.ipo_id == ipo_id)
+            .order_by(IPOStateTransitionRow.transition_at.asc())
+        )
+        trans_rows = (await session.execute(trans_stmt)).scalars().all()
+
+    current_state = None
+    if state_row is not None:
+        current_state = {
+            "ipo_id": str(state_row.ipo_id),
+            "current_state": state_row.current_state,
+            "state_entered_at": state_row.state_entered_at.isoformat(),
+            "state_metadata": state_row.state_metadata or {},
+            "last_checked_at": state_row.last_checked_at.isoformat(),
+            "is_terminal": state_row.is_terminal,
+        }
+
+    transitions = [
+        {
+            "ipo_id": str(t.ipo_id),
+            "from_state": t.from_state,
+            "to_state": t.to_state,
+            "transition_at": t.transition_at.isoformat(),
+            "triggered_by": t.triggered_by,
+            "detection_evidence": t.detection_evidence or {},
+            "reviewer": t.reviewer,
+        }
+        for t in trans_rows
+    ]
+
+    return {"current_state": current_state, "transitions": transitions}
 
 
 __all__ = ("router",)
