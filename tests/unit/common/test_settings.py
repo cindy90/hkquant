@@ -15,10 +15,14 @@ def test_database_url_async_psycopg() -> None:
         port=5433,
         name="hki",
         user="alice",
-        password=SecretStr("s3cr3t"),
+        password=SecretStr("s3cr3t"),  # pragma: allowlist secret
     )
-    assert db.url == "postgresql+asyncpg://alice:s3cr3t@db.example.com:5433/hki"
-    assert db.sync_url == "postgresql+psycopg://alice:s3cr3t@db.example.com:5433/hki"
+    assert (  # pragma: allowlist secret
+        db.url == "postgresql+asyncpg://alice:s3cr3t@db.example.com:5433/hki"
+    )
+    assert (  # pragma: allowlist secret
+        db.sync_url == "postgresql+psycopg://alice:s3cr3t@db.example.com:5433/hki"
+    )
 
 
 def test_settings_default_values() -> None:

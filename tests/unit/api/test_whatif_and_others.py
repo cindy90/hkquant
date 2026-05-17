@@ -100,7 +100,7 @@ def test_audit_log_query_no_perm(client: TestClient) -> None:
     # Login as viewer (no READ_AUDIT permission)
     login = client.post(
         "/api/auth/login",
-        json={"email": "viewer@hk.local", "password": "viewer"},
+        json={"email": "viewer@hk.local", "password": "viewer"},  # pragma: allowlist secret
     )
     assert login.status_code == 200
     token = login.json()["access_token"]
