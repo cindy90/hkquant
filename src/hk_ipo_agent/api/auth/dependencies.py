@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 
 from ...common.enums import Permission, UserRole
 from .jwt import AuthError, decode_access_token
@@ -160,11 +160,18 @@ class CurrentUser:
 
 
 def get_current_user(
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
 ) -> CurrentUser:
     """Decode the ``Authorization: Bearer <token>`` header → ``CurrentUser``.
 
     Raises 401 if the token is missing / invalid / expired.
+
+    R2-6: also stashes the resolved ``CurrentUser`` on ``request.state.current_user``
+    so downstream middleware (audit, rate_limit) can attribute the request
+    to a subject. Pre-fix audit_middleware / rate_limit middleware both
+    read ``request.state.current_user`` but no one wrote it → audit_log
+    rows always had ``user_id=None``, violating CLAUDE.md §UI 集成约束 §3.
     """
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(
@@ -190,11 +197,15 @@ def get_current_user(
             detail="malformed token claims",
         ) from exc
 
-    return CurrentUser(
+    result = CurrentUser(
         id=user_id,
         email=payload.get("email", ""),
         roles=roles_from_strings(payload.get("roles", [])),
     )
+    # R2-6: write to request.state so audit + rate_limit middleware
+    # (which run AFTER the route handler) can pick up the subject.
+    request.state.current_user = result
+    return result
 
 
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]

@@ -184,6 +184,11 @@ class TransitionTrigger(StrEnum):
     MANUAL_REVIEWER = "manual_reviewer"
     TIMEOUT = "timeout"
     EVENT_DRIVEN = "event_driven"
+    # R2-4: explicit "this is a manual correction, NOT a normal transition"
+    # marker. Bypasses VALID_TRANSITIONS validation; requires reviewer +
+    # justification. Auditors filter on this value to surface every
+    # human-driven retroactive fix in the lifecycle history.
+    CORRECTION = "correction"
 
 
 class CodeMappingConfidence(StrEnum):

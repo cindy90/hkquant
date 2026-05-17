@@ -376,7 +376,7 @@ R0 ──> R1 ──> R2 ──> R3 ──┐
 |---|---|---|---|---|---|
 | R0 | ✅ 完成 | 2026-05-17 | 2026-05-17 | `v1.0.1-r0` | commits `8ee82bd` (functional) + `d78b34c` (pre-commit auto-fix LF/EOF/ruff format)；727 unit tests 全过 |
 | R1 | ✅ 完成 | 2026-05-17 | 2026-05-17 | `v1.0.1-r1` | commit `442e1fc`；5 任务全 red-green-refactor；736 unit tests 全过（+9 新 R1 测试，0 regression）。**BREAKING**: R1-1 DCF 终值公式校正，历史 snapshot 会有 ~5% 差异 |
-| R2 | ⏸ 等待 | - | - | - | 生产安全 + 不可变 |
+| R2 | ✅ 完成 | 2026-05-17 | 2026-05-17 | `v1.0.2-r2` | 7 任务全 red-green-refactor；753 unit tests 全过（+17 新 R2 测试，0 regression）。R2-1 + R2-7 prod guards / R2-6 audit user_id / R2-3 snapshot 应用层拒绝 / R2-5 tracking_unreliable + alembic / R2-2 hitl pending → END / R2-4 record_correction. CLAUDE.md 7 条硬约束全部落地 |
 | R3 | ⏸ 等待 | - | - | - | 流程伪完成治理 |
 | R4 | ⏸ 等待 | - | - | - | 模型路由 + Jinja2 |
 | R5 | ⏸ 等待 | - | - | - | async + 类型 |

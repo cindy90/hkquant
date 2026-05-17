@@ -363,6 +363,12 @@ class PredictionOutcome(StrictModel):
 
     cornerstone_held_pct: float | None = None
     cornerstone_reduced: bool | None = None
+    # R2-5: explicit uncertainty marker per CLAUDE.md «基石减持检测的不确定性必须
+    # 显式标注». Set to True whenever the underlying cornerstone-tracking data
+    # source (iFind disclosure scan / HKEX filing parse) returned a partial or
+    # ambiguous result. Downstream reviewers and the learning loop must NOT
+    # treat ``cornerstone_reduced`` as authoritative when this flag is True.
+    cornerstone_tracking_unreliable: bool = False
 
     price_in_predicted_range: bool
     decision_correct: bool

@@ -25,14 +25,25 @@ def route_after_snapshot(state: AnalysisState) -> str:
 
 
 def route_after_hitl(state: AnalysisState) -> str:
-    """After human input, route to report if approved else END."""
+    """After human input, route to report if approved else END.
+
+    R2-2: ``pending`` MUST route to END, not back to ``hitl_wait``.
+    Pre-fix the loop-back combined with ``hitl_wait_node`` re-stamping
+    ``pending`` produced a tight cycle that could only be broken by
+    process termination. The spec intent (ADR 0010 §4 + CLAUDE.md
+    «HITL 默认 bypass，生产 env 强制开») is that the graph pauses at
+    pending and the EXTERNAL caller re-invokes the graph with
+    ``hitl_status="approved"`` or ``"rejected"`` after collecting the
+    human decision. Internal cycling is not how LangGraph HITL works.
+    """
     hitl = state.get("hitl_status")
     if hitl == "approved":
         return "report"
     if hitl == "rejected":
         return "END"
-    # Still pending — loop back (langgraph interrupt will keep state)
-    return "hitl_wait"
+    # Still pending (or unset) — graph returns control to caller for
+    # an out-of-band human-input cycle.
+    return "END"
 
 
 def route_after_validation(state: AnalysisState) -> str:

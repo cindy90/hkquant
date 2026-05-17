@@ -67,6 +67,21 @@ class PredictionRegistryProtocol(Protocol):
 
     async def attach_review(self, snapshot_id: UUID, review: PredictionReview) -> UUID: ...
 
+    # R2-3: explicit "immutable" surface. Both backends raise.
+    async def update_snapshot(  # pragma: no cover — Protocol stub
+        self, snapshot_id: UUID, snapshot: PredictionSnapshot
+    ) -> None: ...
+
+    async def delete_snapshot(self, snapshot_id: UUID) -> None: ...  # pragma: no cover
+
+
+# R2-3 helper: shared "immutable by design" error message for both backends.
+_IMMUTABLE_REASON = (
+    "snapshot is immutable by design — see ADR 0012 + CLAUDE.md §预测生命周期约束. "
+    "Application code MUST NOT update/delete; corrections go through "
+    "ipo_lifecycle.state_machine.record_correction (R2-4) instead."
+)
+
 
 # ---------------------------------------------------------------------------
 # In-memory backend (Phase 6 implementation, kept for unit tests)
@@ -123,6 +138,14 @@ class InMemoryPredictionRegistry:
                 raise KeyError(snapshot_id)
             self._reviews.setdefault(snapshot_id, []).append(review)
         return uuid4()
+
+    async def update_snapshot(self, snapshot_id: UUID, snapshot: PredictionSnapshot) -> None:
+        """R2-3 — explicit refusal. Snapshots are immutable by design."""
+        raise NotImplementedError(_IMMUTABLE_REASON)
+
+    async def delete_snapshot(self, snapshot_id: UUID) -> None:
+        """R2-3 — explicit refusal. Snapshots are immutable by design."""
+        raise NotImplementedError(_IMMUTABLE_REASON)
 
     def __len__(self) -> int:
         return len(self._snapshots)
@@ -225,6 +248,23 @@ class PGPredictionRegistry:
             session.add(row)
             await session.commit()
         return review_id
+
+    async def update_snapshot(self, snapshot_id: UUID, snapshot: PredictionSnapshot) -> None:
+        """R2-3 — explicit refusal at the application layer.
+
+        The DB ``snapshot_no_update`` trigger is the physical defence; this
+        method is the application-layer defence so a Protocol-typed caller
+        gets a typed, named error rather than AttributeError, and so that
+        in-memory and PG backends present the same API surface.
+        """
+        raise NotImplementedError(_IMMUTABLE_REASON)
+
+    async def delete_snapshot(self, snapshot_id: UUID) -> None:
+        """R2-3 — explicit refusal at the application layer.
+
+        DB ``snapshot_no_delete`` trigger handles physical defence.
+        """
+        raise NotImplementedError(_IMMUTABLE_REASON)
 
     # ------------------------------------------------------------------
     # Row <-> Pydantic helpers

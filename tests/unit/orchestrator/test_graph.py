@@ -70,9 +70,23 @@ def test_route_after_snapshot_to_hitl_when_enabled(monkeypatch) -> None:
 
 
 def test_route_after_hitl_states() -> None:
+    """R2-2 — pending must NOT loop back to hitl_wait (was the bug).
+
+    Pre-fix ``route_after_hitl({"hitl_status": "pending"}) == "hitl_wait"``
+    combined with ``hitl_wait_node`` stamping the same ``"pending"`` status
+    on every visit created a tight loop the graph could not escape. The
+    spec intent (ADR 0010) is: graph pauses when human input pending and
+    waits for an EXTERNAL resume invocation, not for an internal cycle.
+
+    Fix: pending → END (graph returns to caller; caller must re-invoke
+    with hitl_status="approved" or "rejected" to resume).
+    """
     assert route_after_hitl({"hitl_status": "approved"}) == "report"
     assert route_after_hitl({"hitl_status": "rejected"}) == "END"
-    assert route_after_hitl({"hitl_status": "pending"}) == "hitl_wait"
+    # R2-2: pending now returns END (break the loop).
+    assert route_after_hitl({"hitl_status": "pending"}) == "END"
+    # Missing/unknown status falls through to the safe pending path.
+    assert route_after_hitl({}) == "END"
 
 
 def test_route_after_validation_default() -> None:

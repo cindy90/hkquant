@@ -234,6 +234,118 @@ async def test_transition_without_initialize_raises(fresh_sf) -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# R2-4 — record_correction: human-driven retroactive fix that bypasses
+# VALID_TRANSITIONS but writes a CORRECTION-trigger audit row.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_record_correction_bypasses_valid_transitions(fresh_sf) -> None:
+    """R2-4 — correction can move from LISTED back to PRICING.
+
+    Pre-fix VALID_TRANSITIONS forbade any LISTED → * except TERMINATED
+    (a one-way door). If the three-way validation produced a false LISTED
+    transition, there was no code path back. CLAUDE.md «误判的纠正方式是
+    新建 correction transition 写 audit log» mandated a fix but no
+    implementation existed.
+    """
+    _truncate_lifecycle()
+    ipo_id = uuid.uuid4()
+    _seed_ipo(ipo_id)
+    sm = StateMachine(fresh_sf)
+    await sm.initialize(ipo_id)
+    # Normal forward path: PRE_LISTING -> PRICING -> LISTED.
+    await sm.transition_to(
+        ipo_id, IPOLifecycleStateType.PRICING, triggered_by=TransitionTrigger.AUTO_DETECTOR
+    )
+    await sm.transition_to(
+        ipo_id, IPOLifecycleStateType.LISTED, triggered_by=TransitionTrigger.AUTO_DETECTOR
+    )
+
+    # Now the human reviewer realizes the LISTED transition was a false
+    # positive (e.g. three-way validation matched a similarly-named entity).
+    # record_correction must permit the otherwise-forbidden reverse.
+    await sm.record_correction(
+        ipo_id,
+        target_state=IPOLifecycleStateType.PRICING,
+        reviewer="alice@hk.local",
+        justification="three-way validation matched wrong entity — see PR-1234",
+    )
+    state = await sm.get_state(ipo_id)
+    assert state is not None and state[0] is IPOLifecycleStateType.PRICING
+
+
+@pytest.mark.asyncio
+async def test_record_correction_writes_audit_with_trigger_correction(fresh_sf) -> None:
+    """R2-4 — correction audit row uses TransitionTrigger.CORRECTION
+    and stores reviewer + justification so auditors can filter."""
+    _truncate_lifecycle()
+    ipo_id = uuid.uuid4()
+    _seed_ipo(ipo_id)
+    sm = StateMachine(fresh_sf)
+    await sm.initialize(ipo_id)
+    await sm.transition_to(
+        ipo_id, IPOLifecycleStateType.PRICING, triggered_by=TransitionTrigger.AUTO_DETECTOR
+    )
+    await sm.record_correction(
+        ipo_id,
+        target_state=IPOLifecycleStateType.PRE_LISTING,
+        reviewer="bob@hk.local",
+        justification="pricing was premature — book-building still open",
+    )
+    async with fresh_sf() as s:
+        rows = (
+            (
+                await s.execute(
+                    select(IPOStateTransitionRow)
+                    .where(IPOStateTransitionRow.ipo_id == ipo_id)
+                    .order_by(IPOStateTransitionRow.transition_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+    latest = rows[0]
+    assert latest.triggered_by == TransitionTrigger.CORRECTION.value
+    assert latest.reviewer == "bob@hk.local"
+    assert "pricing was premature" in (latest.detection_evidence or {}).get("justification", "")
+
+
+@pytest.mark.asyncio
+async def test_record_correction_rejects_empty_reviewer(fresh_sf) -> None:
+    """R2-4 — corrections are SOX-style auditable; reviewer must be named."""
+    _truncate_lifecycle()
+    ipo_id = uuid.uuid4()
+    _seed_ipo(ipo_id)
+    sm = StateMachine(fresh_sf)
+    await sm.initialize(ipo_id)
+    with pytest.raises(StateMachineError, match="reviewer"):
+        await sm.record_correction(
+            ipo_id,
+            target_state=IPOLifecycleStateType.PRICING,
+            reviewer="",  # empty
+            justification="some reason",
+        )
+
+
+@pytest.mark.asyncio
+async def test_record_correction_rejects_empty_justification(fresh_sf) -> None:
+    """R2-4 — corrections require a justification string for the audit log."""
+    _truncate_lifecycle()
+    ipo_id = uuid.uuid4()
+    _seed_ipo(ipo_id)
+    sm = StateMachine(fresh_sf)
+    await sm.initialize(ipo_id)
+    with pytest.raises(StateMachineError, match="justification"):
+        await sm.record_correction(
+            ipo_id,
+            target_state=IPOLifecycleStateType.PRICING,
+            reviewer="charlie@hk.local",
+            justification="",  # empty
+        )
+
+
 # ===========================================================================
 # state_detectors.py — LISTED three-way validation
 # ===========================================================================

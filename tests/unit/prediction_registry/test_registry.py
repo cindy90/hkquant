@@ -146,3 +146,39 @@ async def test_create_snapshot_verifies_integrity() -> None:
     tampered = snap.model_copy(update={"input_data_hash": "0" * 64})
     with pytest.raises(SnapshotIntegrityError):
         await reg.create_snapshot(tampered)
+
+
+# ---------------------------------------------------------------------------
+# R2-3 — explicit application-layer rejection of update/delete
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_in_memory_registry_rejects_update() -> None:
+    """R2-3 — InMemoryPredictionRegistry must explicitly raise on update_snapshot.
+
+    Pre-fix the application layer relied solely on the absence of the method
+    (AttributeError if accessed). Adding an explicit ``NotImplementedError``
+    method to the Protocol forces backend symmetry and gives downstream code
+    a clear, named failure mode that explains *why* the operation is forbidden.
+
+    CLAUDE.md §预测生命周期约束: "snapshot 绝对不可变" — application code
+    must never expose a mutating API for snapshots.
+    """
+    reg = PredictionRegistry()
+    snap = _build_snapshot()
+    await reg.create_snapshot(snap)
+
+    with pytest.raises(NotImplementedError, match="immutable by design"):
+        await reg.update_snapshot(snap.id, snap)
+
+
+@pytest.mark.asyncio
+async def test_in_memory_registry_rejects_delete() -> None:
+    """R2-3 — InMemoryPredictionRegistry must explicitly raise on delete_snapshot."""
+    reg = PredictionRegistry()
+    snap = _build_snapshot()
+    await reg.create_snapshot(snap)
+
+    with pytest.raises(NotImplementedError, match="immutable by design"):
+        await reg.delete_snapshot(snap.id)
