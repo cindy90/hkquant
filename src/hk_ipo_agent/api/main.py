@@ -18,6 +18,7 @@ from fastapi import FastAPI
 
 from ..common.llm_client import LLMClient
 from ..common.settings import get_settings
+from ..prediction_registry.registry import PGPredictionRegistry, set_registry
 from .auth.audit_middleware import AuditMiddleware
 from .middleware.cors import install_cors
 from .middleware.cost_guard import CostGuardMiddleware
@@ -47,6 +48,9 @@ async def _upsert_seed_accounts_into_pg() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialize shared resources at startup, dispose at shutdown.
 
+    Wires the PG-backed prediction registry so /api/ipos reads persisted
+    snapshots instead of the in-memory dev fallback.
+
     R6-6: LLMClient construction failure handling is environment-aware.
       * dev / test: warn + fall back to ``app.state.llm_client = None``;
         cost_guard middleware tolerates None (skips the budget check).
@@ -58,6 +62,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     R6-7: also mirror seeded in-memory users to ``user_accounts`` so
     Phase 10 attribution can FK-link whatif persistence to a real row.
     """
+    # PG-backed registry first — every downstream init may need to read it.
+    set_registry(PGPredictionRegistry())
+
     try:
         app.state.llm_client = LLMClient(daily_budget_usd=Decimal("100"))
     except Exception:

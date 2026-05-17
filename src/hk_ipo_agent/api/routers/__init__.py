@@ -1,12 +1,13 @@
-"""API routers (Phase 7 → 8d).
+"""API routers (Phase 7 → 11.2).
 
 Implemented:
 - Phase 7 MVP: health / dashboard / auth / ipos / snapshots / analysis /
   prospectus / whatif / alerts / audit / chat
 - Phase 7.5b: reviews / proposals / drift
 - Phase 8d: backtest
+- Phase 11.2: upload (PDF prospectus upload + pipeline trigger)
 
-Stubs returning 501 (settings / system are Phase 9):
+Stubs (settings is Phase 9; system returns dev defaults):
 - settings / system
 """
 
@@ -26,8 +27,10 @@ from .proposals import router as proposals_router
 from .prospectus import router as prospectus_router
 from .reviews import router as reviews_router
 from .settings import router as settings_router
+from .snapshots import outcomes_router
 from .snapshots import router as snapshots_router
 from .system import router as system_router
+from .upload import router as upload_router
 from .whatif import router as whatif_router
 
 # All routers in the order to mount. Health first so /health survives any
@@ -40,6 +43,8 @@ ALL_ROUTERS = (
     snapshots_router,
     analysis_router,
     prospectus_router,
+    upload_router,
+    outcomes_router,
     whatif_router,
     alerts_router,
     audit_router,

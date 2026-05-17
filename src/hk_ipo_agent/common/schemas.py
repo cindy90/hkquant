@@ -681,4 +681,4 @@ class DashboardSummary(StrictModel):
     active_snapshots: list[dict[str, Any]] = Field(default_factory=list)
     upcoming_events: list[dict[str, Any]] = Field(default_factory=list)
     system_health: dict[str, str] = Field(default_factory=dict)
-    cost_summary: dict[str, Decimal] = Field(default_factory=dict)
+    cost_summary: dict[str, str] = Field(default_factory=dict)

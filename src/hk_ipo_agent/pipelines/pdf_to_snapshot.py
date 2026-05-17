@@ -28,7 +28,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
-from uuid import UUID, uuid4, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -190,10 +190,17 @@ def _group_chunks_by_section(chunks: list[Any]) -> dict[str, list[dict[str, Any]
 async def _ensure_ipo_event(
     config: PipelineConfig,
 ) -> UUID:
-    """Find or create the IPO event for this stock code. Returns ipo_event.id."""
+    """Find or create the IPO event for this stock code. Returns ipo_event.id.
+
+    Uses the same deterministic ``uuid5(NAMESPACE_URL, "hkipo:<code>")`` that
+    ``create_snapshot_node`` in ``orchestrator/nodes.py`` uses so the FK from
+    ``prediction_snapshots.ipo_id`` → ``ipo_events.id`` is satisfied.
+    """
     from ..data.database import async_session_factory
     from ..data.models import IPOEvent
     from ..data.repositories.ipo_repo import IPOEventRepository
+
+    deterministic_id = uuid5(NAMESPACE_URL, f"hkipo:{config.ipo_id}")
 
     sf = async_session_factory()
     async with sf() as session:
@@ -202,7 +209,7 @@ async def _ensure_ipo_event(
         if existing:
             return existing.id
         new_event = IPOEvent(
-            id=uuid4(),
+            id=deterministic_id,
             stock_code=config.ipo_id,
             company_name_zh=config.company_name_zh,
             listing_type=config.listing_type.value,
@@ -233,8 +240,10 @@ async def _persist_extraction_to_pg(
         else:
             from ..data.models import IPOEvent
 
+            # Use deterministic UUID consistent with create_snapshot_node.
+            deterministic_id = uuid5(NAMESPACE_URL, f"hkipo:{config.ipo_id}")
             new_event = IPOEvent(
-                id=uuid4(),
+                id=deterministic_id,
                 stock_code=config.ipo_id,
                 company_name_zh=config.company_name_zh,
                 listing_type=config.listing_type.value,
@@ -403,13 +412,18 @@ async def run_pdf_to_snapshot(  # noqa: PLR0915  # 75 statements; orchestrates 5
         section_counts: Counter[str | None] = Counter(c.section for c in chunks)
         log(f"      total={len(chunks)} sections={dict(section_counts)}")
 
-        # Persist chunks to Qdrant (non-blocking to pipeline)
+        # Persist chunks to Qdrant (best-effort; pipeline continues if Qdrant is down)
         if config.persist_to_qdrant and chunks:
             log("      [persist] Upserting chunks to Qdrant ...")
             t0 = time.time()
-            qdrant_count = await _persist_chunks_to_qdrant(config, chunks)
-            timings["qdrant_upsert"] = time.time() - t0
-            log(f"      [persist] {qdrant_count} vectors upserted")
+            try:
+                qdrant_count = await _persist_chunks_to_qdrant(config, chunks)
+                timings["qdrant_upsert"] = time.time() - t0
+                log(f"      [persist] {qdrant_count} vectors upserted")
+            except Exception as exc:  # noqa: BLE001
+                timings["qdrant_upsert"] = time.time() - t0
+                log(f"      [persist] Qdrant unavailable, skipping vector store: {exc}")
+                # Pipeline continues without vector persistence
 
         # --- Step 3: extract ----------------------------------------------
         log("[3/5] LLM extraction ...")
@@ -443,6 +457,11 @@ async def run_pdf_to_snapshot(  # noqa: PLR0915  # 75 statements; orchestrates 5
             await _persist_extraction_to_pg(config, extraction_result, parsed_doc)
             timings["pg_persist"] = time.time() - t0
             log("      [persist] Extraction saved")
+
+    # --- Step 3.5: ensure ipo_events row exists (PG FK prerequisite) ------
+    if config.persist_to_pg:
+        log("      [persist] Ensuring ipo_events row exists ...")
+        await _ensure_ipo_event(config)
 
     # --- Step 4: graph ----------------------------------------------------
     log("[4/5] LangGraph (7 agents + debate + synthesizer + snapshot) ...")

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -52,7 +51,7 @@ async def get_summary(
             "snapshots_total": str(len(snapshots)),
             "audit_records": str(audit_count),
         },
-        cost_summary={"today_usd": Decimal("0")},
+        cost_summary={"today_usd": "0"},
     )
 
 
