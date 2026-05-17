@@ -158,10 +158,7 @@ async def run_ensemble(
     }
 
     # --- Regime Gate hard gate (ADR 0005 §2) ---
-    if (
-        market_data.regime_score is not None
-        and market_data.regime_score < REGIME_GATE_THRESHOLD
-    ):
+    if market_data.regime_score is not None and market_data.regime_score < REGIME_GATE_THRESHOLD:
         notes.append(
             f"Regime Gate triggered: regime_score={market_data.regime_score:.3f} < "
             f"{REGIME_GATE_THRESHOLD}; forcing SKIP — price range zeroed (ADR 0005 §2)"

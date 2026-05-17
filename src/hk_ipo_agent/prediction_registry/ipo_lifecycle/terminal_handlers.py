@@ -39,9 +39,7 @@ TERMINAL_CHECKPOINT_DAY = -1
 
 class _RegistryProtocol(Protocol):
     async def get_snapshot(self, snapshot_id: UUID) -> PredictionSnapshot: ...
-    async def attach_review(
-        self, snapshot_id: UUID, review: PredictionReview
-    ) -> UUID: ...
+    async def attach_review(self, snapshot_id: UUID, review: PredictionReview) -> UUID: ...
 
 
 @dataclass(frozen=True)
@@ -79,7 +77,8 @@ class TerminalHandler:
             IPOLifecycleStateType.PRICING_PULLED,
         }:
             return TerminalResult(
-                outcome_id=None, review_id=None,
+                outcome_id=None,
+                review_id=None,
                 skipped=True,
                 skip_reason=f"state {terminal_state.value} is not a terminal-handler target",
             )
@@ -87,8 +86,10 @@ class TerminalHandler:
         snap_row = await self._latest_snapshot(ipo_id)
         if snap_row is None:
             return TerminalResult(
-                outcome_id=None, review_id=None,
-                skipped=True, skip_reason=f"no snapshot for ipo_id={ipo_id}",
+                outcome_id=None,
+                review_id=None,
+                skipped=True,
+                skip_reason=f"no snapshot for ipo_id={ipo_id}",
             )
 
         # 1. Terminal outcome row
@@ -96,7 +97,8 @@ class TerminalHandler:
         # 2. Terminal review draft
         snapshot = await self._registry.get_snapshot(snap_row.id)
         review_id = await self._attach_terminal_review(
-            snapshot, terminal_state=terminal_state,
+            snapshot,
+            terminal_state=terminal_state,
         )
         return TerminalResult(outcome_id=outcome_id, review_id=review_id)
 
@@ -111,7 +113,9 @@ class TerminalHandler:
             return (await s.execute(stmt)).scalar_one_or_none()
 
     async def _write_terminal_outcome(
-        self, snapshot_id: UUID, terminal_state: IPOLifecycleStateType,
+        self,
+        snapshot_id: UUID,
+        terminal_state: IPOLifecycleStateType,
     ) -> UUID | None:
         """Idempotent: if a -1 outcome row already exists, return None."""
         check_stmt = (
@@ -173,8 +177,10 @@ class TerminalHandler:
             snapshot_id=snapshot.id,
             checkpoint_day=TERMINAL_CHECKPOINT_DAY,
             debate_quality=DebateQualityAnalysis(
-                bear_predictions_validated=0, bear_predictions_total=0,
-                bull_predictions_validated=0, bull_predictions_total=0,
+                bear_predictions_validated=0,
+                bear_predictions_total=0,
+                bull_predictions_validated=0,
+                bull_predictions_total=0,
             ),
             primary_attribution="terminal_no_listing",
             llm_diagnosis=(

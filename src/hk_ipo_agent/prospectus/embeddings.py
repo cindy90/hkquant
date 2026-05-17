@@ -92,11 +92,10 @@ class BGEEmbeddings(EmbeddingProvider):
 
     def __init__(self, model_path: str | None = None) -> None:
         try:
-            from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+            from sentence_transformers import SentenceTransformer
         except ImportError as exc:
             raise MissingDependencyError(
-                "sentence-transformers not installed. "
-                "`uv sync --extra embeddings-local`",
+                "sentence-transformers not installed. `uv sync --extra embeddings-local`",
             ) from exc
         path = model_path or get_settings().embedding.bge_model_path
         log.info("loading_bge_model", path=path)
@@ -128,7 +127,7 @@ class VoyageEmbeddings(EmbeddingProvider):
 
     def __init__(self, api_key: str | None = None) -> None:
         try:
-            import voyageai  # noqa: PLC0415
+            import voyageai
         except ImportError as exc:
             raise MissingDependencyError(
                 "voyageai not installed. `uv sync --extra embeddings-cloud`",

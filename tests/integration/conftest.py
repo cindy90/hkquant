@@ -18,8 +18,9 @@ import pytest
 
 @functools.lru_cache(maxsize=1)
 def _pg_available() -> bool:
-    import psycopg  # noqa: PLC0415
-    from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
+    import psycopg
+
+    from hk_ipo_agent.common.settings import get_settings
 
     url = get_settings().database.url
     dsn = url.replace("postgresql+asyncpg://", "postgresql://", 1)
@@ -34,8 +35,9 @@ def _ipo_event_count() -> int:
     """Returns the minimum of (ipo_events, ipo_pricings, ipo_postmarket) so
     a partial wipe (e.g. e2e tests that insert 1 ipo_events row but leave
     pricings/postmarket empty) is also caught."""
-    import psycopg  # noqa: PLC0415
-    from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
+    import psycopg
+
+    from hk_ipo_agent.common.settings import get_settings
 
     url = get_settings().database.url
     dsn = url.replace("postgresql+asyncpg://", "postgresql://", 1)

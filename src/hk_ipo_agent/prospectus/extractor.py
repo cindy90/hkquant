@@ -49,7 +49,9 @@ PROMPTS_DIR = Path(__file__).resolve().parents[3] / "prompts" / "extraction"
 class _SectionRoute(BaseModel):
     """Output of prospectus_section_router prompt."""
 
-    section: str = Field(description="One of: financials / business / risks / shareholders / ch18c / other")
+    section: str = Field(
+        description="One of: financials / business / risks / shareholders / ch18c / other"
+    )
     confidence: float = Field(ge=0.0, le=1.0)
 
 
@@ -156,7 +158,9 @@ class ProspectusExtractor:
 
             for section, chunks in chunks_by_section.items():
                 try:
-                    await self._extract_section(extraction, section, chunks[: self.config.max_chunks_per_section])
+                    await self._extract_section(
+                        extraction, section, chunks[: self.config.max_chunks_per_section]
+                    )
                     sections_succeeded += 1
                 except ExtractionError as exc:
                     log.warning("section_extraction_failed", section=section, error=str(exc))
@@ -324,9 +328,7 @@ class ProspectusExtractor:
     def _build_prompt(self, template_name: str, chunks: list[dict[str, Any]]) -> str:
         """Load the prompt template and append chunk evidence."""
         template_path = PROMPTS_DIR / template_name
-        template_text = (
-            template_path.read_text(encoding="utf-8") if template_path.exists() else ""
-        )
+        template_text = template_path.read_text(encoding="utf-8") if template_path.exists() else ""
         evidence = "\n\n---\n\n".join(
             f"[Page {c.get('page')}] (chunk_id={c.get('chunk_id')})\n{c.get('text', '')}"
             for c in chunks

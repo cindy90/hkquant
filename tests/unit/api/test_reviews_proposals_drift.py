@@ -73,8 +73,14 @@ def _seed_snapshot_and_review(
                 " notes_md, created_at, updated_at) "
                 "VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s, NOW(), NOW())",
                 (
-                    review_id, snap_id, 30, "alice", "valuation_model",
-                    proposed_json, adjustment_status.value, "test note",
+                    review_id,
+                    snap_id,
+                    30,
+                    "alice",
+                    "valuation_model",
+                    proposed_json,
+                    adjustment_status.value,
+                    "test note",
                 ),
             )
         conn.commit()
@@ -96,7 +102,7 @@ def _fresh_async_engine() -> None:
     to the per-test event loop (avoids "Event loop is closed" during
     asyncpg teardown across pytest's function-scoped loops).
     """
-    from hk_ipo_agent.data.database import async_session_factory, get_engine  # noqa: PLC0415
+    from hk_ipo_agent.data.database import async_session_factory, get_engine
 
     get_engine.cache_clear()  # type: ignore[attr-defined]
     async_session_factory.cache_clear()  # type: ignore[attr-defined]
@@ -136,9 +142,7 @@ def test_list_reviews_for_snapshot(client: TestClient, admin_headers) -> None:
     assert r.json()["meta"]["total"] == 1
 
 
-def test_submit_review_returns_404_for_unknown_snapshot(
-    client: TestClient, admin_headers
-) -> None:
+def test_submit_review_returns_404_for_unknown_snapshot(client: TestClient, admin_headers) -> None:
     r = client.post(
         f"/api/reviews/snapshot/{uuid.uuid4()}",
         json={"reviewer": "alice", "what_we_got_right": "x", "what_we_got_wrong": "y"},
@@ -152,18 +156,14 @@ def test_submit_review_returns_404_for_unknown_snapshot(
 # ---------------------------------------------------------------------------
 
 
-def test_list_proposals_returns_reviews_with_adjustments(
-    client: TestClient, admin_headers
-) -> None:
+def test_list_proposals_returns_reviews_with_adjustments(client: TestClient, admin_headers) -> None:
     _seed_snapshot_and_review(proposals=[{"target_path": "x"}])
     r = client.get("/api/proposals/", headers=admin_headers)
     assert r.status_code == 200
     assert r.json()["meta"]["total"] >= 1
 
 
-def test_accept_proposal_transitions_to_accepted(
-    client: TestClient, admin_headers
-) -> None:
+def test_accept_proposal_transitions_to_accepted(client: TestClient, admin_headers) -> None:
     _seed_snapshot_and_review(proposals=[{"target_path": "x"}])
     # Find the review_id from list.
     r = client.get("/api/proposals/", headers=admin_headers)
@@ -177,9 +177,7 @@ def test_accept_proposal_transitions_to_accepted(
     assert r2.json()["adjustment_status"] == AdjustmentStatus.ACCEPTED.value
 
 
-def test_reject_proposal_transitions_to_rejected(
-    client: TestClient, admin_headers
-) -> None:
+def test_reject_proposal_transitions_to_rejected(client: TestClient, admin_headers) -> None:
     _seed_snapshot_and_review(proposals=[{"target_path": "x"}])
     r = client.get("/api/proposals/", headers=admin_headers)
     review_id = r.json()["data"][0]["review_id"]
@@ -192,9 +190,7 @@ def test_reject_proposal_transitions_to_rejected(
     assert r2.json()["adjustment_status"] == AdjustmentStatus.REJECTED.value
 
 
-def test_accept_proposal_rejects_already_accepted(
-    client: TestClient, admin_headers
-) -> None:
+def test_accept_proposal_rejects_already_accepted(client: TestClient, admin_headers) -> None:
     _seed_snapshot_and_review(
         proposals=[{"target_path": "x"}],
         adjustment_status=AdjustmentStatus.ACCEPTED,
@@ -209,9 +205,7 @@ def test_accept_proposal_rejects_already_accepted(
     assert r2.status_code == 409  # CONFLICT — illegal transition
 
 
-def test_accept_proposal_404_for_unknown_review(
-    client: TestClient, admin_headers
-) -> None:
+def test_accept_proposal_404_for_unknown_review(client: TestClient, admin_headers) -> None:
     r = client.post(
         f"/api/proposals/{uuid.uuid4()}/accept",
         json={"reviewer": "alice"},
@@ -225,9 +219,7 @@ def test_accept_proposal_404_for_unknown_review(
 # ---------------------------------------------------------------------------
 
 
-def test_drift_buckets_aggregate_by_attribution(
-    client: TestClient, admin_headers
-) -> None:
+def test_drift_buckets_aggregate_by_attribution(client: TestClient, admin_headers) -> None:
     _seed_snapshot_and_review()
     r = client.get("/api/drift/", headers=admin_headers)
     assert r.status_code == 200

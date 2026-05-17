@@ -108,17 +108,45 @@ class PipelineResult:
 # because it's load-bearing for real (non-fixture) PDFs whose TOC entries
 # trip the structural section detector.
 _FIN_KEYWORDS_CJK = (
-    "收入", "收益", "營業額", "毛利", "淨利潤", "净利润",
-    "資產負債", "资产负债", "現金流量", "现金流量",
-    "經營業績", "财务", "財務",
+    "收入",
+    "收益",
+    "營業額",
+    "毛利",
+    "淨利潤",
+    "净利润",
+    "資產負債",
+    "资产负债",
+    "現金流量",
+    "现金流量",
+    "經營業績",
+    "财务",
+    "財務",
 )
 _RISK_KEYWORDS_CJK = ("風險", "风险", "不確定", "不确定")
 _BIZ_KEYWORDS_CJK = (
-    "業務", "业务", "產品", "产品", "服務", "服务",
-    "客戶", "客户", "市場", "市场", "研發", "研发", "技術", "技术",
+    "業務",
+    "业务",
+    "產品",
+    "产品",
+    "服務",
+    "服务",
+    "客戶",
+    "客户",
+    "市場",
+    "市场",
+    "研發",
+    "研发",
+    "技術",
+    "技术",
 )
 _SHAREHOLDER_KEYWORDS_CJK = (
-    "股東", "股东", "基石投資", "基石投资", "股本", "持股", "配售",
+    "股東",
+    "股东",
+    "基石投資",
+    "基石投资",
+    "股本",
+    "持股",
+    "配售",
 )
 _FIN_RE_EN = re.compile(r"(revenue|profit|loss|ebitda|cash flow)", re.IGNORECASE)
 _RISK_RE_EN = re.compile(r"(risk factor|uncertaint)", re.IGNORECASE)
@@ -145,11 +173,13 @@ def _group_chunks_by_section(chunks: list[Any]) -> dict[str, list[dict[str, Any]
         section = _classify_chunk(chunk.text)
         if section == "other":
             continue
-        groups.setdefault(section, []).append({
-            "text": chunk.text,
-            "page": chunk.page,
-            "chunk_id": chunk.chunk_id,
-        })
+        groups.setdefault(section, []).append(
+            {
+                "text": chunk.text,
+                "page": chunk.page,
+                "chunk_id": chunk.chunk_id,
+            }
+        )
     return groups
 
 
@@ -229,39 +259,32 @@ async def _persist_extraction_to_pg(
             id=uuid4(),
             prospectus_id=doc_id,
             extraction=extraction_result.extraction.model_dump(mode="json"),
-            extraction_version=getattr(
-                extraction_result.extraction, "extraction_version", "1.0"
-            ),
-            needs_human_review=getattr(
-                extraction_result.extraction, "needs_human_review", False
-            ),
+            extraction_version=getattr(extraction_result.extraction, "extraction_version", "1.0"),
+            needs_human_review=getattr(extraction_result.extraction, "needs_human_review", False),
         )
         session.add(ext_row)
         await session.commit()
 
 
-async def _persist_chunks_to_qdrant(
-    config: PipelineConfig, chunks: list[Any]
-) -> int:
+async def _persist_chunks_to_qdrant(config: PipelineConfig, chunks: list[Any]) -> int:
     """Embed and upsert all chunks to Qdrant. Returns count."""
     from ..prospectus.embeddings import get_embedding_provider
     from ..prospectus.vector_store import ProspectusVectorStore
 
     provider = get_embedding_provider()
     store = ProspectusVectorStore(config.prospectus_id, provider=provider)
-    count = await store.upsert_chunks(chunks)
-    return count
+    return await store.upsert_chunks(chunks)
 
 
 async def _load_cached_extraction(
     config: PipelineConfig,
 ) -> Any | None:
     """Try to load a cached extraction from PG. Returns ProspectusExtraction or None."""
+    from sqlalchemy import select
+
     from ..common.schemas import ProspectusExtraction
     from ..data.database import async_session_factory
     from ..data.models.prospectus import ProspectusDoc, ProspectusExtractionRow
-
-    from sqlalchemy import select
 
     sf = async_session_factory()
     async with sf() as session:
@@ -284,7 +307,7 @@ async def _load_cached_extraction(
         return ProspectusExtraction.model_validate(row.extraction)
 
 
-async def run_pdf_to_snapshot(
+async def run_pdf_to_snapshot(  # noqa: PLR0915  # 75 statements; orchestrates 5-step pipeline — see R5/R11 split task
     config: PipelineConfig,
     market_data: MarketData,
     *,
@@ -604,7 +627,9 @@ def _dump_full_state_json(
             "total_elapsed_seconds": round(total_elapsed_s, 2),
             "total_cost_usd": str(cost_log.total_usd()),
             "llm_calls": len(cost_log.records),
-            "snapshot_id": str(final_state.get("snapshot_id")) if final_state.get("snapshot_id") else None,
+            "snapshot_id": str(final_state.get("snapshot_id"))
+            if final_state.get("snapshot_id")
+            else None,
         },
         "extraction": (
             final_state["extraction"].model_dump(mode="json")
@@ -612,8 +637,7 @@ def _dump_full_state_json(
             else None
         ),
         "agent_outputs": {
-            role: output.model_dump(mode="json")
-            for role, output in agent_outputs.items()
+            role: output.model_dump(mode="json") for role, output in agent_outputs.items()
         },
         "valuation_output": (
             valuation.model_dump(mode="json")
@@ -621,9 +645,7 @@ def _dump_full_state_json(
             else None
         ),
         "debate_output": (
-            debate.model_dump(mode="json")
-            if debate and hasattr(debate, "model_dump")
-            else None
+            debate.model_dump(mode="json") if debate and hasattr(debate, "model_dump") else None
         ),
         "cross_check_notes": final_state.get("cross_check_notes", []),
         "extras": None,
@@ -714,7 +736,9 @@ def _write_detailed_report(  # noqa: PLR0912, PLR0915
         L.append(f"| 综合评分 | {decision.scorecard.get('overall', 0):.1f} / 100 |")
         if decision.suggested_allocation_pct is not None:
             L.append(f"| 建议仓位 | {decision.suggested_allocation_pct:.2%} |")
-        L.append(f"| 价格区间 (RMB) | {decision.price_range_low:,.0f} / {decision.price_range_fair:,.0f} / {decision.price_range_high:,.0f} |")
+        L.append(
+            f"| 价格区间 (RMB) | {decision.price_range_low:,.0f} / {decision.price_range_fair:,.0f} / {decision.price_range_high:,.0f} |"
+        )
         L.append(f"| 分析成本 | ${cost_log.total_usd():.4f} |")
         L.append(f"| 分析耗时 | {total_elapsed_s:.1f}s |")
     L.append("")
@@ -756,8 +780,12 @@ def _write_detailed_report(  # noqa: PLR0912, PLR0915
         if ext.financials:
             L.append("### 2.4 财务数据")
             L.append("")
-            L.append("| 年度 | 期间 | 收入(RMB) | 毛利(RMB) | 毛利率 | 净利润(RMB) | 研发费用(RMB) | 研发占比 | 经营现金流(RMB) |")
-            L.append("|------|------|-----------|-----------|--------|-------------|-------------|---------|----------------|")
+            L.append(
+                "| 年度 | 期间 | 收入(RMB) | 毛利(RMB) | 毛利率 | 净利润(RMB) | 研发费用(RMB) | 研发占比 | 经营现金流(RMB) |"
+            )
+            L.append(
+                "|------|------|-----------|-----------|--------|-------------|-------------|---------|----------------|"
+            )
             for fs in ext.financials:
                 rev = f"{fs.revenue_rmb:,.0f}" if fs.revenue_rmb else "-"
                 gp = f"{fs.gross_profit_rmb:,.0f}" if fs.gross_profit_rmb else "-"
@@ -766,7 +794,9 @@ def _write_detailed_report(  # noqa: PLR0912, PLR0915
                 rd = f"{fs.rd_expense_rmb:,.0f}" if fs.rd_expense_rmb else "-"
                 rd_pct = f"{fs.rd_pct_of_revenue:.1%}" if fs.rd_pct_of_revenue is not None else "-"
                 ocf = f"{fs.operating_cash_flow_rmb:,.0f}" if fs.operating_cash_flow_rmb else "-"
-                L.append(f"| {fs.fiscal_year} | {fs.fiscal_period} | {rev} | {gp} | {gm} | {np_} | {rd} | {rd_pct} | {ocf} |")
+                L.append(
+                    f"| {fs.fiscal_year} | {fs.fiscal_period} | {rev} | {gp} | {gm} | {np_} | {rd} | {rd_pct} | {ocf} |"
+                )
             L.append("")
 
         if ext.risk_factors:
@@ -786,7 +816,9 @@ def _write_detailed_report(  # noqa: PLR0912, PLR0915
             for sh in ext.shareholders:
                 val = f"{sh.last_round_valuation_rmb:,.0f}" if sh.last_round_valuation_rmb else "-"
                 dt = str(sh.last_round_date) if sh.last_round_date else "-"
-                L.append(f"| {sh.name} | {sh.pct_pre_ipo:.2%} | {'是' if sh.is_controlling else '否'} | {'是' if sh.is_pre_ipo_investor else '否'} | {val} | {dt} |")
+                L.append(
+                    f"| {sh.name} | {sh.pct_pre_ipo:.2%} | {'是' if sh.is_controlling else '否'} | {'是' if sh.is_pre_ipo_investor else '否'} | {val} | {dt} |"
+                )
             L.append("")
 
         if ext.review_reasons:
@@ -1033,10 +1065,14 @@ def _write_detailed_report(  # noqa: PLR0912, PLR0915
             L.append("| 维度 | P10 | P25 | P50 | P75 | P90 |")
             L.append("|------|-----|-----|-----|-----|-----|")
             r6 = decision.expected_return_6m
-            L.append(f"| 6个月 | {r6.p10:,.0f} | {r6.p25:,.0f} | {r6.p50:,.0f} | {r6.p75:,.0f} | {r6.p90:,.0f} |")
+            L.append(
+                f"| 6个月 | {r6.p10:,.0f} | {r6.p25:,.0f} | {r6.p50:,.0f} | {r6.p75:,.0f} | {r6.p90:,.0f} |"
+            )
             if decision.expected_return_12m:
                 r12 = decision.expected_return_12m
-                L.append(f"| 12个月 | {r12.p10:,.0f} | {r12.p25:,.0f} | {r12.p50:,.0f} | {r12.p75:,.0f} | {r12.p90:,.0f} |")
+                L.append(
+                    f"| 12个月 | {r12.p10:,.0f} | {r12.p25:,.0f} | {r12.p50:,.0f} | {r12.p75:,.0f} | {r12.p90:,.0f} |"
+                )
             L.append("")
 
     # ===== 9. Cost =====
@@ -1066,7 +1102,9 @@ def _write_detailed_report(  # noqa: PLR0912, PLR0915
     L.append("---")
     L.append("")
     L.append("*本报告由多Agent LLM系统自动生成*  ")
-    L.append("*Pipeline: PyMuPDF → Chunker → KIMI Extractor → 7 Expert Agents → Valuation Ensemble → Bull-Bear-Devil Debate → Synthesizer*  ")
+    L.append(
+        "*Pipeline: PyMuPDF → Chunker → KIMI Extractor → 7 Expert Agents → Valuation Ensemble → Bull-Bear-Devil Debate → Synthesizer*  "
+    )
     L.append("*所有分析基于招股书文本 + InMemory模式（无外部市场数据源）*")
 
     path.write_text("\n".join(L), encoding="utf-8")

@@ -64,9 +64,13 @@ def _sample() -> BacktestInput:
 
 def _decision(kind: DecisionType, confidence: float) -> FinalDecision:
     d = ValuationDistribution(
-        p10=Decimal("90"), p25=Decimal("95"), p50=Decimal("100"),
-        p75=Decimal("105"), p90=Decimal("110"),
-        mean=Decimal("100"), std=Decimal("5"),
+        p10=Decimal("90"),
+        p25=Decimal("95"),
+        p50=Decimal("100"),
+        p75=Decimal("105"),
+        p90=Decimal("110"),
+        mean=Decimal("100"),
+        std=Decimal("5"),
     )
     return FinalDecision(
         decision=kind,
@@ -159,7 +163,7 @@ async def test_fixture_fetcher_returns_identity() -> None:
 @pytest.mark.asyncio
 async def test_scorer_returns_skip_on_extraction_lookahead(fresh_sf) -> None:
     """Extraction fetcher raises LookAheadError → SKIP score + note."""
-    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider  # noqa: PLC0415
+    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider
 
     async def _raising_fetcher(*args, **kwargs):
         raise LookAheadError("test")
@@ -169,7 +173,8 @@ async def test_scorer_returns_skip_on_extraction_lookahead(fresh_sf) -> None:
         extraction_fetcher=_raising_fetcher,
     )
     provider = AsOfDataProvider(
-        as_of_date=date(2024, 6, 13), session_factory=fresh_sf,
+        as_of_date=date(2024, 6, 13),
+        session_factory=fresh_sf,
     )
     out = await scorer.score(provider, _sample())
     assert out.decision_score == -1.0
@@ -184,7 +189,7 @@ async def test_scorer_returns_skip_on_extraction_lookahead(fresh_sf) -> None:
 @pytest.mark.asyncio
 async def test_scorer_skips_on_timeout(fresh_sf) -> None:
     """When graph.ainvoke hangs and skip_on_timeout=True → -1.0 SKIP."""
-    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider  # noqa: PLC0415
+    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider
 
     fake_graph = MagicMock()
 
@@ -198,7 +203,8 @@ async def test_scorer_skips_on_timeout(fresh_sf) -> None:
         config=FullScorerConfig(timeout_seconds=0.05, skip_on_timeout=True),
     )
     provider = AsOfDataProvider(
-        as_of_date=date(2024, 6, 13), session_factory=fresh_sf,
+        as_of_date=date(2024, 6, 13),
+        session_factory=fresh_sf,
     )
     with patch(
         "hk_ipo_agent.orchestrator.graph.build_main_graph",
@@ -212,7 +218,7 @@ async def test_scorer_skips_on_timeout(fresh_sf) -> None:
 @pytest.mark.asyncio
 async def test_scorer_propagates_timeout_when_skip_disabled(fresh_sf) -> None:
     """skip_on_timeout=False → TimeoutError bubbles up."""
-    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider  # noqa: PLC0415
+    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider
 
     fake_graph = MagicMock()
 
@@ -226,19 +232,23 @@ async def test_scorer_propagates_timeout_when_skip_disabled(fresh_sf) -> None:
         config=FullScorerConfig(timeout_seconds=0.05, skip_on_timeout=False),
     )
     provider = AsOfDataProvider(
-        as_of_date=date(2024, 6, 13), session_factory=fresh_sf,
+        as_of_date=date(2024, 6, 13),
+        session_factory=fresh_sf,
     )
-    with patch(
-        "hk_ipo_agent.orchestrator.graph.build_main_graph",
-        return_value=fake_graph,
-    ), pytest.raises(TimeoutError):
+    with (
+        patch(
+            "hk_ipo_agent.orchestrator.graph.build_main_graph",
+            return_value=fake_graph,
+        ),
+        pytest.raises(TimeoutError),
+    ):
         await scorer.score(provider, _sample())
 
 
 @pytest.mark.asyncio
 async def test_scorer_extracts_decision_score_from_state(fresh_sf) -> None:
     """Happy path: graph returns a decision → scorer projects to score."""
-    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider  # noqa: PLC0415
+    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider
 
     fake_graph = MagicMock()
     fake_graph.ainvoke = AsyncMock(
@@ -249,7 +259,8 @@ async def test_scorer_extracts_decision_score_from_state(fresh_sf) -> None:
         extraction_fetcher=make_fixture_extraction_fetcher(_extraction()),
     )
     provider = AsOfDataProvider(
-        as_of_date=date(2024, 6, 13), session_factory=fresh_sf,
+        as_of_date=date(2024, 6, 13),
+        session_factory=fresh_sf,
     )
     with patch(
         "hk_ipo_agent.orchestrator.graph.build_main_graph",
@@ -258,5 +269,6 @@ async def test_scorer_extracts_decision_score_from_state(fresh_sf) -> None:
         out = await scorer.score(provider, _sample())
     assert out.decision_score == pytest.approx(+0.75)
     assert out.regulatory_regime in {
-        RegulatoryRegime.PRE_20250804, RegulatoryRegime.POST_20250804,
+        RegulatoryRegime.PRE_20250804,
+        RegulatoryRegime.POST_20250804,
     }

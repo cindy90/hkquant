@@ -190,7 +190,8 @@ class AdjustmentApplier:
                 # Rollback to the previous version.
                 await self._rollback(proposal.target_path, version.version, applied_by)
                 await self._mark_review(
-                    review_id, AdjustmentStatus.REJECTED,
+                    review_id,
+                    AdjustmentStatus.REJECTED,
                     notes=(
                         f"sanity backtest failed: baseline_ic={baseline_ic} "
                         f"new_ic={new_ic} drop="
@@ -234,10 +235,13 @@ class AdjustmentApplier:
             with contextlib.suppress(KeyError):
                 # nothing to roll back to (only one version exists)
                 await self._rollback(
-                    proposal.target_path, version.version, applied_by,
+                    proposal.target_path,
+                    version.version,
+                    applied_by,
                 )
             await self._mark_review(
-                review_id, AdjustmentStatus.REJECTED,
+                review_id,
+                AdjustmentStatus.REJECTED,
                 notes=f"applier raised: {type(exc).__name__}: {exc}",
             )
             return ApplyResult(
@@ -257,8 +261,7 @@ class AdjustmentApplier:
         status = review_row.adjustment_status or ""
         if not reviewer:
             raise AdjustmentNotApprovedError(
-                f"review {review_row.id} has empty reviewer field — "
-                "human gate violated"
+                f"review {review_row.id} has empty reviewer field — human gate violated"
             )
         if status != AdjustmentStatus.ACCEPTED.value:
             raise AdjustmentNotApprovedError(
@@ -271,7 +274,7 @@ class AdjustmentApplier:
     # ------------------------------------------------------------------
 
     async def _load_review(self, review_id: UUID) -> Any:
-        from ..data.models import PredictionReviewRow  # noqa: PLC0415
+        from ..data.models import PredictionReviewRow
 
         async with self._sf() as s:
             row = await s.get(PredictionReviewRow, review_id)
@@ -288,7 +291,7 @@ class AdjustmentApplier:
         applied_at: datetime | None = None,
         notes: str | None = None,
     ) -> None:
-        from ..data.models import PredictionReviewRow  # noqa: PLC0415
+        from ..data.models import PredictionReviewRow
 
         values: dict[str, Any] = {
             "adjustment_status": status.value,
@@ -314,7 +317,10 @@ class AdjustmentApplier:
         )
 
     async def _rollback(
-        self, target_path: str, current_version: str, applied_by: str,
+        self,
+        target_path: str,
+        current_version: str,
+        applied_by: str,
     ) -> None:
         """Roll back to the version *before* current_version."""
         versions = await self._vm.list_versions(target_path, limit=10)
@@ -329,13 +335,16 @@ class AdjustmentApplier:
         # versions[0] is current (just bumped), versions[1] is prior.
         prior = versions[1]
         rolled = await self._vm.rollback(
-            target_path, prior.version, applied_by=applied_by,
+            target_path,
+            prior.version,
+            applied_by=applied_by,
         )
         if self._cfg.write_to_disk and rolled.content is not None:
             _write_target_file(target_path, rolled.content)
 
     async def _sanity_backtest(
-        self, run_walk_forward_fn: Any,
+        self,
+        run_walk_forward_fn: Any,
     ) -> tuple[bool, float | None, float | None]:
         """Compare new metrics vs. baseline on a small sample.
 
@@ -348,7 +357,8 @@ class AdjustmentApplier:
             baseline_ic, new_ic = await run_walk_forward_fn()
         except Exception as exc:
             logger.warning(
-                "sanity_backtest_raised", error=str(exc),
+                "sanity_backtest_raised",
+                error=str(exc),
             )
             return False, None, None
         if baseline_ic is None or new_ic is None:
@@ -382,9 +392,7 @@ def _write_target_file(target_path: str, content: dict[str, Any]) -> None:
     elif target_path.endswith(".md"):
         text = content.get("text") if isinstance(content, dict) else None
         if not isinstance(text, str):
-            raise ValueError(
-                f"markdown target {target_path} requires content['text'] str"
-            )
+            raise ValueError(f"markdown target {target_path} requires content['text'] str")
         full_path.write_text(text, encoding="utf-8")
     else:
         # Fallback: JSON-dump the dict.

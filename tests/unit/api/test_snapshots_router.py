@@ -36,24 +36,16 @@ async def test_list_with_seeded_snapshot(
 
 
 @pytest.mark.asyncio
-async def test_get_memo_markdown(
-    client: TestClient, admin_headers, seeded_snapshot
-) -> None:
-    r = client.get(
-        f"/api/snapshots/{seeded_snapshot.id}/memo.md", headers=admin_headers
-    )
+async def test_get_memo_markdown(client: TestClient, admin_headers, seeded_snapshot) -> None:
+    r = client.get(f"/api/snapshots/{seeded_snapshot.id}/memo.md", headers=admin_headers)
     assert r.status_code == 200
     assert "text/markdown" in r.headers["content-type"]
     assert "Investment Memo" in r.text
 
 
 @pytest.mark.asyncio
-async def test_get_memo_pdf_or_html(
-    client: TestClient, admin_headers, seeded_snapshot
-) -> None:
-    r = client.get(
-        f"/api/snapshots/{seeded_snapshot.id}/memo.pdf", headers=admin_headers
-    )
+async def test_get_memo_pdf_or_html(client: TestClient, admin_headers, seeded_snapshot) -> None:
+    r = client.get(f"/api/snapshots/{seeded_snapshot.id}/memo.pdf", headers=admin_headers)
     assert r.status_code == 200
     # Either real PDF or HTML fallback
     assert r.headers["content-type"] in {"application/pdf", "text/html; charset=utf-8"}

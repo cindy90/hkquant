@@ -105,7 +105,9 @@ class ReviewWorkflow:
             )
 
         attribution = await self._attribution.attribute(
-            snapshot=snapshot, outcome=outcome, actual_price=actual_price,
+            snapshot=snapshot,
+            outcome=outcome,
+            actual_price=actual_price,
         )
         review = self._draft_review(snapshot, outcome, attribution)
         review_id = await self._registry.attach_review(snapshot_id, review)
@@ -163,14 +165,16 @@ class ReviewWorkflow:
         """
         # Build a stub attribution that gets overridden when the
         # learning-loop pulls the latest review for adjustment apply.
-        from ..common.schemas import DebateQualityAnalysis  # noqa: PLC0415
+        from ..common.schemas import DebateQualityAnalysis
 
         attribution_stub = Attribution(
             snapshot_id=snapshot_id,
             checkpoint_day=review_checkpoint_day,
             debate_quality=DebateQualityAnalysis(
-                bear_predictions_validated=0, bear_predictions_total=0,
-                bull_predictions_validated=0, bull_predictions_total=0,
+                bear_predictions_validated=0,
+                bear_predictions_total=0,
+                bull_predictions_validated=0,
+                bull_predictions_total=0,
             ),
             primary_attribution="manual_review",
             llm_diagnosis="(human-authored review)",

@@ -74,7 +74,7 @@ async def _load_outcome_samples(
     since: datetime,
 ) -> list[OutcomeWindowSample]:
     """Pull completed predictions + their outcomes from PG."""
-    from hk_ipo_agent.data.models import (  # noqa: PLC0415
+    from hk_ipo_agent.data.models import (
         PredictionOutcomeRow,
         PredictionSnapshotRow,
     )
@@ -109,9 +109,7 @@ async def _load_outcome_samples(
                     predicted_median_price=None,
                     realized_price_at_60d=None,
                     bear_flagged_risk=None,
-                    realized_outcome_negative=(
-                        (outcome.return_since_listing or 0) < 0
-                    ),
+                    realized_outcome_negative=((outcome.return_since_listing or 0) < 0),
                     agent_scores={},
                     agent_realized_hits={},
                 )
@@ -125,14 +123,11 @@ async def _load_review_records(
     since: datetime,
 ) -> list[ReviewRecord]:
     """Pull human reviews within the window for attribution aggregation."""
-    from hk_ipo_agent.data.models import PredictionReviewRow  # noqa: PLC0415
+    from hk_ipo_agent.data.models import PredictionReviewRow
 
     records: list[ReviewRecord] = []
     async with sf() as s:
-        stmt = (
-            select(PredictionReviewRow)
-            .where(PredictionReviewRow.created_at >= since)
-        )
+        stmt = select(PredictionReviewRow).where(PredictionReviewRow.created_at >= since)
         for row in (await s.execute(stmt)).scalars().all():
             if not row.primary_attribution:
                 continue
@@ -150,7 +145,7 @@ async def _load_review_records(
 
 
 async def _load_pending_proposals(sf) -> list[PendingProposalRow]:
-    from hk_ipo_agent.data.models import PredictionReviewRow  # noqa: PLC0415
+    from hk_ipo_agent.data.models import PredictionReviewRow
 
     out: list[PendingProposalRow] = []
     async with sf() as s:
@@ -172,7 +167,7 @@ async def _load_pending_proposals(sf) -> list[PendingProposalRow]:
 
 
 async def _load_applied_adjustments(sf) -> list[AppliedAdjustmentRow]:
-    from hk_ipo_agent.data.models import (  # noqa: PLC0415
+    from hk_ipo_agent.data.models import (
         ConfigVersionRow,
     )
 
@@ -238,16 +233,11 @@ async def _amain(args: argparse.Namespace) -> int:
     sf = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     try:
         since = datetime.now(UTC) - timedelta(days=args.window_days)
-        print(
-            f"[learning-cycle] window={args.window_days}d → since={since.date()}"
-        )
+        print(f"[learning-cycle] window={args.window_days}d → since={since.date()}")
 
         outcomes = await _load_outcome_samples(sf, since=since)
         reviews = await _load_review_records(sf, since=since)
-        print(
-            f"[learning-cycle] loaded {len(outcomes)} outcomes / "
-            f"{len(reviews)} reviews"
-        )
+        print(f"[learning-cycle] loaded {len(outcomes)} outcomes / {len(reviews)} reviews")
 
         detector = DriftDetector()
         drift_signals = detector.detect(outcomes)
@@ -276,7 +266,9 @@ async def _amain(args: argparse.Namespace) -> int:
         if proposals and outcomes and not args.dry_run:
             first_snap_id = UUID(outcomes[0].snapshot_id)
             review_id = await persist_proposals_to_review(
-                first_snap_id, proposals, sf,
+                first_snap_id,
+                proposals,
+                sf,
             )
             print(
                 f"[learning-cycle] persisted proposals into review "
@@ -313,19 +305,26 @@ async def _amain(args: argparse.Namespace) -> int:
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Phase 10c monthly learning cycle")
     p.add_argument(
-        "--window-days", type=int, default=90,
+        "--window-days",
+        type=int,
+        default=90,
         help="Lookback window (days). Default: 90.",
     )
     p.add_argument(
-        "--period", type=str, default=None,
+        "--period",
+        type=str,
+        default=None,
         help="Override period label (YYYY-MM). Defaults to current month.",
     )
     p.add_argument(
-        "--report-dir", type=Path, default=Path("reports/learning"),
+        "--report-dir",
+        type=Path,
+        default=Path("reports/learning"),
         help="Where to write the markdown report. Default: reports/learning/",
     )
     p.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Run diagnostics but don't persist proposals into PG.",
     )
     return p.parse_args(argv)

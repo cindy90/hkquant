@@ -103,9 +103,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--industry-desc", default="")
     p.add_argument("--max-pages", type=int, default=500)
     p.add_argument("--max-chunks-per-section", type=int, default=10)
-    p.add_argument(
-        "--no-report", action="store_true", help="Skip writing the markdown report"
-    )
+    p.add_argument("--no-report", action="store_true", help="Skip writing the markdown report")
     p.add_argument("--out-dir", type=Path, default=None)
     p.add_argument(
         "--budget-usd",
@@ -221,8 +219,9 @@ async def _main_async(args: argparse.Namespace) -> int:
     print("=" * 70)
     print(f"  Snapshot id:      {result.snapshot_id}")
     print(f"  Total cost (USD): ${result.total_cost_usd:.4f}")
-    print(f"  Total runtime:    {result.total_elapsed_s:.1f}s "
-          f"({result.total_elapsed_s / 60:.1f} min)")
+    print(
+        f"  Total runtime:    {result.total_elapsed_s:.1f}s ({result.total_elapsed_s / 60:.1f} min)"
+    )
     for step, secs in result.step_timings_s.items():
         print(f"    {step:8s}: {secs:6.1f}s")
     if result.report_path:

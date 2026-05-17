@@ -107,13 +107,18 @@ class CodeMapper:
                 return mapping
         # All strategies failed → empty mapping with LOW + requires_review.
         return CodeMapping(
-            ipo_id=ipo_id, hk_stock_code=None, a_share_code=None, us_adr_code=None,
+            ipo_id=ipo_id,
+            hk_stock_code=None,
+            a_share_code=None,
+            us_adr_code=None,
             confidence=CodeMappingConfidence.LOW,
             source=CodeMappingSource.MANUAL,
             requires_review=True,
-            evidence={"reason": "all_strategies_failed",
-                      "company_name_zh": company_name_zh,
-                      "company_name_en": company_name_en},
+            evidence={
+                "reason": "all_strategies_failed",
+                "company_name_zh": company_name_zh,
+                "company_name_en": company_name_en,
+            },
         )
 
     async def save(self, mapping: CodeMapping) -> UUID:
@@ -129,7 +134,9 @@ class CodeMapper:
                 existing.confidence = mapping.confidence.value
                 existing.confirmation_source = mapping.source.value
                 existing.requires_review = mapping.requires_review
-                existing.confirmed_at = now if mapping.confidence != CodeMappingConfidence.LOW else None
+                existing.confirmed_at = (
+                    now if mapping.confidence != CodeMappingConfidence.LOW else None
+                )
                 await s.commit()
                 return UUID(str(existing.id))
             row = CodeMappingRow(
@@ -169,7 +176,10 @@ class CodeMapper:
     # ------------------------------------------------------------------
 
     async def _try_hkex_announcement(
-        self, ipo_id: UUID, company_name_zh: str, company_name_en: str | None,
+        self,
+        ipo_id: UUID,
+        company_name_zh: str,
+        company_name_en: str | None,
     ) -> CodeMapping | None:
         try:
             docs = await self._anns.get_listing_documents(company_name_zh)
@@ -180,7 +190,8 @@ class CodeMapper:
             code = doc.get("stock_code") or doc.get("hk_code")
             if code:
                 return CodeMapping(
-                    ipo_id=ipo_id, hk_stock_code=str(code),
+                    ipo_id=ipo_id,
+                    hk_stock_code=str(code),
                     a_share_code=doc.get("a_share_code"),
                     us_adr_code=doc.get("us_adr_code"),
                     confidence=CodeMappingConfidence.HIGH,
@@ -191,7 +202,10 @@ class CodeMapper:
         return None
 
     async def _try_ifind_search(
-        self, ipo_id: UUID, company_name_zh: str, company_name_en: str | None,
+        self,
+        ipo_id: UUID,
+        company_name_zh: str,
+        company_name_en: str | None,
     ) -> CodeMapping | None:
         query = company_name_en or company_name_zh
         try:
@@ -207,7 +221,8 @@ class CodeMapper:
         if not code:
             return None
         return CodeMapping(
-            ipo_id=ipo_id, hk_stock_code=str(code),
+            ipo_id=ipo_id,
+            hk_stock_code=str(code),
             a_share_code=best.get("a_share_code"),
             us_adr_code=best.get("us_adr_code"),
             confidence=CodeMappingConfidence.MEDIUM,
@@ -217,7 +232,10 @@ class CodeMapper:
         )
 
     async def _try_sponsor_window(
-        self, ipo_id: UUID, sponsor_id: UUID, expected_listing_date: date,
+        self,
+        ipo_id: UUID,
+        sponsor_id: UUID,
+        expected_listing_date: date,
     ) -> CodeMapping | None:
         if self._sponsors is None:
             return None
@@ -225,7 +243,8 @@ class CodeMapper:
         window_end = expected_listing_date + timedelta(days=7)
         try:
             matches = await self._sponsors.find_by_sponsor_and_window(
-                sponsor_id, listing_date_range=(window_start, window_end),
+                sponsor_id,
+                listing_date_range=(window_start, window_end),
             )
         except Exception as exc:
             logger.warning("sponsor_lookup_failed", ipo_id=str(ipo_id), error=str(exc))
@@ -237,7 +256,8 @@ class CodeMapper:
         if not code:
             return None
         return CodeMapping(
-            ipo_id=ipo_id, hk_stock_code=str(code),
+            ipo_id=ipo_id,
+            hk_stock_code=str(code),
             a_share_code=match.get("a_share_code"),
             us_adr_code=None,
             confidence=CodeMappingConfidence.LOW,

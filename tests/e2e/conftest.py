@@ -23,9 +23,9 @@ import pytest
 
 @functools.lru_cache(maxsize=1)
 def _pg_available() -> bool:
-    import psycopg  # noqa: PLC0415
+    import psycopg
 
-    from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
+    from hk_ipo_agent.common.settings import get_settings
 
     url = get_settings().database.url
     dsn = url.replace("postgresql+asyncpg://", "postgresql://", 1)
@@ -38,9 +38,9 @@ def _pg_available() -> bool:
 
 def _ipo_event_count() -> int:
     """Sync count of ipo_events rows (psycopg, fast)."""
-    import psycopg  # noqa: PLC0415
+    import psycopg
 
-    from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
+    from hk_ipo_agent.common.settings import get_settings
 
     url = get_settings().database.url
     dsn = url.replace("postgresql+asyncpg://", "postgresql://", 1)

@@ -91,11 +91,7 @@ def test_v11_v12_v121_tables_declared() -> None:
 def test_naming_convention_applied() -> None:
     """Indices follow the `ix_*` naming convention from `base.NAMING_CONVENTION`."""
     # Find one indexed table and verify naming
-    ix_names = {
-        idx.name
-        for table in metadata.tables.values()
-        for idx in table.indexes
-    }
+    ix_names = {idx.name for table in metadata.tables.values() for idx in table.indexes}
     # We expect at least one of the explicit indexes we declared
     assert "ix_ipo_allocations_ipo_tranche" in ix_names
     assert "ix_cornerstone_investments_ipo_investor" in ix_names
@@ -128,7 +124,13 @@ def test_relationship_backref_declared() -> None:
     """Verify the IPOEvent.pricing / postmarket relationships are defined."""
     mapper = IPOEvent.__mapper__
     rel_names = {rel.key for rel in mapper.relationships}
-    assert {"pricing", "postmarket", "allocations", "cornerstone_investments", "prospectus_docs"} <= rel_names
+    assert {
+        "pricing",
+        "postmarket",
+        "allocations",
+        "cornerstone_investments",
+        "prospectus_docs",
+    } <= rel_names
 
 
 def test_cornerstone_investment_relationships() -> None:
@@ -149,7 +151,8 @@ def test_financial_snapshot_unique_per_company_period() -> None:
     idx_names = {idx.name for idx in FinancialSnapshotRow.__table__.indexes}
     assert "ix_financial_snapshots_company_period" in idx_names
     target = next(
-        idx for idx in FinancialSnapshotRow.__table__.indexes
+        idx
+        for idx in FinancialSnapshotRow.__table__.indexes
         if idx.name == "ix_financial_snapshots_company_period"
     )
     assert target.unique is True

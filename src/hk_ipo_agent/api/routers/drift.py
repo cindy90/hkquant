@@ -55,7 +55,11 @@ async def list_drift_buckets(
     """Aggregate recent reviews by primary_attribution."""
     _ = user
     stmt = (
-        select(PredictionReviewRow.id, PredictionReviewRow.snapshot_id, PredictionReviewRow.primary_attribution)
+        select(
+            PredictionReviewRow.id,
+            PredictionReviewRow.snapshot_id,
+            PredictionReviewRow.primary_attribution,
+        )
         .order_by(PredictionReviewRow.created_at.desc())
         .limit(limit)
     )

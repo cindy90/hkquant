@@ -58,31 +58,39 @@ class TestKBToolMatchThemes:
         return tool
 
     def test_matches_by_keyword(self) -> None:
-        tool = self._tool_with_definitions({
-            "ai_infra": {"keywords": ["AI", "人工智能"], "label": "AI基础设施"},
-            "ev": {"keywords": ["电动车", "新能源"], "label": "新能源汽车"},
-        })
+        tool = self._tool_with_definitions(
+            {
+                "ai_infra": {"keywords": ["AI", "人工智能"], "label": "AI基础设施"},
+                "ev": {"keywords": ["电动车", "新能源"], "label": "新能源汽车"},
+            }
+        )
         matches = tool.match_themes(industry_code="AI", company_name="某AI公司")
         assert "ai_infra" in matches
 
     def test_matches_by_label_fallback(self) -> None:
-        tool = self._tool_with_definitions({
-            "robotics": {"keywords": [], "label": "机器人"},
-        })
+        tool = self._tool_with_definitions(
+            {
+                "robotics": {"keywords": [], "label": "机器人"},
+            }
+        )
         matches = tool.match_themes(industry_code="other", company_name="某机器人公司")
         assert "robotics" in matches
 
     def test_no_match_returns_empty(self) -> None:
-        tool = self._tool_with_definitions({
-            "ai_infra": {"keywords": ["AI"], "label": "AI基础设施"},
-        })
+        tool = self._tool_with_definitions(
+            {
+                "ai_infra": {"keywords": ["AI"], "label": "AI基础设施"},
+            }
+        )
         matches = tool.match_themes(industry_code="pharma", company_name="制药公司")
         assert matches == []
 
     def test_case_insensitive_keyword_match(self) -> None:
-        tool = self._tool_with_definitions({
-            "saas": {"keywords": ["SaaS", "cloud"], "label": "云服务"},
-        })
+        tool = self._tool_with_definitions(
+            {
+                "saas": {"keywords": ["SaaS", "cloud"], "label": "云服务"},
+            }
+        )
         matches = tool.match_themes(industry_code="CLOUD_COMPUTING", company_name="X Corp")
         assert "saas" in matches
 
@@ -100,7 +108,9 @@ class TestKBToolIntegration:
         (kb_themes / "heat_today.json").write_text(
             json.dumps({"themes": {"ai": {"heat": 80}}}), encoding="utf-8"
         )
-        with patch("hk_ipo_agent.agents.tools.kb_tool._KB_ROOT", tmp_path / "data" / "knowledge_base"):
+        with patch(
+            "hk_ipo_agent.agents.tools.kb_tool._KB_ROOT", tmp_path / "data" / "knowledge_base"
+        ):
             tool = KBTool()
             result = tool.themes_heat()
         assert result == {"themes": {"ai": {"heat": 80}}}
@@ -112,7 +122,9 @@ class TestKBToolIntegration:
             json.dumps({"themes": {"ev": {"heat": 60}}}), encoding="utf-8"
         )
         with (
-            patch("hk_ipo_agent.agents.tools.kb_tool._KB_ROOT", tmp_path / "data" / "knowledge_base"),
+            patch(
+                "hk_ipo_agent.agents.tools.kb_tool._KB_ROOT", tmp_path / "data" / "knowledge_base"
+            ),
             patch("hk_ipo_agent.agents.tools.kb_tool._LEGACY_THEMES", legacy),
         ):
             tool = KBTool()

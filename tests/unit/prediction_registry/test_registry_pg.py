@@ -90,13 +90,19 @@ def _build() -> PredictionSnapshot:
         extracted_at=datetime.now(UTC),
     )
     dist = ValuationDistribution(
-        p10=Decimal("90"), p25=Decimal("95"), p50=Decimal("100"),
-        p75=Decimal("105"), p90=Decimal("110"),
-        mean=Decimal("100"), std=Decimal("5"),
+        p10=Decimal("90"),
+        p25=Decimal("95"),
+        p50=Decimal("100"),
+        p75=Decimal("105"),
+        p90=Decimal("110"),
+        mean=Decimal("100"),
+        std=Decimal("5"),
     )
     val = ValuationEnsembleOutput(
         company_id=ext.prospectus_id,
-        single_models=[SingleModelValuation(model_name="x", applicable=True, valuation_distribution=dist)],
+        single_models=[
+            SingleModelValuation(model_name="x", applicable=True, valuation_distribution=dist)
+        ],
         weights_used={"x": 1.0},
         ensemble_distribution=dist,
         implied_price_range={"low": Decimal("95"), "fair": Decimal("100"), "high": Decimal("105")},
@@ -141,8 +147,8 @@ async def pg_registry():
     teardown. This fixture is single-purpose so the test pollution
     stays contained.
     """
-    from sqlalchemy.ext.asyncio import async_sessionmaker as _amsk  # noqa: PLC0415
-    from sqlalchemy.pool import NullPool  # noqa: PLC0415
+    from sqlalchemy.ext.asyncio import async_sessionmaker as _amsk
+    from sqlalchemy.pool import NullPool
 
     db_url = get_settings().database.url
     engine = create_async_engine(db_url, poolclass=NullPool, echo=False)
@@ -288,8 +294,13 @@ async def test_list_active_predictions_filters_window(pg_registry) -> None:
                 " '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '0.0.1', '{}'::jsonb, '{}'::jsonb, "
                 " 0.0, 0.0, :ts)"
             ),
-            {"id": old_snap_id, "ipo": old_ipo_id, "asof": old_age.date(),
-             "h": "0" * 64, "ts": old_age},
+            {
+                "id": old_snap_id,
+                "ipo": old_ipo_id,
+                "asof": old_age.date(),
+                "h": "0" * 64,
+                "ts": old_age,
+            },
         )
         await s.commit()
     active = await reg.list_active_predictions(window_days=360)

@@ -45,17 +45,11 @@ class ChatSessionRow(UUIDMixin, Base):
         ForeignKey("ipo_events.id"),
     )
     title: Mapped[str | None] = mapped_column(String(200))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    last_active_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    __table_args__ = (
-        Index("idx_chat_sessions_user", "user_id", "last_active_at"),
-    )
+    __table_args__ = (Index("idx_chat_sessions_user", "user_id", "last_active_at"),)
 
 
 class ChatMessageRow(UUIDMixin, Base):
@@ -84,13 +78,9 @@ class ChatMessageRow(UUIDMixin, Base):
     model_used: Mapped[str | None] = mapped_column(String(100))
     runtime_ms: Mapped[int | None] = mapped_column(Integer)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    __table_args__ = (
-        Index("idx_chat_messages_session", "session_id", "sequence"),
-    )
+    __table_args__ = (Index("idx_chat_messages_session", "session_id", "sequence"),)
 
 
 __all__ = (

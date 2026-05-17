@@ -69,9 +69,15 @@ def price_range_chart(low: Decimal, fair: Decimal, high: Decimal) -> bytes:
     if hi <= lo:
         hi = lo + 1.0  # avoid zero range
     ax.hlines(1, lo, hi, colors="#888", linewidth=3)
-    for x, label, color in [(lo, "low", "#E63946"), (fa, "fair", "#1D3557"), (hi, "high", "#2A9D8F")]:
+    for x, label, color in [
+        (lo, "low", "#E63946"),
+        (fa, "fair", "#1D3557"),
+        (hi, "high", "#2A9D8F"),
+    ]:
         ax.plot(x, 1, "o", color=color, markersize=10)
-        ax.annotate(f"{label}\n{x:.0f}", (x, 1), textcoords="offset points", xytext=(0, 12), ha="center")
+        ax.annotate(
+            f"{label}\n{x:.0f}", (x, 1), textcoords="offset points", xytext=(0, 12), ha="center"
+        )
     ax.set_yticks([])
     ax.set_xlim(lo - (hi - lo) * 0.1, hi + (hi - lo) * 0.1)
     ax.set_title("Implied Price Range (RMB)")

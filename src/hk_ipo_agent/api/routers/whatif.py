@@ -48,8 +48,9 @@ async def whatif_run(
     # is only useful when SSO is wired (Phase 9) and lifespan provisions
     # users in PG up-front.
     _ = user
-    await _persist_calculation(snapshot_id=payload.snapshot_id, user_id=None,
-                               payload=payload, response=response)
+    await _persist_calculation(
+        snapshot_id=payload.snapshot_id, user_id=None, payload=payload, response=response
+    )
     return response
 
 
@@ -84,7 +85,8 @@ async def _persist_calculation(
     except Exception as exc:
         logger.warning(
             "whatif_persist_failed",
-            snapshot_id=str(snapshot_id), error=str(exc),
+            snapshot_id=str(snapshot_id),
+            error=str(exc),
         )
 
 

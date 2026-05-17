@@ -12,7 +12,7 @@ from hk_ipo_agent.agents.base import AgentContext
 from hk_ipo_agent.agents.policy_agent import PolicyAgent, compute_regime_score
 from hk_ipo_agent.agents.workflow_extras import WorkflowExtras
 from hk_ipo_agent.common.enums import ListingType
-from hk_ipo_agent.common.schemas import ProspectusExtraction
+from hk_ipo_agent.common.schemas import Citation, ProspectusExtraction, RiskFactor
 from hk_ipo_agent.valuation.base import MarketData
 
 
@@ -24,6 +24,17 @@ def _ext() -> ProspectusExtraction:
         industry_code="AI",
         industry_description="AI / SaaS",
         business_model="B2B",
+        # R1-3 — extractions in production always have at least one
+        # risk_factor; fixture must too so _pick_extraction_citations
+        # has a real citation to return.
+        risk_factors=[
+            RiskFactor(
+                category="regulatory",
+                description="policy regime placeholder",
+                severity="medium",
+                citation=Citation(page=42),
+            )
+        ],
         extraction_version="0.0.1",
         extracted_at=datetime.now(UTC),
     )
@@ -92,8 +103,8 @@ async def test_policy_agent_run_writes_regime_score_to_extras(
         return_value=mock_llm_response(
             text=(
                 "Some narrative.\n"
-                "```json\n{\"regime_fit\": 70, \"policy_tailwind\": 60, \"regime_score\": 0, "
-                "\"evidence_pages\": [1], \"notes\": \"ok\"}\n```"
+                '```json\n{"regime_fit": 70, "policy_tailwind": 60, "regime_score": 0, '
+                '"evidence_pages": [1], "notes": "ok"}\n```'
             )
         )
     )
@@ -107,9 +118,7 @@ async def test_policy_agent_run_writes_regime_score_to_extras(
 
 
 @pytest.mark.asyncio
-async def test_policy_agent_negative_regime_finding(
-    mock_llm_client, mock_llm_response
-) -> None:
+async def test_policy_agent_negative_regime_finding(mock_llm_client, mock_llm_response) -> None:
     ctx = _ctx(llm_client=mock_llm_client, regime_override=-0.10)
     mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
@@ -120,9 +129,7 @@ async def test_policy_agent_negative_regime_finding(
 
 
 @pytest.mark.asyncio
-async def test_policy_agent_runtime_seconds_reported(
-    mock_llm_client, mock_llm_response
-) -> None:
+async def test_policy_agent_runtime_seconds_reported(mock_llm_client, mock_llm_response) -> None:
     ctx = _ctx(llm_client=mock_llm_client, regime_override=0.0)
     mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")

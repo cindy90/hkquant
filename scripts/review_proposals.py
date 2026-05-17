@@ -28,14 +28,12 @@ from hk_ipo_agent.common.settings import get_settings
 
 
 async def _list_pending(sf) -> int:
-    from hk_ipo_agent.data.models import PredictionReviewRow  # noqa: PLC0415
+    from hk_ipo_agent.data.models import PredictionReviewRow
 
     async with sf() as s:
         stmt = (
             select(PredictionReviewRow)
-            .where(
-                PredictionReviewRow.adjustment_status == AdjustmentStatus.PROPOSED.value
-            )
+            .where(PredictionReviewRow.adjustment_status == AdjustmentStatus.PROPOSED.value)
             .order_by(PredictionReviewRow.created_at.desc())
             .limit(50)
         )
@@ -58,7 +56,7 @@ async def _list_pending(sf) -> int:
 
 
 async def _accept(sf, review_id: UUID, reviewer: str, notes: str) -> int:
-    from hk_ipo_agent.data.models import PredictionReviewRow  # noqa: PLC0415
+    from hk_ipo_agent.data.models import PredictionReviewRow
 
     async with sf() as s:
         row = await s.get(PredictionReviewRow, review_id)
@@ -89,7 +87,7 @@ async def _accept(sf, review_id: UUID, reviewer: str, notes: str) -> int:
 
 
 async def _reject(sf, review_id: UUID, reviewer: str, reason: str) -> int:
-    from hk_ipo_agent.data.models import PredictionReviewRow  # noqa: PLC0415
+    from hk_ipo_agent.data.models import PredictionReviewRow
 
     async with sf() as s:
         row = await s.get(PredictionReviewRow, review_id)
@@ -118,9 +116,7 @@ async def _amain(args: argparse.Namespace) -> int:
         if args.cmd == "list":
             return await _list_pending(sf)
         if args.cmd == "accept":
-            return await _accept(
-                sf, args.review_id, args.reviewer, args.notes or ""
-            )
+            return await _accept(sf, args.review_id, args.reviewer, args.notes or "")
         if args.cmd == "reject":
             return await _reject(
                 sf, args.review_id, args.reviewer, args.reason or "no reason given"

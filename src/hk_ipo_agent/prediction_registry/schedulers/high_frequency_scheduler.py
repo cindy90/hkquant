@@ -89,7 +89,9 @@ class HighFrequencyScheduler(BaseScheduler):
             try:
                 advanced = await self._advance_state(state, ctx, stats)
             except Exception as exc:
-                stats.record_error(exc, context={"ipo_id": str(row.ipo_id), "phase": "advance_state"})
+                stats.record_error(
+                    exc, context={"ipo_id": str(row.ipo_id), "phase": "advance_state"}
+                )
                 continue
             if advanced:
                 stats.snapshots_processed += 1
@@ -97,9 +99,7 @@ class HighFrequencyScheduler(BaseScheduler):
             await self._sm.touch_last_checked(row.ipo_id)
 
     async def _list_active(self) -> list[IPOLifecycleStateRow]:
-        stmt = select(IPOLifecycleStateRow).where(
-            IPOLifecycleStateRow.is_terminal.is_(False)
-        )
+        stmt = select(IPOLifecycleStateRow).where(IPOLifecycleStateRow.is_terminal.is_(False))
         async with self._sf() as s:
             return list((await s.execute(stmt)).scalars().all())
 
@@ -114,25 +114,35 @@ class HighFrequencyScheduler(BaseScheduler):
             # Detect: pricing / withdrawn / hearing failed.
             for detector_name in ("detect_pricing", "detect_withdrawn", "detect_hearing_failed"):
                 sig = await getattr(self._detectors, detector_name)(
-                    ctx.ipo_id, stock_code=ctx.stock_code or "",
+                    ctx.ipo_id,
+                    stock_code=ctx.stock_code or "",
                 )
                 if sig is not None:
-                    return await self._do_transition(ctx.ipo_id, sig.target_state, sig.evidence, sig.triggered_by)
+                    return await self._do_transition(
+                        ctx.ipo_id, sig.target_state, sig.evidence, sig.triggered_by
+                    )
             return False
         if current_state is IPOLifecycleStateType.PRICING:
             # Detect: LISTED (three-way) / withdrawn / pricing_pulled signal via withdrawn.
             three_way: ThreeWayValidation = await self._detectors.detect_listed_three_way(
-                ctx.ipo_id, stock_code=ctx.stock_code or "",
+                ctx.ipo_id,
+                stock_code=ctx.stock_code or "",
                 expected_listing_date=ctx.expected_listing_date,
             )
             if three_way.passed:
                 return await self._do_transition(
-                    ctx.ipo_id, IPOLifecycleStateType.LISTED,
-                    three_way.evidence, TransitionTrigger.AUTO_DETECTOR,
+                    ctx.ipo_id,
+                    IPOLifecycleStateType.LISTED,
+                    three_way.evidence,
+                    TransitionTrigger.AUTO_DETECTOR,
                 )
-            sig = await self._detectors.detect_withdrawn(ctx.ipo_id, stock_code=ctx.stock_code or "")
+            sig = await self._detectors.detect_withdrawn(
+                ctx.ipo_id, stock_code=ctx.stock_code or ""
+            )
             if sig is not None:
-                return await self._do_transition(ctx.ipo_id, sig.target_state, sig.evidence, sig.triggered_by)
+                return await self._do_transition(
+                    ctx.ipo_id, sig.target_state, sig.evidence, sig.triggered_by
+                )
             return False
         # LISTED → nothing to advance here (daily_scheduler handles terminate-at-360d).
         return False
@@ -146,12 +156,17 @@ class HighFrequencyScheduler(BaseScheduler):
     ) -> bool:
         try:
             await self._sm.transition_to(
-                ipo_id, new_state, triggered_by=triggered_by, evidence=evidence,
+                ipo_id,
+                new_state,
+                triggered_by=triggered_by,
+                evidence=evidence,
             )
         except InvalidStateTransition as exc:
             logger.warning(
                 "high_freq_invalid_transition",
-                ipo_id=str(ipo_id), target=new_state.value, error=str(exc),
+                ipo_id=str(ipo_id),
+                target=new_state.value,
+                error=str(exc),
             )
             return False
         # Resolve code mapping when LISTED — the code is now public.
@@ -174,8 +189,10 @@ class HighFrequencyScheduler(BaseScheduler):
         window_start = (datetime.now(UTC) - self._lookback).date()
         try:
             events = await self._event_detector.scan_events(
-                ipo_id=ctx.ipo_id, stock_code=ctx.stock_code,
-                window_start=window_start, window_end=window_end,
+                ipo_id=ctx.ipo_id,
+                stock_code=ctx.stock_code,
+                window_start=window_start,
+                window_end=window_end,
             )
             stats.events_detected += len(events)
         except Exception as exc:

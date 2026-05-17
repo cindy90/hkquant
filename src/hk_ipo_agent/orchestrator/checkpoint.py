@@ -21,7 +21,7 @@ def get_checkpointer() -> Any | None:
     persistence (acceptable for unit-test usage).
     """
     try:
-        from langgraph.checkpoint.memory import MemorySaver  # noqa: PLC0415
+        from langgraph.checkpoint.memory import MemorySaver
     except ImportError:
         return None
     return MemorySaver()

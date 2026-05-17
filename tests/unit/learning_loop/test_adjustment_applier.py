@@ -44,13 +44,16 @@ pg_required = pytest.mark.skipif(
 
 def _sync_dsn() -> str:
     return get_settings().database.url.replace(
-        "postgresql+asyncpg://", "postgresql://", 1,
+        "postgresql+asyncpg://",
+        "postgresql://",
+        1,
     )
 
 
 @pytest.fixture(autouse=True)
 def _fresh_engine() -> Iterator[None]:
-    from hk_ipo_agent.data.database import async_session_factory, get_engine  # noqa: PLC0415
+    from hk_ipo_agent.data.database import async_session_factory, get_engine
+
     get_engine.cache_clear()  # type: ignore[attr-defined]
     async_session_factory.cache_clear()  # type: ignore[attr-defined]
     yield
@@ -86,7 +89,7 @@ def _seed_snapshot_and_review(
 
     Returns (snapshot_id, review_id).
     """
-    import json  # noqa: PLC0415
+    import json
 
     snap_id = uuid.uuid4()
     review_id = uuid.uuid4()
@@ -125,8 +128,14 @@ def _seed_snapshot_and_review(
             " notes_md, created_at, updated_at) "
             "VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s, NOW(), NOW())",
             (
-                review_id, snap_id, 30, reviewer, "test",
-                json.dumps([proposal]), status.value, "test note",
+                review_id,
+                snap_id,
+                30,
+                reviewer,
+                "test",
+                json.dumps([proposal]),
+                status.value,
+                "test note",
             ),
         )
         conn.commit()
@@ -143,7 +152,8 @@ def _seed_snapshot_and_review(
 async def test_applier_rejects_proposal_when_status_is_proposed(sf) -> None:
     """status=proposed → MUST raise; no config write."""
     _, review_id = _seed_snapshot_and_review(
-        reviewer="alice", status=AdjustmentStatus.PROPOSED,
+        reviewer="alice",
+        status=AdjustmentStatus.PROPOSED,
     )
     applier = AdjustmentApplier(
         session_factory=sf,
@@ -158,7 +168,8 @@ async def test_applier_rejects_proposal_when_status_is_proposed(sf) -> None:
 async def test_applier_rejects_proposal_when_reviewer_empty(sf) -> None:
     """reviewer="" → MUST raise."""
     _, review_id = _seed_snapshot_and_review(
-        reviewer="", status=AdjustmentStatus.ACCEPTED,
+        reviewer="",
+        status=AdjustmentStatus.ACCEPTED,
     )
     applier = AdjustmentApplier(
         session_factory=sf,
@@ -173,7 +184,8 @@ async def test_applier_rejects_proposal_when_reviewer_empty(sf) -> None:
 async def test_applier_rejects_proposal_when_status_implemented(sf) -> None:
     """Already-implemented can't be re-applied."""
     _, review_id = _seed_snapshot_and_review(
-        reviewer="alice", status=AdjustmentStatus.IMPLEMENTED,
+        reviewer="alice",
+        status=AdjustmentStatus.IMPLEMENTED,
     )
     applier = AdjustmentApplier(
         session_factory=sf,
@@ -192,7 +204,8 @@ async def test_applier_rejects_proposal_when_status_implemented(sf) -> None:
 @pytest.mark.asyncio
 async def test_applier_happy_path_marks_review_implemented(sf) -> None:
     _, review_id = _seed_snapshot_and_review(
-        reviewer="alice", status=AdjustmentStatus.ACCEPTED,
+        reviewer="alice",
+        status=AdjustmentStatus.ACCEPTED,
     )
     applier = AdjustmentApplier(
         session_factory=sf,
@@ -204,8 +217,7 @@ async def test_applier_happy_path_marks_review_implemented(sf) -> None:
     # Verify status changed
     with psycopg.connect(_sync_dsn()) as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT adjustment_status, applied_version FROM prediction_reviews "
-            "WHERE id = %s",
+            "SELECT adjustment_status, applied_version FROM prediction_reviews WHERE id = %s",
             (review_id,),
         )
         status, applied_version = cur.fetchone()
@@ -218,10 +230,12 @@ async def test_applier_happy_path_marks_review_implemented(sf) -> None:
 async def test_applier_subsequent_apply_bumps_version(sf) -> None:
     """Two distinct reviews applied to the same target → versions 1.0.0 then 1.0.1."""
     _, review_a = _seed_snapshot_and_review(
-        reviewer="alice", status=AdjustmentStatus.ACCEPTED,
+        reviewer="alice",
+        status=AdjustmentStatus.ACCEPTED,
     )
     _, review_b = _seed_snapshot_and_review(
-        reviewer="alice", status=AdjustmentStatus.ACCEPTED,
+        reviewer="alice",
+        status=AdjustmentStatus.ACCEPTED,
     )
     applier = AdjustmentApplier(
         session_factory=sf,
@@ -243,12 +257,14 @@ async def test_applier_subsequent_apply_bumps_version(sf) -> None:
 async def test_applier_rolls_back_on_backtest_regression(sf) -> None:
     """Sanity backtest returns regression → review marked REJECTED + rollback."""
     _, review_id = _seed_snapshot_and_review(
-        reviewer="alice", status=AdjustmentStatus.ACCEPTED,
+        reviewer="alice",
+        status=AdjustmentStatus.ACCEPTED,
     )
     applier = AdjustmentApplier(
         session_factory=sf,
         config=ApplierConfig(
-            write_to_disk=False, run_sanity_backtest=True,
+            write_to_disk=False,
+            run_sanity_backtest=True,
             rebacktest_ic_tolerance=0.02,
         ),
     )
@@ -258,7 +274,8 @@ async def test_applier_rolls_back_on_backtest_regression(sf) -> None:
         return 0.10, 0.04
 
     result = await applier.apply_review(
-        review_id, run_walk_forward_fn=_bad_backtest,
+        review_id,
+        run_walk_forward_fn=_bad_backtest,
     )
     assert result.success is False
     assert "regression" in result.reason
@@ -277,12 +294,14 @@ async def test_applier_rolls_back_on_backtest_regression(sf) -> None:
 async def test_applier_passes_when_backtest_within_tolerance(sf) -> None:
     """Sanity backtest within tolerance → success."""
     _, review_id = _seed_snapshot_and_review(
-        reviewer="alice", status=AdjustmentStatus.ACCEPTED,
+        reviewer="alice",
+        status=AdjustmentStatus.ACCEPTED,
     )
     applier = AdjustmentApplier(
         session_factory=sf,
         config=ApplierConfig(
-            write_to_disk=False, run_sanity_backtest=True,
+            write_to_disk=False,
+            run_sanity_backtest=True,
             rebacktest_ic_tolerance=0.05,
         ),
     )
@@ -291,7 +310,8 @@ async def test_applier_passes_when_backtest_within_tolerance(sf) -> None:
         return 0.10, 0.09  # drop=0.01 < tol 0.05
 
     result = await applier.apply_review(
-        review_id, run_walk_forward_fn=_good_backtest,
+        review_id,
+        run_walk_forward_fn=_good_backtest,
     )
     assert result.success is True
 
@@ -313,7 +333,8 @@ async def test_applier_unknown_review_raises_key_error(sf) -> None:
 @pytest.mark.asyncio
 async def test_applier_proposal_index_out_of_range_returns_failure(sf) -> None:
     _, review_id = _seed_snapshot_and_review(
-        reviewer="alice", status=AdjustmentStatus.ACCEPTED,
+        reviewer="alice",
+        status=AdjustmentStatus.ACCEPTED,
     )
     applier = AdjustmentApplier(
         session_factory=sf,

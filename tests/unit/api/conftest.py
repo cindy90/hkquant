@@ -106,9 +106,7 @@ def _make_test_snapshot():
     val = ValuationEnsembleOutput(
         company_id="P-TEST-1",
         single_models=[
-            SingleModelValuation(
-                model_name="comparable", applicable=True, valuation_distribution=d
-            )
+            SingleModelValuation(model_name="comparable", applicable=True, valuation_distribution=d)
         ],
         weights_used={"comparable": 1.0},
         ensemble_distribution=d,

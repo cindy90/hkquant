@@ -60,16 +60,21 @@ class LiquidityAgent(BaseAgent):
         sc_tier = _SC_TIER.get(ctx.extraction.listing_type, 50.0)
         competing_n = len(ctx.extras.competing_ipos or [])
 
+        # R1-4: extract the controlling-shareholder line into a named var
+        # so the if/else binds only to it. Pre-fix the precedence bug
+        # swallowed # Target IPO + Listing type when controlling=None.
+        controlling_line = (
+            f"- Controlling shareholder %: {controlling:.1%}\n"
+            if controlling is not None
+            else "- Controlling shareholder: n/a\n"
+        )
         body, _frontmatter = self._load_prompt_body()
         user_msg = (
             f"# Target IPO\n"
             f"- {ctx.extraction.company_name_zh}\n"
             f"- Listing type: {ctx.extraction.listing_type.value}\n\n"
             f"# Computed primitives\n"
-            f"- Controlling shareholder %: "
-            f"{controlling:.1%}\n" if controlling is not None else "- Controlling shareholder: n/a\n"
-        )
-        user_msg += (
+            f"{controlling_line}"
             f"- Buyback-clause investors: {buyback_count}\n"
             f"- Stock Connect tier (heuristic): {sc_tier:.0f}\n"
             f"- Competing IPOs in 60d window: {competing_n}\n\n"
@@ -134,9 +139,7 @@ class LiquidityAgent(BaseAgent):
             scores=score_card.score_dict(),
             overall_score=max(0.0, min(100.0, score_card.overall())),
             key_findings=findings,
-            uncertainty_flags=(
-                ["no_shareholder_data"] if not ctx.extraction.shareholders else []
-            ),
+            uncertainty_flags=(["no_shareholder_data"] if not ctx.extraction.shareholders else []),
             data_sources_used=[
                 DataSource(source="prospectus", detail=ctx.extraction.prospectus_id),
             ],

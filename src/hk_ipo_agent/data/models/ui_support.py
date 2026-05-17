@@ -47,13 +47,9 @@ class WhatIfCalculationRow(UUIDMixin, Base):
     new_distribution: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
     runtime_ms: Mapped[int | None] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    __table_args__ = (
-        Index("idx_whatif_snapshot", "snapshot_id", "created_at"),
-    )
+    __table_args__ = (Index("idx_whatif_snapshot", "snapshot_id", "created_at"),)
 
 
 class RealtimeEventRow(UUIDMixin, Base):
@@ -77,9 +73,7 @@ class RealtimeEventRow(UUIDMixin, Base):
         ForeignKey("prediction_snapshots.id"),
     )
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     broadcast_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     __table_args__ = (

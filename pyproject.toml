@@ -227,10 +227,17 @@ ignore = [
     "RUF001",  # ambiguous unicode in identifiers (Chinese / financial)
     "RUF002",  # ambiguous unicode in docstrings (× / ≥ used for multipliers / thresholds)
     "RUF003",  # ambiguous unicode in comments
+    # PLC0415: lazy imports are used by-design across the codebase to break
+    # circular deps (e.g. adjustment_applier ↔ data.models), to soft-handle
+    # optional dependencies (weasyprint / llamaparse / airflow), and inside
+    # Airflow DAG entry-points. Reintroduce per-file if a specific module
+    # genuinely should be eager.
+    "PLC0415",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["E402", "PLR2004"]
+# tests/* 允许延迟 import（PLC0415），用于打破循环依赖或惰性加载重型 fixture
+"tests/*" = ["E402", "PLR2004", "PLC0415"]
 "scripts/*" = ["T201"]
 "src/hk_ipo_agent/data/migrations/*" = ["F401"]
 

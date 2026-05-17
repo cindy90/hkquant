@@ -19,7 +19,9 @@ from hk_ipo_agent.valuation.base import (
 )
 
 
-def _make_extraction(listing_type: ListingType = ListingType.MAINBOARD_TECH) -> ProspectusExtraction:
+def _make_extraction(
+    listing_type: ListingType = ListingType.MAINBOARD_TECH,
+) -> ProspectusExtraction:
     return ProspectusExtraction(
         prospectus_id="P-T-1",
         company_name_zh="测试",

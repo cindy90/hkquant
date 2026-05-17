@@ -21,7 +21,7 @@ def _fresh_async_engine() -> Iterator[None]:
     Mirrors the same-named fixture in ``tests/unit/api/`` so the two
     suites compose cleanly when pytest interleaves files.
     """
-    from hk_ipo_agent.data.database import async_session_factory, get_engine  # noqa: PLC0415
+    from hk_ipo_agent.data.database import async_session_factory, get_engine
 
     get_engine.cache_clear()  # type: ignore[attr-defined]
     async_session_factory.cache_clear()  # type: ignore[attr-defined]

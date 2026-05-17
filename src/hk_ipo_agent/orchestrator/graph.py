@@ -41,7 +41,7 @@ def build_main_graph(
 
     Returns the compiled graph; caller invokes ``await graph.ainvoke(state)``.
     """
-    from langgraph.graph import END, START, StateGraph  # noqa: PLC0415
+    from langgraph.graph import END, START, StateGraph
 
     nodes = make_nodes(
         llm_client=llm_client,

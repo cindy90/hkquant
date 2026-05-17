@@ -48,9 +48,7 @@ class _SynthLLMOutput(BaseModel):
     allocation_pct_suggested: float | None = Field(default=None, ge=0.0, le=0.10)
 
 
-def _normalize_allocation(
-    gate: DecisionGate, opus_suggested: float | None
-) -> float | None:
+def _normalize_allocation(gate: DecisionGate, opus_suggested: float | None) -> float | None:
     """Cap Opus allocation to the band the rule engine assigned."""
     if gate.suggested_allocation_pct is None:
         return None
@@ -161,9 +159,7 @@ async def synthesize(
         expected_return_6m=dist6,
         expected_return_12m=dist12,
         scorecard=scorecard,
-        key_reasons_for=opus.key_reasons_for or [
-            f"Scorecard overall = {scorecard['overall']:.1f}"
-        ],
+        key_reasons_for=opus.key_reasons_for or [f"Scorecard overall = {scorecard['overall']:.1f}"],
         key_reasons_against=opus.key_reasons_against,
         trigger_rules=[],  # filled below
         references_to_agent_outputs=refs,

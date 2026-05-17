@@ -59,9 +59,7 @@ class PredictionSnapshotRow(UUIDMixin, Base):
     total_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     runtime_seconds: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         Index(
@@ -109,9 +107,7 @@ class PredictionOutcomeRow(UUIDMixin, Base):
     price_in_predicted_range: Mapped[bool | None] = mapped_column(Boolean)
     decision_correct: Mapped[bool | None] = mapped_column(Boolean)
 
-    recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         Index(
@@ -143,9 +139,7 @@ class PostIPOEventRow(UUIDMixin, Base):
     source_url: Mapped[str | None] = mapped_column(String(500))
     price_impact_1d: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
     price_impact_5d: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
-    detected_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (Index("idx_events_ipo_date", "ipo_id", "event_date"),)
 
@@ -206,9 +200,7 @@ class ConfigVersionRow(UUIDMixin, Base):
         ForeignKey("prediction_reviews.id"),
     )
     applied_by: Mapped[str | None] = mapped_column(String(100))
-    applied_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         Index(

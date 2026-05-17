@@ -92,7 +92,8 @@ class EventBus:
         except Exception as exc:
             logger.warning(
                 "event_bus_persist_failed",
-                event_type=event.event_type.value, error=str(exc),
+                event_type=event.event_type.value,
+                error=str(exc),
             )
 
     async def subscribe(self) -> AsyncIterator[RealtimeEvent]:

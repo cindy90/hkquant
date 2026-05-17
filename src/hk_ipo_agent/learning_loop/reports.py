@@ -31,7 +31,7 @@ DEFAULT_REPORT_DIR: Path = Path("reports") / "learning"
 class CalibrationStateRow:
     """One row of the calibration-state table."""
 
-    window: str    # e.g. "30d" / "60d" / "90d"
+    window: str  # e.g. "30d" / "60d" / "90d"
     n_samples: int
     accuracy: float
     avg_decision_correct: float
@@ -92,8 +92,7 @@ def _calibration_section(rows: list[CalibrationStateRow]) -> str:
     ]
     for r in rows:
         body.append(
-            f"| {r.window} | {r.n_samples} | {r.accuracy:.2%} | "
-            f"{r.avg_decision_correct:.3f} |"
+            f"| {r.window} | {r.n_samples} | {r.accuracy:.2%} | {r.avg_decision_correct:.3f} |"
         )
     return "\n".join(body) + "\n"
 

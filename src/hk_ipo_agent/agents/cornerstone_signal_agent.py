@@ -148,9 +148,7 @@ class CornerstoneSignalAgent(BaseAgent):
 
         score_card: CornerstoneScoreCard | None = None
         try:
-            resp = await self._call_llm(
-                ctx, system=body, user=user_msg, max_tokens=2500
-            )
+            resp = await self._call_llm(ctx, system=body, user=user_msg, max_tokens=2500)
             parsed = self._parse_score_card(resp.text)
             if isinstance(parsed, CornerstoneScoreCard):
                 score_card = parsed
@@ -161,9 +159,9 @@ class CornerstoneSignalAgent(BaseAgent):
             score_card = CornerstoneScoreCard(
                 sponsor_quality=50.0,
                 cornerstone_strength=50.0 if cornerstones else 30.0,
-                cluster_bonus=0.0 if not cluster.multi_member_groups else (
-                    50.0 if cluster.multi_member_groups == 1 else 100.0
-                ),
+                cluster_bonus=0.0
+                if not cluster.multi_member_groups
+                else (50.0 if cluster.multi_member_groups == 1 else 100.0),
                 notes="LLM unavailable — deterministic fallback ScoreCard.",
             )
         # Deterministic cluster_bonus override — never trust LLM here.
@@ -215,9 +213,7 @@ class CornerstoneSignalAgent(BaseAgent):
             scores=score_card.score_dict(),
             overall_score=max(0.0, min(100.0, score_card.overall())),
             key_findings=findings,
-            uncertainty_flags=(
-                ["no_predicted_cornerstones"] if not cornerstones else []
-            ),
+            uncertainty_flags=(["no_predicted_cornerstones"] if not cornerstones else []),
             data_sources_used=[
                 DataSource(source="kb_cornerstones", detail=f"n={len(cornerstones)}"),
                 DataSource(source="kb_sponsors", detail=f"n={len(sponsors)}"),

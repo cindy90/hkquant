@@ -77,12 +77,8 @@ def test_aggregator_slice_by_listing_type() -> None:
 
 def test_aggregator_slice_by_agent_role() -> None:
     agg = AttributionAggregator(AggregatorConfig(min_occurrences=3, min_share=0.40))
-    reviews = [
-        _review("over_optimism", agent_role=AgentRole.FUNDAMENTAL) for _ in range(5)
-    ]
-    reviews += [
-        _review("missed_clue", agent_role=AgentRole.SENTIMENT) for _ in range(2)
-    ]
+    reviews = [_review("over_optimism", agent_role=AgentRole.FUNDAMENTAL) for _ in range(5)]
+    reviews += [_review("missed_clue", agent_role=AgentRole.SENTIMENT) for _ in range(2)]
     findings = agg.aggregate(reviews)
     agent_findings = [f for f in findings if f.slice_dimension == "agent_role"]
     assert any(f.slice_value == "fundamental" for f in agent_findings)

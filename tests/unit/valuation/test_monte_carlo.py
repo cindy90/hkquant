@@ -44,9 +44,7 @@ def test_uniform_bounded() -> None:
 
 
 def test_triangular_mode_dominates() -> None:
-    arr = Triangular(low=0.0, mode=10.0, high=10.0).sample(
-        20_000, np.random.default_rng(0)
-    )
+    arr = Triangular(low=0.0, mode=10.0, high=10.0).sample(20_000, np.random.default_rng(0))
     # Mode at upper bound → mean should be skewed high.
     assert arr.mean() > 6.0
 

@@ -49,7 +49,9 @@ class _LLMAnswer(BaseModel):
     """Constrained LLM response — must list at least one citation chunk_id."""
 
     answer: str = Field(min_length=1)
-    cited_chunk_ids: list[str] = Field(min_length=1, description="chunk_ids actually used in the answer")
+    cited_chunk_ids: list[str] = Field(
+        min_length=1, description="chunk_ids actually used in the answer"
+    )
 
 
 class ProspectusQA:

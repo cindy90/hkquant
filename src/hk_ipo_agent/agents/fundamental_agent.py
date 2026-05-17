@@ -56,7 +56,9 @@ def gross_margin_trend(financials: list[FinancialSnapshot]) -> list[float]:
     return margins
 
 
-def customer_concentration_top1(customer_concentration: list[CustomerConcentration]) -> float | None:
+def customer_concentration_top1(
+    customer_concentration: list[CustomerConcentration],
+) -> float | None:
     """Latest period's top-1 customer concentration, if available."""
     if not customer_concentration:
         return None
@@ -82,33 +84,46 @@ class FundamentalAgent(BaseAgent):
 
         # 2. LLM narrative
         body, _frontmatter = self._load_prompt_body()
-        fin_brief = "\n".join(
-            f"- FY{f.fiscal_year} {f.fiscal_period}: revenue="
-            f"{float(f.revenue_rmb) if f.revenue_rmb else 'n/a'}, "
-            f"gross_margin={f.gross_margin}, "
-            f"net_profit={float(f.net_profit_rmb) if f.net_profit_rmb else 'n/a'}"
-            for f in ctx.extraction.financials[-3:]
-        ) or "(no financial snapshots)"
-        risks_brief = "\n".join(
-            f"- [{r.category}/{r.severity}] {r.description[:120]}"
-            for r in ctx.extraction.risk_factors[:5]
-        ) or "(no risk factors extracted)"
+        fin_brief = (
+            "\n".join(
+                f"- FY{f.fiscal_year} {f.fiscal_period}: revenue="
+                f"{float(f.revenue_rmb) if f.revenue_rmb else 'n/a'}, "
+                f"gross_margin={f.gross_margin}, "
+                f"net_profit={float(f.net_profit_rmb) if f.net_profit_rmb else 'n/a'}"
+                for f in ctx.extraction.financials[-3:]
+            )
+            or "(no financial snapshots)"
+        )
+        risks_brief = (
+            "\n".join(
+                f"- [{r.category}/{r.severity}] {r.description[:120]}"
+                for r in ctx.extraction.risk_factors[:5]
+            )
+            or "(no risk factors extracted)"
+        )
 
+        # R1-4: extract conditional lines into named variables so each
+        # if/else binds only to its own line. Pre-fix the precedence bug
+        # made the entire user_msg parenthesis the body of the ternary,
+        # silently dropping # Target IPO / # Financials snapshot / # Task.
+        cagr_line = (
+            f"- Revenue CAGR (n={len(ctx.extraction.financials)}): {cagr:.2%}\n"
+            if cagr is not None
+            else "- Revenue CAGR: insufficient periods\n"
+        )
+        top1_line = (
+            f"- Gross margin (last 3): {margins}\n- Top-1 customer concentration: {top1:.2%}\n"
+            if top1 is not None
+            else f"- Gross margin (last 3): {margins}\n- Top-1 customer concentration: n/a\n"
+        )
         user_msg = (
             f"# Target IPO\n"
             f"- {ctx.extraction.company_name_zh} ({ctx.extraction.stock_code or 'TBD'})\n"
             f"- Industry: {ctx.extraction.industry_code} — {ctx.extraction.industry_description}\n"
             f"- Business model: {ctx.extraction.business_model[:300]}\n\n"
             f"# Computed primitives (DO NOT recompute)\n"
-            f"- Revenue CAGR (n={len(ctx.extraction.financials)}): "
-            f"{cagr:.2%}\n" if cagr is not None else "- Revenue CAGR: insufficient periods\n"
-        )
-        user_msg += (
-            f"- Gross margin (last 3): {margins}\n"
-            f"- Top-1 customer concentration: "
-            f"{top1:.2%}\n" if top1 is not None else "- Top-1 customer concentration: n/a\n"
-        )
-        user_msg += (
+            f"{cagr_line}"
+            f"{top1_line}"
             f"- Has controlling shareholder: {has_controlling}\n\n"
             f"# Financials snapshot\n{fin_brief}\n\n"
             f"# Risk factors\n{risks_brief}\n\n"
@@ -117,9 +132,7 @@ class FundamentalAgent(BaseAgent):
 
         score_card: FundamentalScoreCard | None = None
         try:
-            resp = await self._call_llm(
-                ctx, system=body, user=user_msg, max_tokens=3500
-            )
+            resp = await self._call_llm(ctx, system=body, user=user_msg, max_tokens=3500)
             parsed = self._parse_score_card(resp.text)
             if isinstance(parsed, FundamentalScoreCard):
                 score_card = parsed
@@ -173,9 +186,7 @@ class FundamentalAgent(BaseAgent):
             overall_score=max(0.0, min(100.0, score_card.overall())),
             key_findings=findings,
             uncertainty_flags=(
-                ["insufficient_financial_periods"]
-                if len(ctx.extraction.financials) < 2
-                else []
+                ["insufficient_financial_periods"] if len(ctx.extraction.financials) < 2 else []
             ),
             data_sources_used=[
                 DataSource(source="prospectus", detail=ctx.extraction.prospectus_id),

@@ -75,14 +75,16 @@ class StateMachine:
                 is_terminal=False,
             )
             s.add(row)
-            s.add(IPOStateTransitionRow(
-                ipo_id=ipo_id,
-                from_state=None,
-                to_state=initial_state().value,
-                transition_at=now,
-                triggered_by=triggered_by.value,
-                detection_evidence={"reason": "initialize_lifecycle"},
-            ))
+            s.add(
+                IPOStateTransitionRow(
+                    ipo_id=ipo_id,
+                    from_state=None,
+                    to_state=initial_state().value,
+                    transition_at=now,
+                    triggered_by=triggered_by.value,
+                    detection_evidence={"reason": "initialize_lifecycle"},
+                )
+            )
             await s.commit()
         return row
 
@@ -118,16 +120,18 @@ class StateMachine:
             db_row.is_terminal = is_terminal(new_state)
             if evidence:
                 db_row.state_metadata = {**(db_row.state_metadata or {}), **evidence}
-            s.add(IPOStateTransitionRow(
-                id=_uuid.uuid4(),
-                ipo_id=ipo_id,
-                from_state=from_state.value,
-                to_state=new_state.value,
-                transition_at=now,
-                triggered_by=triggered_by.value,
-                detection_evidence=evidence or {},
-                reviewer=reviewer,
-            ))
+            s.add(
+                IPOStateTransitionRow(
+                    id=_uuid.uuid4(),
+                    ipo_id=ipo_id,
+                    from_state=from_state.value,
+                    to_state=new_state.value,
+                    transition_at=now,
+                    triggered_by=triggered_by.value,
+                    detection_evidence=evidence or {},
+                    reviewer=reviewer,
+                )
+            )
             await s.commit()
             await s.refresh(db_row)
         logger.info(
@@ -145,9 +149,7 @@ class StateMachine:
         Used by detectors when they've looked but found no signal.
         """
         async with self._sf() as s:
-            stmt = select(IPOLifecycleStateRow).where(
-                IPOLifecycleStateRow.ipo_id == ipo_id
-            )
+            stmt = select(IPOLifecycleStateRow).where(IPOLifecycleStateRow.ipo_id == ipo_id)
             row = (await s.execute(stmt)).scalar_one_or_none()
             if row is None:
                 return

@@ -27,9 +27,7 @@ async def run_bear(
     """Run one Bear turn. Returns ``(argument, cost_delta, raw_resp)``."""
     body, _frontmatter = load_prompt("debate/bear.md")
     bull_block = (
-        f"\n\n# Previous Bull argument (to challenge)\n{prior_bull}\n"
-        if prior_bull
-        else ""
+        f"\n\n# Previous Bull argument (to challenge)\n{prior_bull}\n" if prior_bull else ""
     )
     regime_note = (
         "\n# NACS Regime Gate\n"

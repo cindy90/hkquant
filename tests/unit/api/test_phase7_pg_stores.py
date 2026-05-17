@@ -39,7 +39,7 @@ def _sync_dsn() -> str:
 
 @pytest.fixture(autouse=True)
 def _fresh_async_engine() -> None:
-    from hk_ipo_agent.data.database import async_session_factory, get_engine  # noqa: PLC0415
+    from hk_ipo_agent.data.database import async_session_factory, get_engine
 
     get_engine.cache_clear()  # type: ignore[attr-defined]
     async_session_factory.cache_clear()  # type: ignore[attr-defined]
@@ -115,7 +115,9 @@ async def test_pg_chat_store_append_message_raises_for_unknown_session(fresh_sf)
     store = PGChatStore(session_factory=fresh_sf)
     with pytest.raises(KeyError):
         await store.append_message(
-            session_id=uuid.uuid4(), role=ChatMessageRole.USER, content="x",
+            session_id=uuid.uuid4(),
+            role=ChatMessageRole.USER,
+            content="x",
         )
 
 
@@ -145,7 +147,8 @@ async def test_event_bus_skips_persistence_without_session_factory(fresh_sf) -> 
     _truncate_chat_and_users()
     bus = EventBus()  # default: no PG
     await bus.publish(
-        RealtimeEventType.SNAPSHOT_CREATED, payload={"ipo_id": "test"},
+        RealtimeEventType.SNAPSHOT_CREATED,
+        payload={"ipo_id": "test"},
     )
     async with fresh_sf() as s:
         rows = (await s.execute(select(RealtimeEventRow))).scalars().all()
@@ -158,7 +161,9 @@ async def test_event_bus_skips_persistence_without_session_factory(fresh_sf) -> 
 
 
 def test_whatif_endpoint_persists_calculation(
-    client, admin_headers, seeded_snapshot,
+    client,
+    admin_headers,
+    seeded_snapshot,
 ) -> None:
     """Sync test: TestClient + sync psycopg verify avoids the async-loop
     mismatch (TestClient uses its own loop; verifying via psycopg keeps
@@ -208,7 +213,9 @@ def test_whatif_endpoint_persists_calculation(
 
 
 def test_whatif_endpoint_returns_200_even_when_persist_fails(
-    client, admin_headers, seeded_snapshot,
+    client,
+    admin_headers,
+    seeded_snapshot,
 ) -> None:
     """Best-effort persistence: PG FK violation logs a warning but the
     caller still gets 200 with the computed delta. This is the spirit
@@ -246,8 +253,7 @@ async def test_get_user_by_id_pg_returns_record_with_roles(fresh_sf) -> None:
             (user_id, "alice@hk.local", str(user_id)),
         )
         cur.execute(
-            "INSERT INTO user_roles (id, user_id, role, granted_at) "
-            "VALUES (%s, %s, %s, %s)",
+            "INSERT INTO user_roles (id, user_id, role, granted_at) VALUES (%s, %s, %s, %s)",
             (uuid.uuid4(), user_id, "reviewer", granted_at),
         )
         conn.commit()

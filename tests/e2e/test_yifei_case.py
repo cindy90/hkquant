@@ -88,9 +88,13 @@ def _fixture_extraction() -> ProspectusExtraction:
 
 def _fixture_decision() -> FinalDecision:
     d = ValuationDistribution(
-        p10=Decimal("90"), p25=Decimal("95"), p50=Decimal("100"),
-        p75=Decimal("105"), p90=Decimal("110"),
-        mean=Decimal("100"), std=Decimal("5"),
+        p10=Decimal("90"),
+        p25=Decimal("95"),
+        p50=Decimal("100"),
+        p75=Decimal("105"),
+        p90=Decimal("110"),
+        mean=Decimal("100"),
+        std=Decimal("5"),
     )
     return FinalDecision(
         decision=DecisionType.SKIP,

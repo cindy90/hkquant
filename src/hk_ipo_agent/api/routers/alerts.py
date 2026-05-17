@@ -86,10 +86,7 @@ async def list_alerts(
     _ = user
     items, total = await get_alert_store().list(limit=limit, offset=offset)
     return PaginatedResponse(
-        data=[
-            {"id": str(aid), **alert.model_dump(mode="json")}
-            for aid, alert in items
-        ],
+        data=[{"id": str(aid), **alert.model_dump(mode="json")} for aid, alert in items],
         meta=PaginationMeta(
             total=total, limit=limit, offset=offset, has_next=offset + limit < total
         ),
@@ -113,9 +110,7 @@ async def acknowledge_alert(
         ) from exc
     return {
         "alert_id": str(alert_id),
-        "acknowledged_at": updated.acknowledged_at.isoformat()
-        if updated.acknowledged_at
-        else None,
+        "acknowledged_at": updated.acknowledged_at.isoformat() if updated.acknowledged_at else None,
         "acknowledged_by": updated.acknowledged_by,
     }
 

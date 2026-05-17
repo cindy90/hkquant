@@ -111,11 +111,7 @@ def _load_market_env_cache() -> tuple[MarketEnvironment, ...]:
     parsed: list[MarketEnvironment] = []
     for row in rows:
         asof_raw = row["asof_month"]
-        asof_d = (
-            date.fromisoformat(asof_raw[:10])
-            if isinstance(asof_raw, str)
-            else asof_raw
-        )
+        asof_d = date.fromisoformat(asof_raw[:10]) if isinstance(asof_raw, str) else asof_raw
         parsed.append(
             MarketEnvironment(
                 asof_month=asof_d,
@@ -125,7 +121,9 @@ def _load_market_env_cache() -> tuple[MarketEnvironment, ...]:
                 hsi_valuation_pct=float(row.get("hsi_valuation_pct") or 0.0),
                 hk_ipo_30d_avg_d30=float(row.get("hk_ipo_30d_avg_d30") or 0.0),
                 hk_ipo_30d_breakage_rate=float(row.get("hk_ipo_30d_breakage_rate") or 0.0),
-                southbound_30d_net_normalized=float(row.get("southbound_30d_net_normalized") or 0.0),
+                southbound_30d_net_normalized=float(
+                    row.get("southbound_30d_net_normalized") or 0.0
+                ),
                 sector_60d_vol_annualized=float(row.get("sector_60d_vol_annualized") or 0.0),
                 source=str(row.get("source") or "unknown"),
             )

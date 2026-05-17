@@ -188,7 +188,8 @@ class AsOfDataProvider:
     # ------------------------------------------------------------------
 
     async def get_cornerstone_investments(
-        self, ipo_id: UUID,
+        self,
+        ipo_id: UUID,
     ) -> list[CornerstoneInvestment]:
         stmt = (
             select(CornerstoneInvestment)
@@ -231,11 +232,11 @@ class AsOfDataProvider:
         # enforce strict-less-than semantics.
         as_of_minus_1 = self._as_of - timedelta(days=1)
         if start > as_of_minus_1:
-            raise LookAheadError(
-                f"start={start} > as_of-1 ({as_of_minus_1}); empty window"
-            )
+            raise LookAheadError(f"start={start} > as_of-1 ({as_of_minus_1}); empty window")
         return await self._prices.get_hk_history_prices(
-            tickers, as_of_minus_1, start=start,
+            tickers,
+            as_of_minus_1,
+            start=start,
         )
 
     # ------------------------------------------------------------------
@@ -248,17 +249,17 @@ class AsOfDataProvider:
         Callers writing custom queries can wrap their date columns to keep
         the leak surface auditable.
         """
-        candidate_d = (
-            candidate.date() if isinstance(candidate, datetime) else candidate
-        )
+        candidate_d = candidate.date() if isinstance(candidate, datetime) else candidate
         if candidate_d > self._as_of:
             raise LookAheadError(
-                f"field={field_name!r} value={candidate_d} "
-                f"post-dates as_of_date={self._as_of}"
+                f"field={field_name!r} value={candidate_d} post-dates as_of_date={self._as_of}"
             )
 
     def with_as_of_filter(
-        self, stmt: Select[Any], *, date_column: Any,
+        self,
+        stmt: Select[Any],
+        *,
+        date_column: Any,
     ) -> Select[Any]:
         """Helper for repository callers: append ``WHERE date_col <= as_of``.
 

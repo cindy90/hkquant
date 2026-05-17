@@ -48,9 +48,7 @@ class StaleDetector:
     async def scan(self, *, as_of: datetime | None = None) -> list[StaleSignal]:
         """Returns a (possibly empty) list of staleness signals."""
         anchor = as_of or datetime.now(UTC)
-        stmt = select(IPOLifecycleStateRow).where(
-            IPOLifecycleStateRow.is_terminal.is_(False)
-        )
+        stmt = select(IPOLifecycleStateRow).where(IPOLifecycleStateRow.is_terminal.is_(False))
         async with self._sf() as s:
             rows = (await s.execute(stmt)).scalars().all()
 
@@ -105,9 +103,7 @@ class StaleDetector:
         return None
 
 
-def days_in_state(
-    entered_at: datetime, *, as_of: datetime | None = None
-) -> int:
+def days_in_state(entered_at: datetime, *, as_of: datetime | None = None) -> int:
     """Public helper — used by the daily scheduler diagnostic dashboard."""
     anchor = as_of or datetime.now(UTC)
     return (anchor - entered_at).days

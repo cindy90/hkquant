@@ -133,6 +133,94 @@ def test_customer_concentration_top1() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fundamental_agent_fallback_path_preserves_full_prompt(
+    mock_llm_client, mock_llm_response
+) -> None:
+    """R1-4 — f-string ternary precedence bug at fundamental_agent.py:105-115.
+
+    With cagr=None (one-period extraction), the buggy code returned ONLY
+    "- Revenue CAGR: insufficient periods\\n" as the entire user_msg
+    because the `if/else` ternary bound to the whole parenthesized concat.
+    The subsequent `user_msg += ...` appended onto a single-line string,
+    losing the # Target IPO / # Computed primitives / # Task sections.
+
+    The LLM then received a malformed prompt and silently produced low-
+    quality output. This test pins the prompt-completeness contract.
+    """
+    ext = _ext(revenue_periods=[100])  # one period → cagr=None → fallback path
+    md = MarketData(as_of_date=date(2026, 5, 16), listing_type=ListingType.MAINBOARD_TECH)
+    ctx = AgentContext(
+        ipo_id="ipo-1",
+        extraction=ext,
+        market_data=md,
+        llm_client=mock_llm_client,
+        extras=WorkflowExtras(),
+    )
+
+    captured: dict[str, str] = {}
+
+    async def _capture(*, model: str, messages: list[dict], **kw):
+        captured["user"] = next(m["content"] for m in messages if m["role"] == "user")
+        return mock_llm_response(text="narrative")
+
+    mock_llm_client._client.chat.completions.create = AsyncMock(side_effect=_capture)
+
+    await FundamentalAgent().run(ctx)
+
+    user_prompt = captured.get("user", "")
+    # All four section headers must survive the fallback path.
+    assert "# Target IPO" in user_prompt, (
+        f"# Target IPO header missing — fundamental_agent fallback bug not fixed.\n"
+        f"Got user_prompt: {user_prompt[:200]}"
+    )
+    assert "# Computed primitives" in user_prompt
+    assert "# Financials snapshot" in user_prompt
+    assert "# Task" in user_prompt
+    # The fallback line itself should be present
+    assert "insufficient periods" in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_liquidity_agent_fallback_path_preserves_full_prompt(
+    mock_llm_client, mock_llm_response
+) -> None:
+    """R1-4 — same precedence bug at liquidity_agent.py:64-72.
+
+    With controlling=None (empty shareholders), buggy code lost most of
+    the prompt to the ``if/else`` branch.
+    """
+    ext = _ext(revenue_periods=[100, 144], top1=0.40)  # no controlling shareholder
+    md = MarketData(as_of_date=date(2026, 5, 16), listing_type=ListingType.MAINBOARD_TECH)
+    ctx = AgentContext(
+        ipo_id="ipo-1",
+        extraction=ext,
+        market_data=md,
+        llm_client=mock_llm_client,
+        extras=WorkflowExtras(),
+    )
+
+    captured: dict[str, str] = {}
+
+    async def _capture(*, model: str, messages: list[dict], **kw):
+        captured["user"] = next(m["content"] for m in messages if m["role"] == "user")
+        return mock_llm_response(text="narrative")
+
+    mock_llm_client._client.chat.completions.create = AsyncMock(side_effect=_capture)
+
+    await LiquidityAgent().run(ctx)
+
+    user_prompt = captured.get("user", "")
+    assert "# Target IPO" in user_prompt, (
+        f"# Target IPO header missing — liquidity_agent fallback bug not fixed.\n"
+        f"Got user_prompt: {user_prompt[:200]}"
+    )
+    assert "# Computed primitives" in user_prompt
+    assert "# Task" in user_prompt
+    # Either way the controlling-shareholder line should appear (probably n/a)
+    assert "Controlling shareholder" in user_prompt
+
+
+@pytest.mark.asyncio
 async def test_fundamental_agent_run_returns_output(mock_llm_client, mock_llm_response) -> None:
     ext = _ext(revenue_periods=[100, 144], gross_margins=[0.30, 0.40], top1=0.40)
     md = MarketData(as_of_date=date(2026, 5, 16), listing_type=ListingType.MAINBOARD_TECH)

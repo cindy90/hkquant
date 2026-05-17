@@ -40,10 +40,7 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 _BASELINES_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "data"
-    / "fixtures"
-    / "nacs_v8_baselines.json"
+    Path(__file__).resolve().parents[3] / "data" / "fixtures" / "nacs_v8_baselines.json"
 )
 
 # Default monotonicity tolerances (ADR 0005 §3 implicit — within these
@@ -122,9 +119,7 @@ def rank_ic(predicted: list[float], realized: list[float]) -> float:
         is degenerate (no variance after ranking).
     """
     if len(predicted) != len(realized):
-        raise ValueError(
-            f"length mismatch: predicted={len(predicted)} realized={len(realized)}"
-        )
+        raise ValueError(f"length mismatch: predicted={len(predicted)} realized={len(realized)}")
     if len(predicted) < 2:
         return 0.0
     p = np.asarray(predicted, dtype=np.float64)
@@ -162,9 +157,7 @@ def ls_spread(
     different variance (top tends to have more extreme winners).
     """
     if len(predicted) != len(realized):
-        raise ValueError(
-            f"length mismatch: predicted={len(predicted)} realized={len(realized)}"
-        )
+        raise ValueError(f"length mismatch: predicted={len(predicted)} realized={len(realized)}")
     if len(predicted) < n_buckets * 2:
         return 0.0, 0.0
     p = np.asarray(predicted, dtype=np.float64)
@@ -197,7 +190,11 @@ def compute_slice(
     ic = rank_ic(predicted, realized)
     spread, t = ls_spread(predicted, realized, n_buckets=n_buckets)
     return SliceMetrics(
-        horizon=horizon, n=len(predicted), ic=ic, ls_spread=spread, ls_t_stat=t,
+        horizon=horizon,
+        n=len(predicted),
+        ic=ic,
+        ls_spread=spread,
+        ls_t_stat=t,
     )
 
 
@@ -215,8 +212,7 @@ def compute_report(
             Each horizon may have a different sample size (drop-outs OK).
     """
     horizons = {
-        h: compute_slice(p, r, horizon=h, n_buckets=n_buckets)
-        for h, (p, r) in per_horizon.items()
+        h: compute_slice(p, r, horizon=h, n_buckets=n_buckets) for h, (p, r) in per_horizon.items()
     }
     # n_total = the max sample count across horizons (the broadest slice).
     n_total = max((m.n for m in horizons.values()), default=0)
@@ -232,8 +228,7 @@ def load_v8_baselines() -> dict[str, Any]:
     """Load ``data/fixtures/nacs_v8_baselines.json``."""
     if not _BASELINES_PATH.exists():
         raise FileNotFoundError(
-            f"NACS v8 baselines fixture missing at {_BASELINES_PATH}; "
-            "run Phase 8b export step"
+            f"NACS v8 baselines fixture missing at {_BASELINES_PATH}; run Phase 8b export step"
         )
     payload: dict[str, Any] = json.loads(_BASELINES_PATH.read_text(encoding="utf-8"))
     return payload
@@ -250,8 +245,7 @@ def get_baseline_iteration(name: str | None = None) -> dict[str, dict[str, dict[
     pick = name or baselines["canonical_iteration"]
     if pick not in baselines["iterations"]:
         raise KeyError(
-            f"unknown iteration {pick!r}; available: "
-            f"{list(baselines['iterations'].keys())}"
+            f"unknown iteration {pick!r}; available: {list(baselines['iterations'].keys())}"
         )
     iteration: dict[str, dict[str, dict[str, float]]] = baselines["iterations"][pick]
     return iteration
@@ -286,10 +280,7 @@ def monotonicity_constraint(
     if not label_baseline:
         # No matching baseline → constraint trivially passes but we
         # still emit a soft note (callers can decide whether to escalate).
-        violations.append(
-            f"no baseline entry for label={new_report.label!r}; "
-            "constraint skipped"
-        )
+        violations.append(f"no baseline entry for label={new_report.label!r}; constraint skipped")
         return True, violations
     for horizon, slice_m in new_report.horizons.items():
         bl = label_baseline.get(horizon)

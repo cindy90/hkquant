@@ -84,7 +84,7 @@ def cross_check(
     rets = [float(r["return_60d"]) for r in matches if r.get("return_60d") is not None]
     dds = [float(r["max_drawdown_60d"]) for r in matches if r.get("max_drawdown_60d") is not None]
 
-    import statistics  # noqa: PLC0415 — local for one-off use
+    import statistics
 
     return CrossCheckResult(
         sample_size=len(matches),

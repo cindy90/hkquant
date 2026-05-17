@@ -62,9 +62,7 @@ class IndustryAgent(BaseAgent):
 
         score_card: IndustryScoreCard | None = None
         try:
-            resp = await self._call_llm(
-                ctx, system=body, user=user_msg, max_tokens=2500
-            )
+            resp = await self._call_llm(ctx, system=body, user=user_msg, max_tokens=2500)
             parsed = self._parse_score_card(resp.text)
             if isinstance(parsed, IndustryScoreCard):
                 score_card = parsed
@@ -103,9 +101,7 @@ class IndustryAgent(BaseAgent):
             scores=score_card.score_dict(),
             overall_score=max(0.0, min(100.0, score_card.overall())),
             key_findings=findings,
-            uncertainty_flags=(
-                ["insufficient_peer_data"] if ps_summary.get("n", 0) < 3 else []
-            ),
+            uncertainty_flags=(["insufficient_peer_data"] if ps_summary.get("n", 0) < 3 else []),
             data_sources_used=[
                 DataSource(source="ifind", detail="peer_multiples"),
                 DataSource(source="prospectus", detail=ctx.extraction.prospectus_id),

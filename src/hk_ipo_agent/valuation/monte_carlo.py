@@ -159,9 +159,7 @@ def run_mc(
     if not isinstance(result, np.ndarray):
         result = np.asarray(result, dtype=np.float64)
     if result.shape != (paths,):
-        raise ValueError(
-            f"payoff returned shape {result.shape}; expected ({paths},)"
-        )
+        raise ValueError(f"payoff returned shape {result.shape}; expected ({paths},)")
     return result.astype(np.float64, copy=False)
 
 

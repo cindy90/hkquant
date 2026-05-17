@@ -125,7 +125,7 @@ prompt 调整必须走 `propose → review → apply` 闭环，**严禁系统自
 - **10b 强制 human gate**：是 prediction-lifecycle 约束的实装；
   对抗测试明确划线
 - **10c 闭环实证**：propose-accept-apply-rebacktest 的全链路验证
-- **不开新 DB 表**：复用 7.5a 已落地的 `config_versions` + 
+- **不开新 DB 表**：复用 7.5a 已落地的 `config_versions` +
   `prediction_reviews.proposed_adjustments` JSONB
 
 ### Negative

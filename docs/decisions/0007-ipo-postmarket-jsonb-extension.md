@@ -65,7 +65,7 @@ day1_return, day5_return, day22_return, day126_return, day127_return, day252_ret
 - 与 `prediction_outcomes` 表字段重叠（两表都能存 D90 收益），但语义不同：
   - `prediction_outcomes.relative_return_industry` 是相对超额收益，存归因
   - `ipo_postmarket.returns_by_day["90"]` 是绝对收益，存历史
-  
+
   两者由各自的 workflow 写入，不互相依赖。
 
 ## Progress

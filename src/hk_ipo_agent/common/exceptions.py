@@ -178,8 +178,7 @@ class SnapshotCreationFailed(PredictionRegistryError):
     """
 
     default_message = (
-        "Snapshot creation failed in orchestrator hard edge "
-        "(synthesize → create_snapshot → report)"
+        "Snapshot creation failed in orchestrator hard edge (synthesize → create_snapshot → report)"
     )
 
 

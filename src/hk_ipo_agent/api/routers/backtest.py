@@ -115,9 +115,7 @@ _BACKTEST_KEY = "backtest_run_id"
 
 @router.get("/runs", response_model=PaginatedResponse)
 async def list_backtest_runs(
-    user: Annotated[
-        CurrentUser, Depends(require_permission(Permission.READ_SETTINGS))
-    ],
+    user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_SETTINGS))],
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse:
@@ -147,9 +145,7 @@ async def list_backtest_runs(
     runs: list[_BacktestRunSummary] = []
     for rid, members in grouped.items():
         pricing_dates: list[str] = [
-            pd
-            for m in members
-            if (pd := (m.input_data_snapshot or {}).get("pricing_date"))
+            pd for m in members if (pd := (m.input_data_snapshot or {}).get("pricing_date"))
         ]
         created = [m.created_at for m in members]
         scorer = _config_get(members[0], "scorer")
@@ -183,9 +179,7 @@ async def list_backtest_runs(
 @router.get("/runs/{run_id}", response_model=_BacktestRunDetail)
 async def get_backtest_run(
     run_id: UUID,
-    user: Annotated[
-        CurrentUser, Depends(require_permission(Permission.READ_SETTINGS))
-    ],
+    user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_SETTINGS))],
 ) -> _BacktestRunDetail:
     """Detail for one backtest run — all samples + headline config."""
     _ = user
@@ -193,10 +187,7 @@ async def get_backtest_run(
     async with sf() as s:
         stmt = (
             select(PredictionSnapshotRow)
-            .where(
-                PredictionSnapshotRow.config_snapshot["backtest_run_id"].astext
-                == str(run_id)
-            )
+            .where(PredictionSnapshotRow.config_snapshot["backtest_run_id"].astext == str(run_id))
             .order_by(PredictionSnapshotRow.as_of_date.asc())
         )
         rows = list((await s.execute(stmt)).scalars().all())
@@ -224,20 +215,13 @@ async def get_backtest_run(
 # router is mounted without requiring data.
 @router.get("/runs/_meta/count")
 async def runs_count(
-    user: Annotated[
-        CurrentUser, Depends(require_permission(Permission.READ_SETTINGS))
-    ],
+    user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_SETTINGS))],
 ) -> dict[str, int]:
     """Return the count of unique backtest_run_id values currently visible."""
     _ = user
-    stmt = (
-        select(func.count(func.distinct(
-            PredictionSnapshotRow.config_snapshot["backtest_run_id"].astext
-        )))
-        .where(
-            PredictionSnapshotRow.config_snapshot.has_key(_BACKTEST_KEY)
-        )
-    )
+    stmt = select(
+        func.count(func.distinct(PredictionSnapshotRow.config_snapshot["backtest_run_id"].astext))
+    ).where(PredictionSnapshotRow.config_snapshot.has_key(_BACKTEST_KEY))
     sf = async_session_factory()
     async with sf() as s:
         row = (await s.execute(stmt)).scalar_one_or_none() or 0

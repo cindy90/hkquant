@@ -89,7 +89,7 @@ def _make_synthetic_prospectus(tmp_path: Path) -> Path:
 @pytest.fixture
 def mocked_llm(monkeypatch: pytest.MonkeyPatch) -> LLMClient:
     """LLMClient with acomplete_json mocked to return a fixed answer."""
-    from decimal import Decimal  # noqa: PLC0415
+    from decimal import Decimal
 
     monkeypatch.setenv("KIMI_API_KEY", "sk-test-rag")
     return LLMClient(daily_budget_usd=Decimal("100"))
@@ -148,8 +148,9 @@ async def test_end_to_end_pdf_to_cited_answer(
         qa = ProspectusQA(store=store, llm=mocked_llm, model="moonshot-v1-128k")
         # Force a retrieval result that contains our target_chunk
         # by patching the retriever to return a controlled hit-list:
-        from hk_ipo_agent.prospectus.retriever import HybridResult  # noqa: PLC0415
-        from hk_ipo_agent.prospectus.vector_store import SearchHit  # noqa: PLC0415
+        from hk_ipo_agent.prospectus.retriever import HybridResult
+        from hk_ipo_agent.prospectus.vector_store import SearchHit
+
         controlled_hit = SearchHit(
             chunk_id=target_chunk.chunk_id,
             prospectus_id=prospectus_id,

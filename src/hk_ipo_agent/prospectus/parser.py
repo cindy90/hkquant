@@ -106,7 +106,7 @@ async def _parse_with_llamaparse(
         )
 
     try:
-        from llama_parse import LlamaParse  # noqa: PLC0415
+        from llama_parse import LlamaParse
     except ImportError as exc:
         raise MissingDependencyError(
             "llama-parse package not installed. `uv sync --extra parse`",
@@ -122,9 +122,18 @@ async def _parse_with_llamaparse(
     blocks: list[ParsedBlock] = []
     tables: list[ParsedTable] = []
     char_offset = 0
-    page = 1
 
-    for doc in documents:
+    # R1-2: derive page directly from enumerate index so empty pages don't
+    # shift subsequent page numbers down. Pre-fix the page counter was
+    # incremented at the bottom of the loop AFTER the `continue` guard for
+    # empty pages, silently corrupting citation pages whenever a prospectus
+    # had blank/separator pages (which is common for tables of contents,
+    # section breaks, and Chinese-language watermark-only pages).
+    # See docs/PLAN_post_v1.0.md §3 R1-2 + test
+    # tests/unit/prospectus/test_parser_fallback.py::
+    #   test_llamaparse_page_numbers_skip_empty_pages_correctly.
+    for idx, doc in enumerate(documents, start=1):
+        page = idx
         # LlamaParse returns one Document per page (or sometimes per section).
         text = getattr(doc, "text", "") or ""
         if not text.strip():
@@ -151,13 +160,12 @@ async def _parse_with_llamaparse(
                 )
             full_text_parts.append(chunk["text"])
             char_offset += len(chunk["text"]) + 2  # account for join
-        page += 1
 
     full_text = "\n\n".join(full_text_parts)
     return ParsedDocument(
         prospectus_id=prospectus_id,
         backend=ParserBackend.LLAMAPARSE,
-        page_count=page - 1,
+        page_count=len(documents),
         full_text=full_text,
         blocks=blocks,
         tables=tables,
@@ -214,7 +222,7 @@ async def _parse_with_pymupdf(
 ) -> ParsedDocument:
     """PyMuPDF fallback. Always available (pip dependency)."""
     try:
-        import pymupdf  # noqa: PLC0415
+        import pymupdf
     except ImportError as exc:
         raise MissingDependencyError(
             "pymupdf package not installed. It should be in pyproject.toml core deps.",

@@ -44,9 +44,13 @@ from hk_ipo_agent.valuation.base import MarketData
 def _state() -> dict[str, Any]:
     """Build the minimal AnalysisState the create_snapshot node needs."""
     dist = ValuationDistribution(
-        p10=Decimal("90"), p25=Decimal("95"), p50=Decimal("100"),
-        p75=Decimal("105"), p90=Decimal("110"),
-        mean=Decimal("100"), std=Decimal("5"),
+        p10=Decimal("90"),
+        p25=Decimal("95"),
+        p50=Decimal("100"),
+        p75=Decimal("105"),
+        p90=Decimal("110"),
+        mean=Decimal("100"),
+        std=Decimal("5"),
     )
     return {
         "ipo_id": "PG-TEST-1",
@@ -76,7 +80,9 @@ def _state() -> dict[str, Any]:
             weights_used={"x": 1.0},
             ensemble_distribution=dist,
             implied_price_range={
-                "low": Decimal("95"), "fair": Decimal("100"), "high": Decimal("105"),
+                "low": Decimal("95"),
+                "fair": Decimal("100"),
+                "high": Decimal("105"),
             },
         ),
         "debate_output": DebateOutput(final_consensus="balanced"),
@@ -95,7 +101,7 @@ def _state() -> dict[str, Any]:
 
 
 def _md() -> MarketData:
-    from datetime import date  # noqa: PLC0415
+    from datetime import date
 
     return MarketData(as_of_date=date(2026, 5, 16), listing_type=ListingType.MAINBOARD_TECH)
 
@@ -154,7 +160,7 @@ async def test_create_snapshot_node_hash_mismatch_blocks_persistence(monkeypatch
     set_registry(InMemoryPredictionRegistry())
 
     # Patch build_snapshot to return a tampered snapshot.
-    from hk_ipo_agent.orchestrator import nodes as nodes_mod  # noqa: PLC0415
+    from hk_ipo_agent.orchestrator import nodes as nodes_mod
 
     original_build = nodes_mod.build_snapshot
 

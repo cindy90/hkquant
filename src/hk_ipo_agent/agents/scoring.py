@@ -120,7 +120,9 @@ Example format:
 class FundamentalScoreCard(BaseScoreCard):
     business_quality: float = Field(ge=0, le=100, description="Business model durability + moat")
     financial_health: float = Field(ge=0, le=100, description="Margin / cash / leverage")
-    governance: float = Field(ge=0, le=100, description="Board / controlling shareholders / structure")
+    governance: float = Field(
+        ge=0, le=100, description="Board / controlling shareholders / structure"
+    )
 
 
 class IndustryScoreCard(BaseScoreCard):
@@ -134,9 +136,15 @@ class ValuationScoreCard(BaseScoreCard):
     ``valuation/ensemble.py``. These reflect *appropriateness* of the
     valuation approach, not the price level itself."""
 
-    method_fit: float = Field(ge=0, le=100, description="How well chosen methods fit this listing type")
-    assumption_quality: float = Field(ge=0, le=100, description="How defensible are key MC assumptions")
-    upside_downside_ratio: float = Field(ge=0, le=100, description="P75/P25 ratio normalized (1.0x = 50)")
+    method_fit: float = Field(
+        ge=0, le=100, description="How well chosen methods fit this listing type"
+    )
+    assumption_quality: float = Field(
+        ge=0, le=100, description="How defensible are key MC assumptions"
+    )
+    upside_downside_ratio: float = Field(
+        ge=0, le=100, description="P75/P25 ratio normalized (1.0x = 50)"
+    )
 
 
 class PolicyScoreCard(BaseScoreCard):
@@ -159,12 +167,16 @@ class LiquidityScoreCard(BaseScoreCard):
     lockup_risk: float = Field(
         ge=0, le=100, description="6m post-IPO lockup expiry pressure (lower=better)"
     )
-    southbound_eligibility: float = Field(ge=0, le=100, description="Stock Connect inclusion likelihood")
+    southbound_eligibility: float = Field(
+        ge=0, le=100, description="Stock Connect inclusion likelihood"
+    )
 
 
 class CornerstoneScoreCard(BaseScoreCard):
     sponsor_quality: float = Field(ge=0, le=100, description="Sponsor 24m HK IPO track record")
-    cornerstone_strength: float = Field(ge=0, le=100, description="Roster quality (sovereign / strategic / hedge)")
+    cornerstone_strength: float = Field(
+        ge=0, le=100, description="Roster quality (sovereign / strategic / hedge)"
+    )
     cluster_bonus: float = Field(
         ge=0,
         le=100,
@@ -178,9 +190,7 @@ class CornerstoneScoreCard(BaseScoreCard):
 class SentimentScoreCard(BaseScoreCard):
     market_temperature: float = Field(ge=0, le=100, description="HK IPO market warmth proxy")
     narrative_risk: float = Field(ge=0, le=100, description="Story coherence + AI gilding flag")
-    theme_heat: float = Field(
-        ge=0, le=100, description="NACS theme heat 0-100 (ADR 0005 §5)"
-    )
+    theme_heat: float = Field(ge=0, le=100, description="NACS theme heat 0-100 (ADR 0005 §5)")
 
 
 __all__ = (

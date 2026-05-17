@@ -37,9 +37,7 @@ class SchedulerRunRow(UUIDMixin, Base):
     scheduler_type: Mapped[str] = mapped_column(String(30), nullable=False)
     # enums.SchedulerType: high_freq / daily / event_driven
     run_id: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     snapshots_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     events_detected: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -48,9 +46,7 @@ class SchedulerRunRow(UUIDMixin, Base):
     status: Mapped[str] = mapped_column(String(20), default="running", nullable=False)
     # enums.SchedulerStatus: running / completed / failed
 
-    __table_args__ = (
-        Index("idx_scheduler_runs_started", "scheduler_type", "started_at"),
-    )
+    __table_args__ = (Index("idx_scheduler_runs_started", "scheduler_type", "started_at"),)
 
 
 class AlertRow(UUIDMixin, Base):
@@ -77,9 +73,7 @@ class AlertRow(UUIDMixin, Base):
     )
     message: Mapped[str] = mapped_column(Text, nullable=False)
     actionable_info: Mapped[str] = mapped_column(Text, nullable=False)
-    detected_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     acknowledged_by: Mapped[str | None] = mapped_column(String(100))
     extra_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
@@ -115,9 +109,7 @@ class EarningsComparisonRow(UUIDMixin, TimestampMixin, Base):
     filing_date: Mapped[date | None] = mapped_column(Date)
 
     actual_revenue: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    predicted_revenue_from_prospectus: Mapped[Decimal | None] = mapped_column(
-        Numeric(18, 2)
-    )
+    predicted_revenue_from_prospectus: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
     revenue_deviation_pct: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
 
     actual_net_profit: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
@@ -133,9 +125,7 @@ class EarningsComparisonRow(UUIDMixin, TimestampMixin, Base):
     # enums.EarningsAssessment: beat / in_line / miss / significant_miss
     confidence: Mapped[str | None] = mapped_column(String(20))
     notes: Mapped[str | None] = mapped_column(Text)
-    requires_human_review: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
+    requires_human_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     __table_args__ = (
         Index(

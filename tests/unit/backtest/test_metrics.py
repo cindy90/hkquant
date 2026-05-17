@@ -170,7 +170,8 @@ def test_get_baseline_iteration_canonical_default() -> None:
     canonical = get_baseline_iteration()
     # p1_lockup_v2 main_board 60d IC = 0.0873388...
     assert canonical["main_board"]["60d"]["ic"] == pytest.approx(
-        0.08733882389214259, abs=1e-9,
+        0.08733882389214259,
+        abs=1e-9,
     )
 
 
@@ -191,7 +192,11 @@ def _baseline_like_report(ic: float = 0.10, t_stat: float = 0.50) -> MetricsRepo
         n_total=100,
         horizons={
             "60d": SliceMetrics(
-                horizon="60d", n=100, ic=ic, ls_spread=0.03, ls_t_stat=t_stat,
+                horizon="60d",
+                n=100,
+                ic=ic,
+                ls_spread=0.03,
+                ls_t_stat=t_stat,
             ),
         },
     )
@@ -264,10 +269,18 @@ def test_compare_to_baseline_returns_per_horizon_deltas() -> None:
         n_total=100,
         horizons={
             "30d": SliceMetrics(
-                horizon="30d", n=100, ic=0.12, ls_spread=0.05, ls_t_stat=0.80,
+                horizon="30d",
+                n=100,
+                ic=0.12,
+                ls_spread=0.05,
+                ls_t_stat=0.80,
             ),
             "60d": SliceMetrics(
-                horizon="60d", n=100, ic=0.085, ls_spread=0.04, ls_t_stat=0.30,
+                horizon="60d",
+                n=100,
+                ic=0.085,
+                ls_spread=0.04,
+                ls_t_stat=0.30,
             ),
         },
     )

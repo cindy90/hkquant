@@ -43,9 +43,7 @@ class ThreeWayValidation:
     @property
     def passed(self) -> bool:
         return (
-            self.hkex_listing_announcement
-            and self.ifind_first_day_quote
-            and self.stock_code_active
+            self.hkex_listing_announcement and self.ifind_first_day_quote and self.stock_code_active
         )
 
 
@@ -83,9 +81,7 @@ class StateDetectors:
         self._ifind = ifind
         self._codes = code_resolver
 
-    async def detect_pricing(
-        self, ipo_id: UUID, *, stock_code: str
-    ) -> TransitionSignal | None:
+    async def detect_pricing(self, ipo_id: UUID, *, stock_code: str) -> TransitionSignal | None:
         """PRICING: HKEX publishes a price-range filing (PHIP / AP)."""
         try:
             filings = await self._anns.get_disclosure_filings(stock_code)
@@ -130,9 +126,11 @@ class StateDetectors:
         target_date = expected_listing_date or datetime.now(UTC).date()
         try:
             payload = await self._ifind.get_hk_history_prices(
-                stock_code, target_date, start=target_date,
+                stock_code,
+                target_date,
+                start=target_date,
             )
-            from ..benchmarks import _close_series  # noqa: PLC0415
+            from ..benchmarks import _close_series
 
             series = _close_series(payload)
             ifind_ok = any(stock_code in vals for vals in series.values())
@@ -158,9 +156,7 @@ class StateDetectors:
             },
         )
 
-    async def detect_withdrawn(
-        self, ipo_id: UUID, *, stock_code: str
-    ) -> TransitionSignal | None:
+    async def detect_withdrawn(self, ipo_id: UUID, *, stock_code: str) -> TransitionSignal | None:
         """WITHDRAWN: HKEX publishes a withdrawal-of-application notice."""
         try:
             filings = await self._anns.get_disclosure_filings(stock_code)

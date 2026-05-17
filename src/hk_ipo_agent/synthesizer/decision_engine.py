@@ -60,8 +60,7 @@ def decide(
             decision=DecisionType.SKIP,
             suggested_allocation_pct=None,
             hard_reason=(
-                f"regime_score={extras.regime_score:.3f} < 0 (NACS Regime Gate, "
-                "ADR 0005 §2)"
+                f"regime_score={extras.regime_score:.3f} < 0 (NACS Regime Gate, ADR 0005 §2)"
             ),
             overall_score=overall_score,
         )
@@ -76,11 +75,7 @@ def decide(
         )
 
     sentiment_out = agent_outputs.get("sentiment")
-    narrative_risk = (
-        sentiment_out.scores.get("narrative_risk", 0.0)
-        if sentiment_out
-        else 0.0
-    )
+    narrative_risk = sentiment_out.scores.get("narrative_risk", 0.0) if sentiment_out else 0.0
     if extras.ai_gilding_flag and narrative_risk >= 70.0:
         return DecisionGate(
             decision=DecisionType.SKIP,

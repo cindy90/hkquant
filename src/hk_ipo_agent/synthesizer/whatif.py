@@ -109,9 +109,7 @@ def _market_data_from_snapshot(
     return _WhatIfContext(market_data=md, extras=extras)
 
 
-def _delta_summary(
-    original: ValuationDistribution, new: ValuationDistribution
-) -> dict[str, float]:
+def _delta_summary(original: ValuationDistribution, new: ValuationDistribution) -> dict[str, float]:
     """Per-percentile pct deltas (handles zero baseline safely)."""
 
     def pct(a: Decimal, b: Decimal) -> float:
@@ -136,9 +134,7 @@ async def run_whatif(
     started = monotonic()
 
     ctx = _market_data_from_snapshot(snapshot, modified_assumptions)
-    extraction = ProspectusExtraction.model_validate(
-        snapshot.input_data_snapshot["extraction"]
-    )
+    extraction = ProspectusExtraction.model_validate(snapshot.input_data_snapshot["extraction"])
 
     models = [
         ComparableValuation(),
@@ -148,9 +144,7 @@ async def run_whatif(
         MilestonesValuation(),
         *industry_models(),
     ]
-    new_ensemble: ValuationEnsembleOutput = await run_ensemble(
-        extraction, ctx.market_data, models
-    )
+    new_ensemble: ValuationEnsembleOutput = await run_ensemble(extraction, ctx.market_data, models)
 
     return WhatIfResponse(
         calculation_id=uuid4(),

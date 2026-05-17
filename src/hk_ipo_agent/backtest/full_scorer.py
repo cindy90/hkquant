@@ -127,11 +127,7 @@ class FullPipelineScorer:
     ) -> ScoreOutput:
         as_of = provider.as_of_date
         regulatory = regulatory_regime_for(as_of)
-        regime = (
-            regime_score_from_cache(as_of)
-            if self._cfg.use_cache_regime
-            else 0.0
-        )
+        regime = regime_score_from_cache(as_of) if self._cfg.use_cache_regime else 0.0
         market = MarketData(
             as_of_date=as_of,
             listing_type=sample_input.listing_type or ListingType.MAINBOARD_OTHER,
@@ -153,7 +149,7 @@ class FullPipelineScorer:
 
         # Lazy-import the graph so unit tests that don't exercise the
         # full pipeline don't pay the LangGraph import cost.
-        from ..orchestrator.graph import build_main_graph  # noqa: PLC0415
+        from ..orchestrator.graph import build_main_graph
 
         graph = build_main_graph(
             llm_client=self._llm,

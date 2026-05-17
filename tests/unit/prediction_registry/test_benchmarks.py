@@ -31,15 +31,25 @@ class _StubFetcher:
         self.price_calls: list[tuple] = []
 
     async def get_macro_index_history(
-        self, as_of_date, *, start, index_keys=None,
+        self,
+        as_of_date,
+        *,
+        start,
+        index_keys=None,
     ):
         self.index_calls.append((as_of_date, start, tuple(index_keys or ())))
         return self._index_payload
 
     async def get_hk_history_prices(
-        self, tickers, as_of_date, *, start,
+        self,
+        tickers,
+        as_of_date,
+        *,
+        start,
     ):
-        self.price_calls.append((tuple(tickers) if isinstance(tickers, list) else tickers, as_of_date, start))
+        self.price_calls.append(
+            (tuple(tickers) if isinstance(tickers, list) else tickers, as_of_date, start)
+        )
         return self._prices_payload
 
 
@@ -87,7 +97,8 @@ async def test_compute_returns_three_benchmarks() -> None:
     # stub returns the same payload either way; we tolerate that here.
     svc = BenchmarkPriceService(fetcher, peer_limit=10)
     out = await svc.compute(
-        t0=date(2026, 1, 1), tn=date(2026, 3, 1),
+        t0=date(2026, 1, 1),
+        tn=date(2026, 3, 1),
         industry_peers=["0700.HK", "0981.HK"],
     )
     assert isinstance(out, BenchmarkReturns)

@@ -130,9 +130,7 @@ def test_build_snapshot_contains_hash() -> None:
 def test_compute_input_hash_deterministic() -> None:
     snap = _build()
     h2 = compute_input_hash(
-        extraction=ProspectusExtraction.model_validate(
-            snap.input_data_snapshot["extraction"]
-        ),
+        extraction=ProspectusExtraction.model_validate(snap.input_data_snapshot["extraction"]),
         agent_outputs=snap.agent_outputs,
         valuation=snap.valuation_output,
         debate=snap.debate_output,
@@ -155,7 +153,7 @@ def test_verify_snapshot_fails_on_tamper() -> None:
 
 
 def test_snapshot_is_frozen() -> None:
-    from pydantic import ValidationError  # noqa: PLC0415
+    from pydantic import ValidationError
 
     snap = _build()
     with pytest.raises(ValidationError):

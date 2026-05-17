@@ -33,9 +33,7 @@ async def list_audit_logs(
     )
     return PaginatedResponse(
         data=[r.model_dump(mode="json") for r in records],
-        meta=PaginationMeta(
-            total=len(records), limit=limit, offset=0, has_next=False
-        ),
+        meta=PaginationMeta(total=len(records), limit=limit, offset=0, has_next=False),
     )
 
 

@@ -78,9 +78,7 @@ def test_dump_weights_yaml_with_header() -> None:
 def test_enumerate_weight_grid_emits_normalized_vectors() -> None:
     # 2 models, small grid → only a few combos. Each output must sum to 1.
     grid = (0.2, 0.4, 0.5, 0.6, 0.8)
-    vectors = list(
-        _enumerate_weight_grid(["dcf", "comparable"], grid=grid, tol=1e-6)
-    )
+    vectors = list(_enumerate_weight_grid(["dcf", "comparable"], grid=grid, tol=1e-6))
     for v in vectors:
         assert set(v.keys()) == {"dcf", "comparable"}
         assert abs(sum(v.values()) - 1.0) < 1e-6
@@ -114,8 +112,10 @@ def _make_samples(
                 as_of_date=date(2024, 6, 13),
                 decision_score=score,
                 realized_returns={
-                    "5d": score * 0.01, "30d": score * 0.02,
-                    "60d": score * 0.03, "180d": score * 0.04,
+                    "5d": score * 0.01,
+                    "30d": score * 0.02,
+                    "60d": score * 0.03,
+                    "180d": score * 0.04,
                 },
                 regime_score=regime,
                 regulatory_regime=RegulatoryRegime.PRE_20250804,
@@ -129,7 +129,9 @@ def test_calibrate_one_listing_type_insufficient_samples_keeps_baseline() -> Non
     samples = _make_samples(5)  # < MIN_SLICE_N (20)
     baseline = {"dcf": 0.5, "comparable": 0.5}
     result = calibrate_one_listing_type(
-        ListingType.MAINBOARD_TECH, samples, baseline,
+        ListingType.MAINBOARD_TECH,
+        samples,
+        baseline,
     )
     assert result.chosen_weights == baseline
     assert "insufficient samples" in result.reason
@@ -141,7 +143,9 @@ def test_calibrate_one_listing_type_with_enough_samples_runs_search() -> None:
     samples = _make_samples(25)
     baseline = {"dcf": 0.5, "comparable": 0.5}
     result = calibrate_one_listing_type(
-        ListingType.MAINBOARD_TECH, samples, baseline,
+        ListingType.MAINBOARD_TECH,
+        samples,
+        baseline,
     )
     assert result.n_samples == 25
     assert abs(sum(result.chosen_weights.values()) - 1.0) < 1e-6
@@ -151,7 +155,7 @@ def test_calibrate_one_listing_type_with_enough_samples_runs_search() -> None:
 
 def test_calibrate_one_listing_type_no_candidate_passes_monotonicity() -> None:
     """Adversarial: 25 samples where scoring is fully randomized → IC≈0 → fail vs v8."""
-    import random  # noqa: PLC0415
+    import random
 
     rng = random.Random(42)
     samples: list[BacktestSample] = []
@@ -165,8 +169,10 @@ def test_calibrate_one_listing_type_no_candidate_passes_monotonicity() -> None:
                 as_of_date=date(2024, 6, 13),
                 decision_score=rng.random(),
                 realized_returns={
-                    "5d": rng.gauss(0, 0.1), "30d": rng.gauss(0, 0.1),
-                    "60d": rng.gauss(0, 0.1), "180d": rng.gauss(0, 0.1),
+                    "5d": rng.gauss(0, 0.1),
+                    "30d": rng.gauss(0, 0.1),
+                    "60d": rng.gauss(0, 0.1),
+                    "180d": rng.gauss(0, 0.1),
                 },
                 regime_score=0.1,
                 regulatory_regime=RegulatoryRegime.PRE_20250804,
@@ -176,8 +182,11 @@ def test_calibrate_one_listing_type_no_candidate_passes_monotonicity() -> None:
     baseline = {"dcf": 0.5, "comparable": 0.5}
     # Tighten tolerance so random scoring definitely fails.
     result = calibrate_one_listing_type(
-        ListingType.MAINBOARD_TECH, samples, baseline,
-        ic_tolerance=0.001, t_tolerance=0.05,
+        ListingType.MAINBOARD_TECH,
+        samples,
+        baseline,
+        ic_tolerance=0.001,
+        t_tolerance=0.05,
     )
     # Random IC ≪ v8 baseline → no candidate passes → baseline kept.
     assert result.chosen_weights == baseline

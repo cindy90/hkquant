@@ -37,9 +37,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Identify by current user id if available, else client IP.
         ident = getattr(request.state, "current_user", None)
-        key = (
-            str(ident.id) if ident else (request.client.host if request.client else "anon")
-        )
+        key = str(ident.id) if ident else (request.client.host if request.client else "anon")
 
         now = time.monotonic()
         async with self._lock:

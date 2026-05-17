@@ -41,7 +41,8 @@ class Base(DeclarativeBase):
         cols = list(self.__table__.columns) if hasattr(self, "__table__") else []
         # Prefer id + the first 3 lightweight columns (skip JSONB / ARRAY / Text).
         lightweight = [
-            c for c in cols
+            c
+            for c in cols
             if c.name == "id" or type(c.type).__name__ not in {"JSONB", "ARRAY", "Text"}
         ][:4]
         parts: list[str] = []
