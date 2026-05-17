@@ -102,23 +102,30 @@ class FundamentalAgent(BaseAgent):
             or "(no risk factors extracted)"
         )
 
+        # R1-4: extract conditional lines into named variables so each
+        # if/else binds only to its own line. Pre-fix the precedence bug
+        # made the entire user_msg parenthesis the body of the ternary,
+        # silently dropping # Target IPO / # Financials snapshot / # Task.
+        cagr_line = (
+            f"- Revenue CAGR (n={len(ctx.extraction.financials)}): {cagr:.2%}\n"
+            if cagr is not None
+            else "- Revenue CAGR: insufficient periods\n"
+        )
+        top1_line = (
+            f"- Gross margin (last 3): {margins}\n"
+            f"- Top-1 customer concentration: {top1:.2%}\n"
+            if top1 is not None
+            else f"- Gross margin (last 3): {margins}\n"
+            "- Top-1 customer concentration: n/a\n"
+        )
         user_msg = (
             f"# Target IPO\n"
             f"- {ctx.extraction.company_name_zh} ({ctx.extraction.stock_code or 'TBD'})\n"
             f"- Industry: {ctx.extraction.industry_code} — {ctx.extraction.industry_description}\n"
             f"- Business model: {ctx.extraction.business_model[:300]}\n\n"
             f"# Computed primitives (DO NOT recompute)\n"
-            f"- Revenue CAGR (n={len(ctx.extraction.financials)}): "
-            f"{cagr:.2%}\n"
-            if cagr is not None
-            else "- Revenue CAGR: insufficient periods\n"
-        )
-        user_msg += (
-            f"- Gross margin (last 3): {margins}\n- Top-1 customer concentration: {top1:.2%}\n"
-            if top1 is not None
-            else "- Top-1 customer concentration: n/a\n"
-        )
-        user_msg += (
+            f"{cagr_line}"
+            f"{top1_line}"
             f"- Has controlling shareholder: {has_controlling}\n\n"
             f"# Financials snapshot\n{fin_brief}\n\n"
             f"# Risk factors\n{risks_brief}\n\n"

@@ -127,13 +127,20 @@ class DCFValuation(ValuationModel):
                 pv_explicit = pv_explicit + ufcf_t / np.power(1.0 + wacc, t)
                 if t == _HORIZON:
                     # Terminal year normalized using term_m (steady-state margin).
+                    # R1-1: terminal ΔWC must scale with steady-state growth ``g``,
+                    # NOT the explicit-period CAGR. Using cagr here over-shrinks
+                    # ufcf_n (since cagr ≫ g for tech IPOs) and under-estimates
+                    # equity by ~5-6% on a 0.25/0.03/0.04 (cagr/g/wc) base case.
+                    # See docs/PLAN_post_v1.0.md §3 R1-1 and the pen-paper test
+                    # tests/unit/valuation/test_dcf.py::
+                    #   test_dcf_terminal_delta_wc_uses_g_not_cagr.
                     ebitda_term = revenue_t * term_m
                     nopat_term = (ebitda_term - revenue_t * da_pct) * (1.0 - tax)
                     ufcf_n = (
                         nopat_term
                         + revenue_t * da_pct
                         - revenue_t * capex_pct
-                        - revenue_t * wc_pct * cagr  # delta-WC at terminal growth rate
+                        - revenue_t * wc_pct * g  # ΔWC at terminal growth rate g (steady state)
                     )
 
             # Gordon TV; discount back HORIZON years.
@@ -156,6 +163,10 @@ class DCFValuation(ValuationModel):
             "tax_rate_dist": _describe(assumptions["tax_rate"]),
             "cash_balance_rmb": cash,
             "valid_path_count": int(np.isfinite(samples).sum()),
+            # R1-1 audit trail — terminal-year ΔWC scaled by g (steady state),
+            # NOT the explicit-period CAGR. Auditors reading the snapshot can
+            # verify which growth rate was used.
+            "delta_wc_terminal_basis": "g (terminal_growth, per spec §3.7)",
         }
 
         return SingleModelValuation(

@@ -70,6 +70,9 @@ def test_lookup_ai_revenue_skips_needs_review() -> None:
 
 
 def _ctx(llm_client, *, industry="AI", company="测试", stock_code="09999.HK") -> AgentContext:
+    # R1-3 — extractions in production always have ≥1 risk_factor; fixture must too.
+    from hk_ipo_agent.common.schemas import Citation, RiskFactor
+
     ext = ProspectusExtraction(
         prospectus_id="P-S-1",
         company_name_zh=company,
@@ -78,6 +81,14 @@ def _ctx(llm_client, *, industry="AI", company="测试", stock_code="09999.HK") 
         industry_description="general",
         business_model="AI core",
         stock_code=stock_code,
+        risk_factors=[
+            RiskFactor(
+                category="business",
+                description="sentiment placeholder",
+                severity="low",
+                citation=Citation(page=42),
+            )
+        ],
         extraction_version="0.0.1",
         extracted_at=datetime.now(UTC),
     )
@@ -89,6 +100,38 @@ def _ctx(llm_client, *, industry="AI", company="测试", stock_code="09999.HK") 
         llm_client=llm_client,
         extras=WorkflowExtras(),
     )
+
+
+@pytest.mark.asyncio
+async def test_sentiment_agent_fallback_path_preserves_full_prompt(
+    mock_llm_client, mock_llm_response
+) -> None:
+    """R1-4 — f-string ternary precedence bug at sentiment_agent.py:140-149.
+
+    With theme_heat_pct=None (no KB tool), buggy code returned ONLY
+    ``"- theme_heat: N/A\\n"`` as the entire user_msg, swallowing the
+    # Target IPO / # Computed signals / # Task headers behind the ternary.
+    """
+    ctx = _ctx(mock_llm_client)  # no kb_tool → theme_heat_pct = None
+
+    captured: dict[str, str] = {}
+
+    async def _capture(*, model: str, messages: list[dict], **kw):  # noqa: ARG001
+        captured["user"] = next(m["content"] for m in messages if m["role"] == "user")
+        return mock_llm_response(text="narrative")
+
+    mock_llm_client._client.chat.completions.create = AsyncMock(side_effect=_capture)
+
+    await SentimentAgent().run(ctx)
+
+    user_prompt = captured.get("user", "")
+    assert "# Target IPO" in user_prompt, (
+        f"# Target IPO header missing — sentiment_agent fallback bug not fixed.\n"
+        f"Got user_prompt: {user_prompt[:200]}"
+    )
+    assert "# Computed signals" in user_prompt
+    assert "# Task" in user_prompt
+    assert "theme_heat" in user_prompt  # either value or "N/A"
 
 
 @pytest.mark.asyncio

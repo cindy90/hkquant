@@ -73,7 +73,13 @@ async def run_debate(
     Returns ``(DebateOutput, total_cost_usd)``.
     """
     settings = get_settings().orchestrator
-    max_r = max_rounds if max_rounds is not None else settings.debate_max_rounds
+    requested_max_r = max_rounds if max_rounds is not None else settings.debate_max_rounds
+    # R1-5: clamp to the spec's hard upper bound. Callers (including future
+    # API endpoints) MUST NOT be able to bypass the 3-round cap by passing
+    # a higher max_rounds. Hard 3 is the spec ceiling (PROJECT_SPEC.md §8 +
+    # ADR 0010 §1). Clamping to settings.debate_max_rounds picks up overrides
+    # from config/.env, which themselves should not exceed the spec ceiling.
+    max_r = max(0, min(requested_max_r, settings.debate_max_rounds))
     threshold = (
         jaccard_threshold if jaccard_threshold is not None else settings.debate_jaccard_threshold
     )
@@ -111,7 +117,12 @@ async def run_debate(
         total_cost += c3
 
         sim = jaccard(bull_text, bear_text)
-        converged = sim >= threshold and r >= 1
+        # R1-5: require ≥ 2 rounds before early-stop. The first round only
+        # produces Bull's opening + Bear's reaction; Bear needs at least one
+        # iteration with Bull's prior reply visible (round 2 onwards) for
+        # "convergence" to mean anything. Pre-fix used ``r >= 1`` which is
+        # trivially true and let identical Bull/Bear text halt at round 1.
+        converged = sim >= threshold and r >= 2
         rounds.append(
             DebateRound(
                 round_number=r,

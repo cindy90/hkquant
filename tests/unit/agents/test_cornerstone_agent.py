@@ -14,8 +14,21 @@ from hk_ipo_agent.agents.cornerstone_signal_agent import (
 )
 from hk_ipo_agent.agents.workflow_extras import WorkflowExtras
 from hk_ipo_agent.common.enums import ListingType
-from hk_ipo_agent.common.schemas import ProspectusExtraction
+from hk_ipo_agent.common.schemas import Citation, ProspectusExtraction, RiskFactor
 from hk_ipo_agent.valuation.base import MarketData
+
+
+# Minimum risk_factor so _pick_extraction_citations has a fallback citation.
+# R1-3 enforces "no silent Citation(page=1) fabrication" — real extractions
+# always have at least one risk_factor, so test fixtures must too.
+_DEFAULT_RISK = [
+    RiskFactor(
+        category="business",
+        description="placeholder risk for fixture",
+        severity="medium",
+        citation=Citation(page=42),
+    )
+]
 
 
 def test_cluster_no_holder_returns_baseline() -> None:
@@ -73,6 +86,7 @@ def _ctx(llm_client, cornerstones=None, sponsors=None) -> AgentContext:
         industry_code="AI",
         industry_description="x",
         business_model="x",
+        risk_factors=list(_DEFAULT_RISK),
         extraction_version="0.0.1",
         extracted_at=datetime.now(UTC),
     )

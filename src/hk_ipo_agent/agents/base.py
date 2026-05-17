@@ -33,6 +33,7 @@ from typing import Any, ClassVar, cast
 from pydantic import BaseModel
 
 from ..common.enums import AgentRole, Confidence
+from ..common.exceptions import CitationRequiredError
 from ..common.llm_client import LLMClient, LLMResponse
 from ..common.schemas import (
     AgentOutput,
@@ -268,7 +269,15 @@ class BaseAgent(ABC):
         """Build Citation list, optionally pinned to evidence pages.
 
         Falls back to the first available citation in the extraction
-        (financials → risks → page 1) if no evidence pages given.
+        (financials → risks). If no evidence is available anywhere,
+        raises :class:`CitationRequiredError` rather than fabricating a
+        page-1 citation.
+
+        R1-3: pre-fix returned ``[Citation(page=1)]`` as a silent fallback,
+        which violated CLAUDE.md strict constraint "every Finding must
+        trace back to a prospectus page". Callers are now expected to
+        catch the exception and emit an uncertainty_flag-only finding
+        instead of a sham one.
         """
         if evidence_pages:
             return [Citation(page=p) for p in evidence_pages]
@@ -276,7 +285,11 @@ class BaseAgent(ABC):
             return [extraction.financials[0].citation]
         if extraction.risk_factors:
             return [extraction.risk_factors[0].citation]
-        return [Citation(page=1)]
+        raise CitationRequiredError(
+            "no citation available in extraction: financials, risk_factors, "
+            "and evidence_pages are all empty. Caller must handle this case "
+            "explicitly (emit uncertainty_flag instead of forging a citation)."
+        )
 
     @staticmethod
     def _make_finding(
