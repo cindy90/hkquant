@@ -140,4 +140,4 @@ PROJECT_SPEC.md §4 Phase 9 deliverables + ADR 0005 §Progress（归档段）
 - [x] **现在**: 本 ADR 0014 写就
 - [x] **Phase 9a (~0.5d)**: NACS legacy 归档（themes / data SQLite + 4 backups / 4 顶层脚本 / configs / src/{config,nacs_model,data,data_sources}）+ legacy/README.md + kb_tool / theme_loader / migrate_sqlite_to_pg / export_market_env_cache 路径更新 + 全仓 642 单测 0 regression + ADR 0005 §Progress Phase 9 三项 ✓
 - [x] **Phase 9b (~1d)**: `backtest/full_scorer.py` (FullPipelineScorer + FullScorerConfig + ExtractionFetcher + make_fixture_extraction_fetcher + 30min SLO timeout) + 13 新单测 + `tests/e2e/test_quantumpharm_case.py` (5 测试 — row exists / provider 防漏 / walk-forward / persistence round-trip) + `tests/e2e/test_full_pipeline_smoke.py` (mock-graph smoke ≤ 5s) + `scripts/perf_smoke.py` (V8Lite 实测 ~0.8ms/IPO，2.3M× SLO headroom) + `tests/e2e/conftest.py` (auto-ETL session fixture)
-- [ ] **Phase 9c (~0.5d)**: 5 家 case study 文档 + ADR 0005 收尾 + CLAUDE.md Phase 9 ✓ + tag `v0.9`
+- [x] **Phase 9c (~0.5d)**: 5 家 case study 文档（2228 晶泰 / 2533 黑芝麻 / 2432 越疆 / 3750 宁德 H / 9660 地平线机器人）+ docs/case_studies/README.md + ADR 0005 已 100% 收尾 + CLAUDE.md Phase 9 ✓ + CHANGELOG v0.9 + tag `v0.9`

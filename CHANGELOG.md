@@ -7,6 +7,78 @@ The project follows the Phase-based versioning of `PROJECT_SPEC.md` §4.
 
 ---
 
+## [v0.9] — Phase 9 完成：端到端验证 + NACS legacy 归档 (2026-05-17)
+
+### Added
+- **`legacy/`** 目录（ADR 0014 §9a）：归档 NACS v8 资产 — `legacy/themes/`
+  (10 文件) + `legacy/data/` (nacs_real.db + 4 backups) + `legacy/scripts/`
+  (build_perf_cache / check_health / run_v7_backtest / nacs_checklist_tool)
+  + `legacy/configs/nacs_v8.yaml` + `legacy/src/` (config / nacs_model /
+  data / data_sources) + `legacy/README.md` 解释为何归档.
+- **`src/hk_ipo_agent/backtest/full_scorer.py`**：`FullPipelineScorer`
+  (BacktestScorer Protocol 实现，包 LangGraph orchestrator + 30min SLO
+  timeout + LookAhead-aware extraction fetcher) + `FullScorerConfig` +
+  `_project_decision` (direction × confidence → rank-IC friendly score)
+  + `make_fixture_extraction_fetcher`.
+- **`scripts/perf_smoke.py`**：V8LiteScorer wall-clock 性能探针（实测
+  ~0.8ms/IPO，2.3M× SLO headroom vs PROJECT_SPEC §13 30min）+
+  `reports/perf/` markdown 输出.
+- **`tests/e2e/test_quantumpharm_case.py`**：晶泰 2228.HK 端到端 5
+  测试（row sentinel / provider 防漏 2 case / V8Lite walk-forward /
+  persistence round-trip）—— 全部用真实 ETL'd ipo_postmarket 数据.
+- **`tests/e2e/test_full_pipeline_smoke.py`**：mock-graph + 真实
+  FullPipelineScorer 调用链 smoke（≤ 5s）.
+- **`tests/e2e/conftest.py`**：session-scoped auto-ETL fixture — 解决
+  跨 module TRUNCATE 顺序，e2e suite order-independent.
+- **`docs/case_studies/`**：5 家 case study 文档 + README — 2228 晶泰 /
+  2533 黑芝麻 / 2432 越疆 / 3750 宁德 H / 9660 地平线机器人；每份含
+  HKEX 实际披露数据 + 实现 ETL'd 实际收益 + V8LiteScorer reproducible
+  recipe + FullPipelineScorer upgrade path.
+
+### Changed
+- **`scripts/migrate_sqlite_to_pg.py`** + **`scripts/export_market_env_cache.py`**：
+  NACS SQLite 路径策略改为 try-legacy-first（`legacy/data/nacs_real.db`
+  fallback to `data/nacs_real.db`），既支持归档后路径，也兼容遗留 caller.
+- **`src/hk_ipo_agent/agents/tools/kb_tool.py`**：`_LEGACY_THEMES`
+  指向 `legacy/themes/`. Docstring 更新.
+
+### Tests
+- 661 unit + 6 e2e + 4 integration passed. +19 net (13 full_scorer
+  unit + 5 quantumpharm e2e + 1 full pipeline smoke). 0 regressions
+  through Phase 9.
+
+### Docs
+- ADR 0014 — Phase 9 scope + 3 sub-stages (9a / 9b / 9c). All ticked.
+- ADR 0005 §Progress — Phase 9 三项 ✓. 资产迁移地图 100% 完结.
+- CLAUDE.md Phase 9 marked DONE.
+
+---
+
+## [v0.8] — Phase 8 完成：回测与校准 (2026-05-17)
+
+### Added
+- **`src/hk_ipo_agent/backtest/`**：`as_of_data.py` (AsOfDataProvider
+  防数据泄漏) + `regime_detection.py` (regulatory change points +
+  market regime score) + `metrics.py` (Rank IC + L-S spread Welch
+  t-stat) + `runner.py` (BacktestScorer Protocol + V8LiteScorer +
+  walk-forward harness + persist_run_to_pg) + `calibration.py`
+  (constrained grid search + monotonicity vs NACS v8) + `reports.py`
+  (markdown 5 sections).
+- **`data/fixtures/nacs_v8_baselines.json`** (5 iterations) +
+  **`data/fixtures/market_environment_cache.json`** (54 monthly
+  snapshots) + **`scripts/export_market_env_cache.py`**.
+- **`src/hk_ipo_agent/api/routers/backtest.py`**：list runs + detail
+  by run_id + meta count，关闭 ADR 0011 最后一条遗留.
+- **`scripts/run_backtest.py`** CLI + `--persist` flag.
+
+### Results
+- 374-sample full backtest 跑通：277 regime-pass / main_board 30d
+  IC = +0.0096 / regime_pass 30d IC = +0.0688（Regime Gate 效应
+  复现，+0.06 IC lift 与 v8 实证同向）.
+- Test status: 642 passed (was 449 at v0.7 end). +193 net.
+
+---
+
 ## [v0.7] — Phase 7 完成 MVP: 报告 + API + UI 集成层 (2026-05-16)
 
 ### Added
