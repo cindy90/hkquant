@@ -204,7 +204,7 @@
   - [x] **8c** (f2fbd32) runner.py (BacktestScorer Protocol + V8LiteScorer + walk-forward + PG loader) + calibration.py (constrained grid search + monotonicity，回退 Bayesian 避免新依赖) + reports.py (markdown 5 sections) + scripts/run_backtest.py CLI + 32 新单测（runner 11 + calibration 13 + reports 8）+ 2 integration smoke
   - [x] **8d** backtest router (list runs + detail + _meta/count，6 单测) + runner.persist_run_to_pg + CLI --persist + **374 样本全量回测跑通**（277 regime-pass，报告写 `reports/backtest/2026-05-17_*.md`，374 行 prediction_snapshots 持久化）+ ETL bug fix + tag `v0.8`
 - [ ] Phase 9 — 端到端验证 **← 当前**（ADR 0014 3 子阶段）
-  - [x] **9a** NACS legacy 归档（themes / nacs_real.db + 4 backups / 4 顶层脚本 / configs / src/{config,nacs_model,data,data_sources}）+ legacy/README.md + 路径修复 + 642 单测 0 regression + ADR 0005 §Progress Phase 9 三项 ✓
-  - [ ] **9b** FullPipelineScorer adapter + e2e fixture pipeline + 晶泰 case 实装 + 性能探针
+  - [x] **9a** (22c36fa) NACS legacy 归档（themes / nacs_real.db + 4 backups / 4 顶层脚本 / configs / src/{config,nacs_model,data,data_sources}）+ legacy/README.md + 路径修复 + 642 单测 0 regression + ADR 0005 §Progress Phase 9 三项 ✓
+  - [x] **9b** FullPipelineScorer (backtest/full_scorer.py，30min SLO timeout + LookAhead skip) + 13 新单测 + 晶泰 2228.HK e2e case (5 测试，用真实 ipo_postmarket 数据) + 全 pipeline mock-graph smoke + 性能探针 scripts/perf_smoke.py（V8Lite ~0.8ms/IPO，2.3M× SLO headroom）+ tests/e2e/conftest.py auto-ETL fixture + 661 全仓单测 + e2e 全通过
   - [ ] **9c** 5 家 case study 文档 + ADR 0005 完结 + tag `v0.9`
 - [ ] Phase 10 — 持续学习闭环
