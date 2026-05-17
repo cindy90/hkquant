@@ -229,6 +229,33 @@ async def test_db_trigger_blocks_delete(pg_registry) -> None:
 
 
 @pytest.mark.asyncio
+async def test_pg_registry_application_layer_rejects_update(pg_registry) -> None:
+    """R2-3 — PGPredictionRegistry application API rejects update_snapshot.
+
+    Pre-fix the application layer relied solely on the DB trigger to catch
+    UPDATE attempts. But a direct ``session.execute(UPDATE ...)`` is only
+    one way to mutate; if a Protocol-typed caller tried ``update_snapshot``
+    they'd get AttributeError, not a descriptive error.
+
+    R2-3 adds explicit ``NotImplementedError`` methods to both backends
+    so the failure surface is symmetric in-memory ↔ PG.
+    """
+    reg, sf = pg_registry
+    snap = await _create_and_get(reg, sf)
+    with pytest.raises(NotImplementedError, match="immutable by design"):
+        await reg.update_snapshot(snap.id, snap)
+
+
+@pytest.mark.asyncio
+async def test_pg_registry_application_layer_rejects_delete(pg_registry) -> None:
+    """R2-3 — PGPredictionRegistry application API rejects delete_snapshot."""
+    reg, sf = pg_registry
+    snap = await _create_and_get(reg, sf)
+    with pytest.raises(NotImplementedError, match="immutable by design"):
+        await reg.delete_snapshot(snap.id)
+
+
+@pytest.mark.asyncio
 async def test_attach_review_appends_to_prediction_reviews(pg_registry) -> None:
     reg, sf = pg_registry
     snap = await _create_and_get(reg, sf)

@@ -133,6 +133,47 @@ def _outcome(snapshot_id, *, ret: float) -> PredictionOutcome:
     )
 
 
+def test_prediction_outcome_cornerstone_tracking_unreliable_default_false() -> None:
+    """R2-5 — new field exists with backwards-compatible default of False.
+
+    Pre-fix CLAUDE.md «基石减持检测的不确定性必须显式标注» had no
+    schema surface; this test pins the field's existence and default so the
+    learning loop / drift detector can rely on the contract.
+    """
+    from uuid import uuid4
+
+    outcome = _outcome(uuid4(), ret=0.10)
+    # Default-constructed outcomes are tracking-reliable. Reviewers and
+    # the learning loop may trust cornerstone_reduced when this is False.
+    assert outcome.cornerstone_tracking_unreliable is False
+
+
+def test_prediction_outcome_cornerstone_tracking_unreliable_explicit_true() -> None:
+    """R2-5 — explicit True must round-trip through Pydantic + model_dump."""
+    from uuid import uuid4
+
+    outcome = PredictionOutcome(
+        snapshot_id=uuid4(),
+        checkpoint_day=30,
+        return_since_ipo=0.05,
+        return_since_listing=0.05,
+        max_drawdown=-0.1,
+        relative_return_hsi=0.03,
+        relative_return_hstech=0.01,
+        relative_return_industry=0.00,
+        price_in_predicted_range=True,
+        decision_correct=True,
+        cornerstone_tracking_unreliable=True,
+        recorded_at=datetime.now(UTC),
+    )
+    assert outcome.cornerstone_tracking_unreliable is True
+    # Round-trip through JSON: the flag must survive serialize/parse.
+    dumped = outcome.model_dump(mode="json")
+    assert dumped["cornerstone_tracking_unreliable"] is True
+    restored = PredictionOutcome.model_validate(dumped)
+    assert restored.cornerstone_tracking_unreliable is True
+
+
 @pytest.fixture
 def llm_mock(monkeypatch) -> LLMClient:
     monkeypatch.setenv("KIMI_API_KEY", "sk-test")

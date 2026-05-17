@@ -19,10 +19,16 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .exceptions import ConfigurationError
+
+# R2-7: literal default JWT secret. Production startup must reject this value.
+_DEFAULT_JWT_SECRET_PLACEHOLDER = "change-me-min-32-chars-long-secret-here"
+
+# R2-1 + R2-7: which Settings.environment strings count as "production".
+_PROD_ENV_ALIASES = frozenset({"prod", "production"})
 
 # Resolve config dir relative to repo root (this file lives at src/hk_ipo_agent/common/).
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -115,7 +121,7 @@ class APISettings(BaseSettings):
 
 
 class AuthSettings(BaseSettings):
-    jwt_secret: SecretStr = SecretStr("change-me-min-32-chars-long-secret-here")
+    jwt_secret: SecretStr = SecretStr(_DEFAULT_JWT_SECRET_PLACEHOLDER)
     jwt_algorithm: str = "HS256"
     jwt_access_token_ttl_seconds: int = 3600
     jwt_refresh_token_ttl_seconds: int = 604800
@@ -191,6 +197,40 @@ class Settings(BaseSettings):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     scheduler: SchedulerSettings = Field(default_factory=SchedulerSettings)
     orchestrator: OrchestratorSettings = Field(default_factory=OrchestratorSettings)
+
+    @model_validator(mode="after")
+    def _enforce_production_guards(self) -> Settings:
+        """R2-1 + R2-7 — fail-loud production-environment hard checks.
+
+        CLAUDE.md hard constraints that previously lived only in prose:
+        - «HITL 默认 bypass，生产 env 强制开» (R2-1)
+        - «JWT secret 在 prod 必须覆盖默认占位符» (R2-7)
+
+        Without these, an operator forgetting an env var ships a
+        production system whose human-in-the-loop checkpoint is bypassed
+        and/or whose token-signing secret is the public placeholder.
+        Refusing to start is the right failure mode.
+
+        Dev / staging environments are unaffected.
+        """
+        if self.environment.lower() not in _PROD_ENV_ALIASES:
+            return self
+
+        if not self.orchestrator.enable_hitl:
+            raise ConfigurationError(
+                "HITL must be enabled in production "
+                "(set HK_IPO__ORCHESTRATOR__ENABLE_HITL=true). "
+                "See CLAUDE.md §预测生命周期约束 + ADR 0010 + PLAN R2-1."
+            )
+
+        if self.auth.jwt_secret.get_secret_value() == _DEFAULT_JWT_SECRET_PLACEHOLDER:
+            raise ConfigurationError(
+                "JWT secret must be overridden in production — the default "
+                "placeholder is publicly known. Set HK_IPO__AUTH__JWT_SECRET "
+                "to a unique high-entropy value (≥ 32 chars). See PLAN R2-7."
+            )
+
+        return self
 
     @classmethod
     def from_yaml_and_env(cls) -> Settings:

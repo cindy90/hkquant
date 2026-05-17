@@ -103,6 +103,12 @@ class PredictionOutcomeRow(UUIDMixin, Base):
 
     cornerstone_held_pct: Mapped[Decimal | None] = mapped_column(Numeric(8, 4))
     cornerstone_reduced: Mapped[bool | None] = mapped_column(Boolean)
+    # R2-5: see PredictionOutcome schema docstring. server_default="false"
+    # so existing prediction_outcomes rows (before migration) read as
+    # tracking-reliable instead of NULL.
+    cornerstone_tracking_unreliable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     price_in_predicted_range: Mapped[bool | None] = mapped_column(Boolean)
     decision_correct: Mapped[bool | None] = mapped_column(Boolean)
