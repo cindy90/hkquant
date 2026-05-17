@@ -72,7 +72,11 @@ jobs:
         run: uv sync --group dev --extra reports --extra parse --extra embeddings-cloud
 
       - name: mypy (advisory — failures don't block PR)
-        run: uv run mypy src/hk_ipo_agent
+        # `|| true` keeps the job's conclusion=SUCCESS so downstream jobs that
+        # `needs: [typecheck]` aren't SKIPPED by GitHub's default-on-failure
+        # rule. The mypy output is still surfaced in the job log; cleanup is
+        # tracked under PLAN R10-R11 (pre-commit mypy stage flip to active).
+        run: uv run mypy src/hk_ipo_agent || true
 
   # ---------------------------------------------------------------------------
   # unit tests — 跨 Python 版本矩阵

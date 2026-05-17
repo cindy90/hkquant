@@ -38,8 +38,11 @@ repos:
         args: ["--fix=lf"]
 
   # ---------------- ruff: lint + format ----------------
+  # rev pinned to match `uv sync`-installed ruff (>= 0.15). Older revs
+  # have different format preferences (e.g. assert-wrap style) that
+  # bounce-reformat output from the newer CLI ruff.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.7.0
+    rev: v0.15.13
     hooks:
       - id: ruff
         args: ["--fix"]
