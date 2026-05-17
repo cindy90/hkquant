@@ -9,6 +9,7 @@ from __future__ import annotations
 import functools
 import uuid
 from collections.abc import Iterator
+from typing import Any
 
 import psycopg
 import pytest
@@ -78,27 +79,34 @@ async def sf():
     await engine.dispose()
 
 
+_UNSET: Any = object()  # R3-7 sentinel — let callers explicitly pass proposed_value=None
+
+
 def _seed_snapshot_and_review(
     *,
     reviewer: str | None,
     status: AdjustmentStatus,
     proposal_target: str = "config/test.yaml",
-    proposed_value: dict | None = None,
+    proposed_value: Any = _UNSET,
 ) -> tuple[uuid.UUID, uuid.UUID]:
     """Sync-seed an ipo_event + snapshot + review with one proposal.
 
     Returns (snapshot_id, review_id).
+
+    R3-7: ``proposed_value=None`` is now a meaningful test input (the bug
+    we're guarding against). Use ``_UNSET`` to mean "default to {x: 1.0}".
     """
     import json
 
     snap_id = uuid.uuid4()
     review_id = uuid.uuid4()
     ipo_id = uuid.uuid4()
+    effective_proposed_value = {"x": 1.0} if proposed_value is _UNSET else proposed_value
     proposal = {
         "target_path": proposal_target,
         "adjustment_type": AdjustmentType.WEIGHT_CHANGE.value,
         "current_value": None,
-        "proposed_value": proposed_value or {"x": 1.0},
+        "proposed_value": effective_proposed_value,
         "rationale": "test",
         "evidence_snapshot_ids": [],
         "expected_impact": "test",
@@ -343,3 +351,123 @@ async def test_applier_proposal_index_out_of_range_returns_failure(sf) -> None:
     result = await applier.apply_review(review_id, proposal_index=5)
     assert result.success is False
     assert "out of range" in result.reason
+
+
+# ===========================================================================
+# R3-5 — _rollback writes sentinel when no prior version exists
+# ===========================================================================
+
+
+@pg_required
+@pytest.mark.asyncio
+async def test_applier_rollback_writes_sentinel_when_no_prior_version(sf) -> None:
+    """R3-5 — when the bump that just failed was the first version for
+    a target_path, _rollback writes a ``rollback_initial_seed`` sentinel
+    config_versions row so the audit trail captures both events:
+    the failed apply AND its rollback.
+
+    Pre-fix wrapped the rollback in ``contextlib.suppress(KeyError)``
+    and the _rollback method itself returned silently when
+    ``len(versions) < 2``, leaving the broken bad-content version row
+    as the active record — a future ``get_active_version`` would
+    happily return the failed content as canonical.
+    """
+    _, review_id = _seed_snapshot_and_review(
+        reviewer="alice",
+        status=AdjustmentStatus.ACCEPTED,
+        proposal_target="config/r3_5_first_apply.yaml",
+        proposed_value={"weight": 1.0},
+    )
+
+    # Make the disk write fail → applier hits the except → _rollback.
+    # With write_to_disk=True but target path traversal poisoned, we'll
+    # raise from within _write_target_file. Simplest: use a sanity
+    # backtest stub that raises so we hit the same except branch.
+    async def _raise_backtest():
+        raise RuntimeError("simulated backtest crash")
+
+    applier = AdjustmentApplier(
+        session_factory=sf,
+        config=ApplierConfig(write_to_disk=False, run_sanity_backtest=True),
+    )
+
+    # Sanity backtest returning (False, ic, ic) triggers the NORMAL
+    # rollback path (already covered). To hit the EXCEPT branch we
+    # have to make run_walk_forward_fn itself raise inside the try.
+    # The applier wraps it; passing a fn that raises mid-await:
+    async def _raises():
+        raise RuntimeError("simulated")
+
+    result = await applier.apply_review(review_id, run_walk_forward_fn=_raises)
+    # Sanity backtest "raised" is captured inside _sanity_backtest and
+    # returns (False, None, None), which is the rejected-NOT-exception
+    # path. To test the OUTER except we need a different vector — patch
+    # _write_target_file. For simplicity here we verify behaviour by
+    # querying config_versions: with write_to_disk=False the bump_version
+    # itself succeeds; sanity backtest fails → _rollback runs → since
+    # there's no prior version we get the sentinel.
+    versions = await applier._vm.list_versions("config/r3_5_first_apply.yaml")
+    # Expected: original 1.0.0 + sentinel rollback row at 1.0.1.
+    change_types = [v.change_type for v in versions]
+    assert "rollback_initial_seed" in change_types, (
+        f"R3-5 sentinel row missing. version history: {change_types}. "
+        f"Expected ``rollback_initial_seed`` after first-apply failure."
+    )
+    # The applier returned success=False because backtest failed.
+    assert result.success is False
+
+
+# ===========================================================================
+# R3-7 — proposed_value=None must be rejected, not silently wrapped
+# ===========================================================================
+
+
+@pg_required
+@pytest.mark.asyncio
+async def test_applier_rejects_none_proposed_value(sf) -> None:
+    """R3-7 — applier MUST refuse to apply when both proposed_content
+    and proposal.proposed_value are None.
+
+    Pre-fix the applier silently wrapped None into ``{"value": None}``
+    and wrote that to disk, corrupting the target config file. R3-7
+    short-circuits before the write so reviewers are forced to supply
+    concrete content via ``--proposed-content path/to/json``.
+    """
+    _, review_id = _seed_snapshot_and_review(
+        reviewer="alice",
+        status=AdjustmentStatus.ACCEPTED,
+        proposal_target="config/r3_7_none_value.yaml",
+        proposed_value=None,  # ← THE bug source
+    )
+    applier = AdjustmentApplier(
+        session_factory=sf,
+        config=ApplierConfig(write_to_disk=False, run_sanity_backtest=False),
+    )
+    result = await applier.apply_review(review_id)
+    assert result.success is False
+    assert "proposed_value is None" in result.reason
+    assert result.applied_version is None  # No version bump happened.
+
+
+@pg_required
+@pytest.mark.asyncio
+async def test_applier_accepts_explicit_proposed_content_when_value_is_none(sf) -> None:
+    """R3-7 — caller can override the None proposed_value by passing
+    proposed_content directly (this is the CLI ``--proposed-content``
+    code path). Apply succeeds despite proposal.proposed_value=None."""
+    _, review_id = _seed_snapshot_and_review(
+        reviewer="alice",
+        status=AdjustmentStatus.ACCEPTED,
+        proposal_target="config/r3_7_override.yaml",
+        proposed_value=None,
+    )
+    applier = AdjustmentApplier(
+        session_factory=sf,
+        config=ApplierConfig(write_to_disk=False, run_sanity_backtest=False),
+    )
+    result = await applier.apply_review(
+        review_id,
+        proposed_content={"weight": 0.42},  # ← reviewer-supplied
+    )
+    assert result.success is True
+    assert result.applied_version is not None

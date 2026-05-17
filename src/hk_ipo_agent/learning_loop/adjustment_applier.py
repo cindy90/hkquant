@@ -27,7 +27,6 @@ failures are auditable.
 
 from __future__ import annotations
 
-import contextlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -160,8 +159,23 @@ class AdjustmentApplier:
                 reason=f"proposal schema invalid: {exc}",
             )
 
-        # Use proposed_value as content if caller didn't override.
+        # R3-7 — reject the empty-value path that pre-fix silently wrapped
+        # None into {"value": None} and wrote to disk. Reviewers must
+        # supply ``proposed_content`` (e.g. via CLI ``--proposed-content
+        # path/to/json``) so config files never get partial / null content.
         if proposed_content is None:
+            if proposal.proposed_value is None:
+                return ApplyResult(
+                    review_id=review_id,
+                    target_path=proposal.target_path,
+                    applied_version=None,
+                    success=False,
+                    reason=(
+                        "proposed_value is None — reviewer must supply concrete "
+                        "content via --proposed-content path/to/json. "
+                        "See PLAN R3-7 + LEARNING_PROTOCOL §accept."
+                    ),
+                )
             proposed_content = (
                 proposal.proposed_value
                 if isinstance(proposal.proposed_value, dict)
@@ -225,20 +239,24 @@ class AdjustmentApplier:
                 baseline_ic=baseline_ic,
             )
         except Exception as exc:
-            # Disk write or backtest raised — roll back the version row.
+            # R3-5 — disk write or backtest raised; roll back the version row.
+            # Pre-fix wrapped this in `contextlib.suppress(KeyError)` which
+            # silently swallowed cases where there was no prior version to
+            # roll back to, leaving the bad-content row as the active
+            # version. _rollback now writes a `rollback_initial_seed`
+            # sentinel row instead of returning silently, so the audit
+            # trail always reflects the failed apply.
             logger.error(
                 "applier_failed_rolling_back",
                 review_id=str(review_id),
                 target=proposal.target_path,
                 error=str(exc),
             )
-            with contextlib.suppress(KeyError):
-                # nothing to roll back to (only one version exists)
-                await self._rollback(
-                    proposal.target_path,
-                    version.version,
-                    applied_by,
-                )
+            await self._rollback(
+                proposal.target_path,
+                version.version,
+                applied_by,
+            )
             await self._mark_review(
                 review_id,
                 AdjustmentStatus.REJECTED,
@@ -322,15 +340,48 @@ class AdjustmentApplier:
         current_version: str,
         applied_by: str,
     ) -> None:
-        """Roll back to the version *before* current_version."""
+        """Roll back to the version *before* current_version.
+
+        R3-5: when no prior version exists (this was the first bump for
+        the target path), write a ``rollback_initial_seed`` sentinel row
+        into ``config_versions`` so the audit trail captures the failed
+        apply. Pre-fix this case just logged a warning and silently
+        returned, leaving the (broken) current_version as the active
+        row — a future ``get_active_version`` call would happily return
+        the bad content.
+
+        Disk-side: when the sentinel path is taken, the on-disk file
+        (if any was written by the failed apply) is removed so it
+        doesn't outlive its config_versions entry.
+        """
         versions = await self._vm.list_versions(target_path, limit=10)
         if len(versions) < 2:
-            # Nothing prior — leave as-is, just log
+            # R3-5: write a sentinel "initial seed rollback" row so the
+            # audit trail shows the failed apply AND its rollback.
             logger.warning(
-                "applier_no_prior_version_to_rollback",
+                "applier_no_prior_version_rollback_sentinel",
                 target=target_path,
                 current=current_version,
             )
+            await self._vm.bump_version(
+                target_path,
+                {"_rollback_initial_seed": True, "reverted_version": current_version},
+                applied_by=applied_by,
+                change_type="rollback_initial_seed",
+            )
+            # Remove the on-disk file written by the failed apply (if any).
+            if self._cfg.write_to_disk:
+                repo_root = Path(__file__).resolve().parents[3]
+                disk_path = repo_root / target_path
+                if disk_path.exists():
+                    try:
+                        disk_path.unlink()
+                    except OSError as exc:
+                        logger.warning(
+                            "applier_sentinel_unlink_failed",
+                            target=target_path,
+                            error=str(exc),
+                        )
             return
         # versions[0] is current (just bumped), versions[1] is prior.
         prior = versions[1]
