@@ -22,6 +22,7 @@
 | [0010](0010-debate-and-snapshot-design.md) | Phase 6 编排 — 辩论早停 + Snapshot 创建发位 | **Accepted** | **Phase 6, 7.5** | Jaccard 早停 + 3 轮硬上限；Devil 元层质疑；Phase 6 in-memory snapshot → Phase 7.5 替换为 PG；HITL 可配置 bypass；`operator.or_` reducer |
 | [0011](0011-phase7-scope-and-deferrals.md) | Phase 7 范围 + 延期项 | **Accepted** | **Phase 7, 7.5, 8, 9** | MVP 实现 10 核心 router + 全套 middleware + auth (无 SSO) + SSE/WS 骨架 + reporting；reviews/proposals/drift 延 Phase 7.5；backtest 延 Phase 8；SSO 延 Phase 9 |
 | [0012](0012-phase7.5-scope-and-substages.md) | Phase 7.5 范围 + 4 子阶段切片 | **Accepted** | **Phase 7.5** | 18 表 + 4 trigger + Registry PG 化 / Outcome+Event+Attribution+Review 闭环 / 状态机 + CodeMapper + EarningsComparator + Alerts / 三层调度器 + Airflow + 端到端晶泰 — 切成 7.5a→b→c→d 四子阶段 |
+| [0013](0013-phase8-scope-and-substages.md) | Phase 8 范围 + 4 子阶段切片 | **Proposed** | **Phase 8** | 防泄漏 as_of_data + regime_detection / IC L-S t-stat metrics + NACS v8 baselines / walk-forward runner + Bayesian calibration + reports + 50+ 样本回测 / backtest router 收尾 — 切成 8a→b→c→d 四子阶段；继承 NACS market_environment_cache + 5 轮 iteration archive 作单调性约束 |
 
 ---
 
@@ -40,7 +41,7 @@
 | Phase 6 编排 + Critic + Synthesizer | 0001 / 0002 / **★ 0010** | **是** — 辩论 Jaccard 早停 + Devil 元层质疑 + Phase 6 in-memory snapshot (Phase 7.5 替换 PG) + HITL bypass 默认 + `operator.or_` reducer |
 | Phase 7 报告 + API + UI 集成层 | **0008** / **★ 0011** | **是** — ADR 0011 定 MVP 范围；reviews/proposals/drift/backtest 延后；SSO 延 Phase 9；in-memory audit/chat/whatif 沿用 Phase 6 snapshot 模式 |
 | Phase 7.5 预测档案 + 生命周期 | **★ 0012** | **是** — ADR 0012 切 7.5a/b/c/d 4 子阶段；7.5a 同时收掉 ADR 0011 遗留的 Phase 7 in-memory PG 化；7.5b 实装 reviews/proposals/drift |
-| Phase 8 回测与校准 | **★ 0005 §3** | **是** — `backtest/{metrics,calibration,regime_detection}.py` 继承 v8 baseline + IC 三件套 |
+| Phase 8 回测与校准 | **★ 0005 §3** + **★ 0013** | **是** — ADR 0013 切 8a/b/c/d 4 子阶段；`backtest/{metrics,calibration,regime_detection}.py` 继承 v8 baseline + IC 三件套；8d 收掉 ADR 0011 最后遗留的 backtest router |
 | Phase 9 端到端验证 | **★ 0005 §Progress 归档段** | **是** — 把 themes/ / nacs_real.db / NACS 顶层脚本归档到 legacy/ |
 | Phase 10 持续学习闭环 | 0005（参考归因部分） | 否 |
 

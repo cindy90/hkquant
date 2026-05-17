@@ -28,7 +28,7 @@
 | **Phase 6** 编排 + Critic + Synthesizer | PROJECT_SPEC.md §8 + **ADR 0010** | LangGraph 主图必须保证 `synthesize → create_snapshot → report` 顺序；辩论 Jaccard 早停（≤3 轮）；Devil 元层质疑；HITL 默认 bypass（生产 env 强制开）；Phase 6 in-memory snapshot，Phase 7.5 替换 PG |
 | **Phase 7** 报告 + API + UI 集成层 | PROJECT_SPEC.md §16 全章 + **ADR 0011** | MVP 实施：10 核心 router + middleware + auth (本地 JWT，无 SSO) + SSE/WS 骨架 + reporting + What-If；OpenAPI 3.1 完整可被 UI 消费；reviews/proposals/drift/backtest 延 Phase 7.5/8 |
 | **Phase 7.5** 预测档案 + 生命周期 | PROJECT_SPEC.md §3.11 / §3.11.1 / §3.11.2 + §10 + **ADR 0012**（强制） + ADR 0011 Progress（遗留收尾） | 切 7.5a/b/c/d 4 子阶段，每个子阶段独立 commit + 单测 + 停下来等确认；7.5a 一次性 18 表 + 4 trigger + Registry PG 化 + Phase 7 in-memory PG 化；7.5b 数据流闭环 + reviews/proposals/drift router；7.5c 状态机 + 代码映射 + 财报比对 + 警报；7.5d 三层调度器 + Airflow + 端到端晶泰；snapshot immutability 必须 DB trigger 强制；LISTED 三重验证 |
-| **Phase 8** 回测与校准 | **ADR 0005 §3**（强制） + PROJECT_SPEC.md §3.9 | `backtest/metrics.py` 实现 IC / L-S / t-stat；`calibration.py` 用 v8 5 轮迭代基线作单调性约束；`regime_detection.py` 用 `market_environment_cache` 初始训练集 |
+| **Phase 8** 回测与校准 | **ADR 0005 §3**（强制） + **ADR 0013**（强制） + PROJECT_SPEC.md §3.9 | 切 8a/b/c/d 4 子阶段：as_of_data + regime_detection / IC L-S t-stat metrics / runner + calibration + reports + 50+ 全量回测 / backtest router 收尾。`backtest/metrics.py` 实现 IC / L-S / t-stat 三件套；`calibration.py` 用 v8 5 轮 iteration archive 作单调性约束；`regime_detection.py` 用 `market_environment_cache` JSON fixture；防泄漏 `as_of_data.py` 是地基 |
 | **Phase 9** 端到端验证 | **ADR 0005 §Progress（归档段）** | 把 `themes/` / `data/nacs_real.db` / NACS 顶层脚本归档到 `legacy/`；勾选 ADR 0005 Progress 全部条目 |
 | **Phase 10** 持续学习闭环 | PROJECT_SPEC.md §3.12 | drift_detector / counterfactual / adjustment_applier 强制人工 gate |
 
@@ -198,6 +198,10 @@
   - [x] **7.5d** schedulers/ 4 模块 + Airflow DAG + 端到端晶泰 + tag `v0.7.5`
     - [x] 7.5d-1 (8ae5cfa) schedulers/{base, high_freq, daily, event_driven} + advisory lock + config/schedulers.yaml + 12 新单测含 4 对抗测试
     - [x] 7.5d-2 4 Airflow DAG + 端到端晶泰 2228.HK simulation（PRE_LISTING → PRICING → LISTED → 10 canonical checkpoint outcomes → review_drafts at T+30/90/180 → TERMINATED at T+360 + immutability 保持）+ tag `v0.7.5`
-- [ ] Phase 8 — 回测与校准
+- [ ] Phase 8 — 回测与校准 **← 当前**（ADR 0013 4 子阶段）
+  - [ ] **8a** as_of_data 防泄漏 + regime_detection + market_environment_cache JSON
+  - [ ] **8b** metrics (IC / L-S / t-stat) + NACS v8 baselines + monotonicity_constraint
+  - [ ] **8c** walk-forward runner + Bayesian calibration + reports + 50+ 样本全量回测
+  - [ ] **8d** backtest router 实装（ADR 0011 最后遗留）+ tag `v0.8`
 - [ ] Phase 9 — 端到端验证
 - [ ] Phase 10 — 持续学习闭环
