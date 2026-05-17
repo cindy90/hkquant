@@ -22,7 +22,7 @@
 | [0010](0010-debate-and-snapshot-design.md) | Phase 6 编排 — 辩论早停 + Snapshot 创建发位 | **Accepted** | **Phase 6, 7.5** | Jaccard 早停 + 3 轮硬上限；Devil 元层质疑；Phase 6 in-memory snapshot → Phase 7.5 替换为 PG；HITL 可配置 bypass；`operator.or_` reducer |
 | [0011](0011-phase7-scope-and-deferrals.md) | Phase 7 范围 + 延期项 | **Accepted** | **Phase 7, 7.5, 8, 9** | MVP 实现 10 核心 router + 全套 middleware + auth (无 SSO) + SSE/WS 骨架 + reporting；reviews/proposals/drift 延 Phase 7.5；backtest 延 Phase 8；SSO 延 Phase 9 |
 | [0012](0012-phase7.5-scope-and-substages.md) | Phase 7.5 范围 + 4 子阶段切片 | **Accepted** | **Phase 7.5** | 18 表 + 4 trigger + Registry PG 化 / Outcome+Event+Attribution+Review 闭环 / 状态机 + CodeMapper + EarningsComparator + Alerts / 三层调度器 + Airflow + 端到端晶泰 — 切成 7.5a→b→c→d 四子阶段 |
-| [0013](0013-phase8-scope-and-substages.md) | Phase 8 范围 + 4 子阶段切片 | **Proposed** | **Phase 8** | 防泄漏 as_of_data + regime_detection / IC L-S t-stat metrics + NACS v8 baselines / walk-forward runner + Bayesian calibration + reports + 50+ 样本回测 / backtest router 收尾 — 切成 8a→b→c→d 四子阶段；继承 NACS market_environment_cache + 5 轮 iteration archive 作单调性约束 |
+| [0013](0013-phase8-scope-and-substages.md) | Phase 8 范围 + 4 子阶段切片 | **Accepted** | **Phase 8** | 防泄漏 as_of_data + regime_detection / IC L-S t-stat metrics + NACS v8 baselines / walk-forward runner + Bayesian calibration + reports + 50+ 样本回测 / backtest router 收尾 — 切成 8a→b→c→d 四子阶段；继承 NACS market_environment_cache + 5 轮 iteration archive 作单调性约束 |
 
 ---
 

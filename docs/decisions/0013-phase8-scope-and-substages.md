@@ -1,6 +1,6 @@
 # ADR 0013: Phase 8 范围 + 4 子阶段切片
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-05-16
 - **Deciders**: project lead
 - **Supersedes**: 无
