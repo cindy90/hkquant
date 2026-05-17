@@ -165,6 +165,6 @@ NACS 87 单元测试中，绝大多数耦合 NACS 模型代码，无法迁移。
 - [x] **Phase 8**：`backtest/metrics.py` 实现 IC / L-S / t-stat 三件套（Phase 8b, commit `cd860f7`：Rank IC + L-S spread + Welch t-stat + 25 单测）
 - [x] **Phase 8**：`backtest/calibration.py` 用 v8 迭代基线作为单调性约束（Phase 8c：constrained grid search + monotonicity_constraint vs nacs_v8_baselines.json canonical p1_lockup_v2 + 13 单测）
 - [x] **Phase 8**：`backtest/regime_detection.py` 用 market_environment_cache 作为初始训练集（Phase 8a, commit `0b65ded`：54 行月度快照 JSON fixture + lru_cached loader + market_env_for / regime_score_from_cache）
-- [ ] **Phase 9**：`themes/` 旧目录归档到 `legacy/`
-- [ ] **Phase 9**：`data/nacs_real.db` 归档到 `legacy/`
-- [ ] **Phase 9**：NACS 顶层脚本（`build_perf_cache.py` / `check_health.py` / `run_v7_backtest.py` / `nacs_checklist_tool.html`）归档到 `legacy/`
+- [x] **Phase 9a**：`themes/` 旧目录归档到 `legacy/themes/`（5 JSON + theme_tracker / _audit_codes / research_premium / README + _premium_research_cache）；kb_tool 的 `_LEGACY_THEMES` 指向 `legacy/themes/`，theme_loader docstring 更新
+- [x] **Phase 9a**：`data/nacs_real.db` + 4 `.bak_*` 归档到 `legacy/data/`；migrate_sqlite_to_pg.py + export_market_env_cache.py 用 try-legacy-first 路径策略
+- [x] **Phase 9a**：NACS 顶层脚本（`build_perf_cache.py` / `check_health.py` / `run_v7_backtest.py` / `nacs_checklist_tool.html`）归档到 `legacy/scripts/`；同时 archive `configs/` → `legacy/configs/` + `src/{config.py, nacs_model.py, data/, data_sources/}` → `legacy/src/`

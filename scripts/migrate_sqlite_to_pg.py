@@ -4,7 +4,7 @@ This is the workhorse of Phase 2's NACS legacy inheritance plan
 (see ADR 0005 §1 for the complete table mapping). One-shot, idempotent,
 required precondition for Phase 2 DONE.
 
-Source:    data/nacs_real.db (SQLite, 14 tables)
+Source:    legacy/data/nacs_real.db (SQLite, 14 tables — Phase 9a archived)
 Target:    PostgreSQL schema per PROJECT_SPEC.md §5 (v1.0 ORM only)
 
 Tables migrated (ADR 0005 §1):
@@ -78,7 +78,12 @@ from hk_ipo_agent.data.repositories import (
 log = get_logger("migrate_sqlite_to_pg")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SQLITE_PATH = REPO_ROOT / "data" / "nacs_real.db"
+# Phase 9a (ADR 0014): NACS SQLite archived to legacy/data/. We try the
+# legacy path first, then fall back to the old in-place path for callers
+# that haven't been updated.
+_LEGACY_SQLITE = REPO_ROOT / "legacy" / "data" / "nacs_real.db"
+_INPLACE_SQLITE = REPO_ROOT / "data" / "nacs_real.db"
+DEFAULT_SQLITE_PATH = _LEGACY_SQLITE if _LEGACY_SQLITE.exists() else _INPLACE_SQLITE
 DEFAULT_FIXTURE_DIR = REPO_ROOT / "data" / "knowledge_base"
 
 

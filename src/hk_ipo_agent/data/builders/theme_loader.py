@@ -1,8 +1,11 @@
 """Theme system loader per ADR 0005 §5.
 
-Copies the NACS ``themes/`` JSON resources into ``data/knowledge_base/themes/``
-where Sentiment Agent (Phase 5) will read them. The legacy daily-cron updater
-``themes/theme_tracker.py`` is migrated to ``scripts/update_theme_heat.py`` later.
+Copies the NACS theme JSON resources into ``data/knowledge_base/themes/``
+where Sentiment Agent (Phase 5) reads them. Originally read from repo
+root ``themes/``; **Phase 9a (ADR 0014)** moved that path to
+``legacy/themes/``. The CLI driver passes the right source dir explicitly.
+The legacy daily-cron updater (`theme_tracker.py`) is replaced by
+``scripts/update_theme_heat.py``.
 
 Files handled (verbatim copy; no schema transformation needed):
 - theme_definitions.json   — taxonomy

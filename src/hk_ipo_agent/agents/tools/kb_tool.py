@@ -6,10 +6,12 @@ Per PROJECT_SPEC.md §3.6. Provides:
 - ``ai_revenue_manual()`` — read ``themes/ai_revenue_manual.json`` (AI gilding base)
 - ``cornerstone_profiles()`` / ``sponsor_track_records()`` — Phase 2 builders
 
-The themes/ JSONs currently live at repo-root ``themes/`` (NACS legacy).
-ADR 0005 §Progress will migrate them to ``data/knowledge_base/themes/``
-in Phase 9. Until then this tool reads from BOTH locations and prefers
-the new path when present.
+The themes/ JSONs were originally at repo-root ``themes/`` (NACS legacy).
+**Phase 9a (ADR 0014)** archived that path to ``legacy/themes/`` after
+``theme_loader.py`` copied them to ``data/knowledge_base/themes/``.
+This tool reads from BOTH locations and prefers the new path; the
+legacy fallback now points into ``legacy/themes/`` so dev workflows
+that bypass the ETL still work.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from typing import Any
 # Repo root: src/hk_ipo_agent/agents/tools/kb_tool.py -> ../../../../
 _REPO_ROOT: Path = Path(__file__).resolve().parents[4]
 _KB_ROOT: Path = _REPO_ROOT / "data" / "knowledge_base"
-_LEGACY_THEMES: Path = _REPO_ROOT / "themes"
+_LEGACY_THEMES: Path = _REPO_ROOT / "legacy" / "themes"
 
 
 def _read_json(*candidates: Path) -> dict[str, Any]:

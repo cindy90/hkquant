@@ -10,7 +10,8 @@ not the source of truth.
 Re-runnable:
     python scripts/export_market_env_cache.py
 
-Reads:  ``data/nacs_real.db`` (legacy NACS SQLite)
+Reads:  ``legacy/data/nacs_real.db`` (Phase 9a archived; falls back to
+        ``data/nacs_real.db`` for legacy callers)
 Writes: ``data/fixtures/market_environment_cache.json``
 
 The output is checked into git (small JSON file, deterministic).
@@ -24,7 +25,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-NACS_DB = REPO_ROOT / "data" / "nacs_real.db"
+_LEGACY_NACS_DB = REPO_ROOT / "legacy" / "data" / "nacs_real.db"
+_INPLACE_NACS_DB = REPO_ROOT / "data" / "nacs_real.db"
+NACS_DB = _LEGACY_NACS_DB if _LEGACY_NACS_DB.exists() else _INPLACE_NACS_DB
 OUT_PATH = REPO_ROOT / "data" / "fixtures" / "market_environment_cache.json"
 
 

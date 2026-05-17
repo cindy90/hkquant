@@ -1,0 +1,139 @@
+{
+  "_comment": "港股复合业务公司估值用主题情绪追踪定义. 每个主题含: theme_id / 同花顺 iv_bkid / 5-10 只核心可比公司 (港股) / 关键词列表 (新闻/研报匹配). iv_bkid 与 data/watchlist.json 共享, 但 core_companies 是 watchlist 没有的字段.",
+  "_schema_version": "1.0",
+  "_usage": "themes/theme_tracker.py 每天 8:30 加载本文件, 拉数据 + Kimi 聚合打热度分 → themes/history.csv",
+  "_last_updated": "2026-05-08",
+  "themes": {
+    "ai_server": {
+      "theme_id": "ai_server",
+      "label": "AI 服务器 / 数据中心",
+      "iv_bkid": "011007_308847",
+      "fallback_quote_code": "HSTECH.HK",
+      "core_companies": [
+        {"code": "00992.HK", "name": "联想集团", "role": "AI 服务器整机 (港股 AI 镀金标杆)"},
+        {"code": "00763.HK", "name": "中兴通讯", "role": "AI 服务器/算力网络"},
+        {"code": "06088.HK", "name": "FIT HON TENG", "role": "AI 服务器连接器"},
+        {"code": "00285.HK", "name": "比亚迪电子", "role": "AI 服务器结构件"},
+        {"code": "01415.HK", "name": "高伟电子", "role": "光模块/DC 组件"},
+        {"code": "01347.HK", "name": "华虹半导体", "role": "代工 (HBM 周边)"},
+        {"code": "00981.HK", "name": "中芯国际", "role": "代工龙头"},
+        {"code": "06618.HK", "name": "京东健康", "role": "(占位 — 待校正)"},
+        {"code": "01810.HK", "name": "小米集团", "role": "AI 终端"}
+      ],
+      "keywords": ["AI 服务器", "算力", "数据中心", "HBM", "GPU", "光模块", "AI 算力", "智算中心", "GB200", "AI 芯片", "推理算力"]
+    },
+    "llm": {
+      "theme_id": "llm",
+      "label": "大模型 / 生成式 AI",
+      "iv_bkid": "011007_305848",
+      "fallback_quote_code": "HSTECH.HK",
+      "core_companies": [
+        {"code": "00700.HK", "name": "腾讯控股", "role": "混元大模型"},
+        {"code": "09988.HK", "name": "阿里巴巴-W", "role": "通义千问"},
+        {"code": "03690.HK", "name": "美团-W", "role": "AI 应用"},
+        {"code": "09618.HK", "name": "京东集团-SW", "role": "言犀大模型"},
+        {"code": "01024.HK", "name": "快手-W", "role": "可灵 AI"},
+        {"code": "09888.HK", "name": "百度集团-SW", "role": "文心一言"},
+        {"code": "02013.HK", "name": "微盟集团", "role": "AI SaaS"},
+        {"code": "09961.HK", "name": "携程集团-S", "role": "AI 旅游"}
+      ],
+      "keywords": ["大模型", "LLM", "生成式 AI", "AIGC", "文心一言", "通义千问", "混元", "豆包", "DeepSeek", "GPT", "Claude", "Agent"]
+    },
+    "ai_application": {
+      "theme_id": "ai_application",
+      "label": "AI 应用 / Agent",
+      "iv_bkid": "011007_309047",
+      "fallback_quote_code": "HSTECH.HK",
+      "core_companies": [
+        {"code": "00268.HK", "name": "金蝶国际", "role": "企业级 AI"},
+        {"code": "00772.HK", "name": "阅文集团", "role": "AI 内容"},
+        {"code": "02013.HK", "name": "微盟集团", "role": "AI SaaS"},
+        {"code": "06618.HK", "name": "京东健康", "role": "AI 医疗"},
+        {"code": "01797.HK", "name": "新东方在线", "role": "AI 教育"},
+        {"code": "01357.HK", "name": "美图公司", "role": "AI 图像生成"},
+        {"code": "03888.HK", "name": "金山软件", "role": "AI 办公 (WPS AI)"}
+      ],
+      "keywords": ["AI 应用", "Agent", "智能体", "AI Coding", "AI 办公", "AI 教育", "AI 医疗", "AI 营销", "Copilot"]
+    },
+    "humanoid_robot": {
+      "theme_id": "humanoid_robot",
+      "label": "人形机器人",
+      "iv_bkid": "011007_309172",
+      "fallback_quote_code": "HSTECH.HK",
+      "core_companies": [
+        {"code": "02338.HK", "name": "潍柴动力", "role": "执行器/电机"},
+        {"code": "01211.HK", "name": "比亚迪股份", "role": "电池/电控"},
+        {"code": "02382.HK", "name": "舜宇光学科技", "role": "视觉传感"},
+        {"code": "02018.HK", "name": "瑞声科技", "role": "声学/触觉"},
+        {"code": "00285.HK", "name": "比亚迪电子", "role": "结构件"},
+        {"code": "01478.HK", "name": "丘钛科技", "role": "摄像模组"},
+        {"code": "06865.HK", "name": "福莱特玻璃", "role": "(占位)"}
+      ],
+      "keywords": ["人形机器人", "具身智能", "Optimus", "Figure", "灵巧手", "执行器", "丝杠", "谐波减速器", "RV 减速器", "六维力传感"]
+    },
+    "semi_localization": {
+      "theme_id": "semi_localization",
+      "label": "半导体国产化",
+      "iv_bkid": "011007_309171",
+      "fallback_quote_code": "930967.CSI",
+      "core_companies": [
+        {"code": "00981.HK", "name": "中芯国际", "role": "晶圆代工龙头"},
+        {"code": "01347.HK", "name": "华虹半导体", "role": "成熟制程代工"},
+        {"code": "06088.HK", "name": "FIT HON TENG", "role": "封装/连接器"},
+        {"code": "01385.HK", "name": "上海复旦", "role": "FPGA/MCU"},
+        {"code": "00522.HK", "name": "ASMPT", "role": "封装设备"},
+        {"code": "01478.HK", "name": "丘钛科技", "role": "摄像模组"},
+        {"code": "06036.HK", "name": "云顶新耀-B", "role": "(占位)"}
+      ],
+      "keywords": ["半导体", "国产替代", "晶圆", "光刻机", "EDA", "AI 芯片", "GPU 国产化", "存储", "HBM", "先进封装", "Chiplet"]
+    },
+    "ai_driving": {
+      "theme_id": "ai_driving",
+      "label": "智能驾驶 / Robotaxi",
+      "iv_bkid": "011007_305874",
+      "fallback_quote_code": "HSTECH.HK",
+      "core_companies": [
+        {"code": "09868.HK", "name": "小鹏汽车-W", "role": "XNGP 智驾"},
+        {"code": "02015.HK", "name": "理想汽车-W", "role": "AD Max"},
+        {"code": "09866.HK", "name": "蔚来-SW", "role": "NOP+"},
+        {"code": "01211.HK", "name": "比亚迪股份", "role": "天神之眼"},
+        {"code": "00175.HK", "name": "吉利汽车", "role": "千里浩瀚"},
+        {"code": "02338.HK", "name": "潍柴动力", "role": "(占位)"},
+        {"code": "09863.HK", "name": "零跑汽车", "role": "智驾域控"}
+      ],
+      "keywords": ["智能驾驶", "Robotaxi", "城市 NOA", "端到端", "FSD", "L4", "L3", "智驾", "高阶智驾", "无人驾驶", "Apollo"]
+    },
+    "innovative_drug": {
+      "theme_id": "innovative_drug",
+      "label": "创新药 / AI 制药",
+      "iv_bkid": "011007_305895",
+      "fallback_quote_code": "HSCI.HK",
+      "core_companies": [
+        {"code": "01099.HK", "name": "国药控股", "role": "(占位)"},
+        {"code": "01093.HK", "name": "石药集团", "role": "创新药 + AI"},
+        {"code": "02269.HK", "name": "药明生物", "role": "CXO + AI 制药"},
+        {"code": "00241.HK", "name": "阿里健康", "role": "AI 医疗"},
+        {"code": "06160.HK", "name": "百济神州", "role": "biotech"},
+        {"code": "02616.HK", "name": "京东方精电", "role": "(占位)"},
+        {"code": "06185.HK", "name": "康方生物", "role": "ADC"},
+        {"code": "01952.HK", "name": "云锋金融", "role": "(占位)"}
+      ],
+      "keywords": ["创新药", "AI 制药", "ADC", "GLP-1", "AlphaFold", "biotech", "License-out", "出海", "BD 交易"]
+    },
+    "new_energy": {
+      "theme_id": "new_energy",
+      "label": "新能源 / 储能",
+      "iv_bkid": "011007_308767",
+      "fallback_quote_code": "HSCI.HK",
+      "core_companies": [
+        {"code": "03750.HK", "name": "宁德时代", "role": "动力电池龙头"},
+        {"code": "01211.HK", "name": "比亚迪股份", "role": "整车 + 电池"},
+        {"code": "00916.HK", "name": "龙源电力", "role": "风电"},
+        {"code": "00968.HK", "name": "信义光能", "role": "光伏玻璃"},
+        {"code": "02208.HK", "name": "金风科技", "role": "风电整机"},
+        {"code": "00257.HK", "name": "中国光大环境", "role": "(占位)"}
+      ],
+      "keywords": ["新能源", "储能", "动力电池", "光伏", "风电", "氢能", "电网", "虚拟电厂", "充电桩"]
+    }
+  }
+}
