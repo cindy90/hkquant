@@ -153,6 +153,68 @@ def test_calibrate_one_listing_type_with_enough_samples_runs_search() -> None:
     assert result.objective_value > 0.9
 
 
+def test_calibrate_v8lite_path_is_flagged_placebo() -> None:
+    """R3-3 — under V8LiteScorer-style data (decision_score is single
+    signal monotone in realized return), weight grid yields identical
+    IC across all candidates → is_placebo must be True so reports can
+    surface "calibration was a no-op" honestly instead of pretending
+    weights moved.
+    """
+    samples = _make_samples(25)
+    baseline = {"dcf": 0.5, "comparable": 0.5}
+    result = calibrate_one_listing_type(
+        ListingType.MAINBOARD_TECH,
+        samples,
+        baseline,
+    )
+    assert result.is_placebo is True, (
+        f"V8Lite-style perfect samples should flag is_placebo=True; "
+        f"got {result.is_placebo}. R3-3 not applied — calibration "
+        f"output will silently look like it moved weights when it didn't."
+    )
+    assert result.placebo_reason is not None
+    assert "V8LiteScorer" in result.placebo_reason or "invariant" in result.placebo_reason
+
+
+def test_calibrate_insufficient_samples_is_not_flagged_placebo() -> None:
+    """Insufficient-sample case keeps baseline; that's a known
+    non-calibration, not a V8Lite placebo. is_placebo stays False
+    so reports don't conflate the two cases."""
+    samples = _make_samples(5)
+    baseline = {"dcf": 0.5, "comparable": 0.5}
+    result = calibrate_one_listing_type(
+        ListingType.MAINBOARD_TECH,
+        samples,
+        baseline,
+    )
+    assert result.is_placebo is False
+    assert result.placebo_reason is None
+
+
+def test_calibrate_uses_regime_pass_baseline_label_not_main_board() -> None:
+    """R3-4 — monotonicity check must compare against the v8
+    ``regime_pass`` baseline, not lift the slice into ``main_board``.
+
+    Pre-fix the code rewrote ``report.label`` to ``main_board`` so any
+    candidate passing the (lower) main_board threshold passed. With the
+    fix, the comparison uses the slice's actual ``regime_pass`` label
+    which has the correct higher reference IC.
+
+    Verification: chosen_metrics.label must end up as "regime_pass".
+    """
+    samples = _make_samples(25)
+    baseline = {"dcf": 0.5, "comparable": 0.5}
+    result = calibrate_one_listing_type(
+        ListingType.MAINBOARD_TECH,
+        samples,
+        baseline,
+    )
+    assert result.chosen_metrics.label == "regime_pass", (
+        f"calibration report label should be 'regime_pass' (not 'main_board'); "
+        f"got '{result.chosen_metrics.label}'. R3-4 not applied."
+    )
+
+
 def test_calibrate_one_listing_type_no_candidate_passes_monotonicity() -> None:
     """Adversarial: 25 samples where scoring is fully randomized → IC≈0 → fail vs v8."""
     import random

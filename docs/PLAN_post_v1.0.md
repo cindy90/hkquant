@@ -377,7 +377,7 @@ R0 ──> R1 ──> R2 ──> R3 ──┐
 | R0 | ✅ 完成 | 2026-05-17 | 2026-05-17 | `v1.0.1-r0` | commits `8ee82bd` (functional) + `d78b34c` (pre-commit auto-fix LF/EOF/ruff format)；727 unit tests 全过 |
 | R1 | ✅ 完成 | 2026-05-17 | 2026-05-17 | `v1.0.1-r1` | commit `442e1fc`；5 任务全 red-green-refactor；736 unit tests 全过（+9 新 R1 测试，0 regression）。**BREAKING**: R1-1 DCF 终值公式校正，历史 snapshot 会有 ~5% 差异 |
 | R2 | ✅ 完成 | 2026-05-17 | 2026-05-17 | `v1.0.2-r2` | 7 任务全 red-green-refactor；753 unit tests 全过（+17 新 R2 测试，0 regression）。R2-1 + R2-7 prod guards / R2-6 audit user_id / R2-3 snapshot 应用层拒绝 / R2-5 tracking_unreliable + alembic / R2-2 hitl pending → END / R2-4 record_correction. CLAUDE.md 7 条硬约束全部落地 |
-| R3 | ⏸ 等待 | - | - | - | 流程伪完成治理 |
+| R3 | 🔄 进行中 (5/8) | 2026-05-17 | - | `v1.0.3-r3-partial` | R3-1 (iFind stub raise + ADR 0018) / R3-2 (learning_cycle 4 extractors + 18 tests) / R3-3 (calibration is_placebo) / R3-4 (monotonicity regime_pass baseline) / R3-6 (version_manager advisory lock). **780 unit tests passed (+27)**. R3-5 (applier 单事务) / R3-7 (proposed_value 校验) / R3-8 (apply CLI) 待做 |
 | R4 | ⏸ 等待 | - | - | - | 模型路由 + Jinja2 |
 | R5 | ⏸ 等待 | - | - | - | async + 类型 |
 | R6 | ⏸ 等待 | - | - | - | RBAC + Auth |

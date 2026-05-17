@@ -86,9 +86,15 @@ class ComparablePoolBuilder:
             )
 
     async def _ingest(self, ifind_result: object, repo: ComparableCompanyRepository) -> int:
-        """Parse iFind comparable list. Phase 2.1: stub."""
-        log.warning(
-            "comparable_ingest_stub",
-            note="Phase 2.1 wires this once iFind credentials are provisioned",
+        """Parse iFind comparable list.
+
+        R3-1: previously a ``return 0`` stub which masked the lack of
+        implementation behind the ``ifind != None`` path. Now raises to
+        force callers to either run in audit-only mode or wait for the
+        wiring described in ADR 0018.
+        """
+        raise NotImplementedError(
+            "iFind comparable-pool ingest not yet wired — see ADR 0018 and "
+            "docs/PLAN_post_v1.0.md §5 R3-1. Use audit-only mode "
+            "(ComparablePoolBuilder(ifind=None)) until then."
         )
-        return 0

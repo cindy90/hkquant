@@ -45,7 +45,6 @@ from .metrics import (
     DEFAULT_IC_TOLERANCE,
     DEFAULT_T_TOLERANCE,
     MetricsReport,
-    SliceMetrics,
     compute_report,
     get_baseline_iteration,
     monotonicity_constraint,
@@ -97,6 +96,15 @@ class SliceCalibration:
     monotonicity_notes: tuple[str, ...]
     objective_value: float  # mean IC across horizons, regime_pass slice
     reason: str  # human-readable why this candidate won
+    # R3-3 — explicit "this calibration was a no-op" marker. Under V8LiteScorer
+    # the decision_score is a single signal and weights collapse to a scalar
+    # multiplier on Rank IC (invariant to monotonic transforms). The grid
+    # search therefore yields the first valid candidate (dict-ordering),
+    # which is informationally equivalent to the baseline. Reports must
+    # flag this so reviewers don't read "calibrated" as "weights changed".
+    # See docs/PLAN_post_v1.0.md §5 R3-3.
+    is_placebo: bool = False
+    placebo_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -271,7 +279,18 @@ def calibrate_one_listing_type(
     # v8 baseline (used by monotonicity_constraint).
     v8_baseline = get_baseline_iteration()
 
+    # R3-3 — V8LiteScorer placebo detection. Under that scorer the only
+    # signal driving decision_score is listing_type + cluster_bonus
+    # (single scalar), so multiplying by sum(weights) is a monotonic
+    # transform that does NOT change Rank IC. We record the baseline
+    # mean IC and detect later if every candidate's IC ≈ baseline.
+    baseline_report = _score_samples_with_weights(
+        slice_samples, baseline_weights, horizons=horizons
+    )
+    baseline_objective = _mean_ic_across_horizons(baseline_report)
+
     best: SliceCalibration | None = None
+    candidate_objectives: list[float] = []
     for candidate_weights in _enumerate_weight_grid(
         baseline_weights.keys(),
         grid=grid,
@@ -281,25 +300,16 @@ def calibrate_one_listing_type(
             candidate_weights,
             horizons=horizons,
         )
-        # Inflate label to "main_board" for monotonicity vs v8 (v8 baseline
-        # uses main_board / regime_pass keys; we lift the local
-        # regime_pass report into both for the check).
-        check_report = MetricsReport(
-            label="main_board",
-            n_total=report.n_total,
-            horizons={
-                h: SliceMetrics(
-                    horizon=m.horizon,
-                    n=m.n,
-                    ic=m.ic,
-                    ls_spread=m.ls_spread,
-                    ls_t_stat=m.ls_t_stat,
-                )
-                for h, m in report.horizons.items()
-            },
-        )
+        # R3-4 — use the report's actual ``regime_pass`` label against the
+        # ``regime_pass`` baseline (v8 fixture has both main_board and
+        # regime_pass entries). Pre-fix the report's label was forcibly
+        # rewritten to ``main_board``, comparing regime-pass slice metrics
+        # against the wider main_board baseline. main_board has a lower
+        # ceiling (regime gate selects the more-bullish subsample), so
+        # ANY candidate trivially passed monotonicity. This is the
+        # "偷换概念" problem flagged in the 2026-05-17 review.
         passed, violations = monotonicity_constraint(
-            check_report,
+            report,  # label is already "regime_pass"
             v8_baseline,
             ic_tolerance=ic_tolerance,
             t_tolerance=t_tolerance,
@@ -307,6 +317,7 @@ def calibrate_one_listing_type(
         if not passed:
             continue
         objective = _mean_ic_across_horizons(report)
+        candidate_objectives.append(objective)
         if best is None or objective > best.objective_value:
             best = SliceCalibration(
                 listing_type=listing_type,
@@ -324,24 +335,48 @@ def calibrate_one_listing_type(
 
     if best is None:
         # No candidate passed monotonicity → keep baseline.
-        baseline_metrics = _score_samples_with_weights(
-            slice_samples,
-            baseline_weights,
-            horizons=horizons,
-        )
         return SliceCalibration(
             listing_type=listing_type,
             n_samples=len(slice_samples),
             chosen_weights=dict(baseline_weights),
             baseline_weights=dict(baseline_weights),
-            chosen_metrics=baseline_metrics,
+            chosen_metrics=baseline_report,
             monotonicity_passed=False,
             monotonicity_notes=("no candidate cleared monotonicity vs v8; baseline retained",),
-            objective_value=_mean_ic_across_horizons(baseline_metrics),
+            objective_value=baseline_objective,
             reason="no candidate passed monotonicity; baseline retained",
         )
 
-    return best
+    # R3-3 — placebo detection. If every candidate that passed monotonicity
+    # produced the same mean IC (within float noise), weights weren't
+    # actually moving the metric — that's the V8LiteScorer no-op pattern.
+    is_placebo = False
+    placebo_reason = None
+    if candidate_objectives:
+        spread = max(candidate_objectives) - min(candidate_objectives)
+        if spread < 1e-9:
+            is_placebo = True
+            placebo_reason = (
+                f"All {len(candidate_objectives)} passing candidates produced identical "
+                f"mean IC = {best.objective_value:.6f} (spread {spread:.2e}). Under "
+                "V8LiteScorer the decision_score is a single signal and weight "
+                "renormalization is a monotonic transform that leaves Rank IC "
+                "invariant — the calibration is informational only. Real per-model "
+                "calibration requires FullPipelineScorer."
+            )
+    return SliceCalibration(
+        listing_type=best.listing_type,
+        n_samples=best.n_samples,
+        chosen_weights=best.chosen_weights,
+        baseline_weights=best.baseline_weights,
+        chosen_metrics=best.chosen_metrics,
+        monotonicity_passed=best.monotonicity_passed,
+        monotonicity_notes=best.monotonicity_notes,
+        objective_value=best.objective_value,
+        reason=best.reason,
+        is_placebo=is_placebo,
+        placebo_reason=placebo_reason,
+    )
 
 
 # ===========================================================================
