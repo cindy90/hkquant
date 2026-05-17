@@ -5,16 +5,80 @@ on:
     branches: [main, master, develop]
   pull_request:
     branches: [main, master, develop]
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
 
-# 同 ref 的并发运行只保留最新一次, 节省 CI 配额
+# 同 ref 的并发运行只保留最新一次，节省 CI 配额
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # 中文路径不会出现在 CI 上，但 alembic.ini 在 Windows runner 仍需 UTF-8
+  PYTHONUTF8: "1"
+
 jobs:
-  test:
-    name: pytest (Py${{ matrix.python }})
+  # ---------------------------------------------------------------------------
+  # lint — ruff check + pre-commit hooks (含 detect-secrets)
+  # ---------------------------------------------------------------------------
+  lint:
+    name: lint (ruff + pre-commit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Setup Python 3.11
+        run: uv python install 3.11
+
+      - name: Install dev deps
+        run: uv sync --group dev
+
+      - name: ruff check
+        run: uv run ruff check src/hk_ipo_agent tests scripts
+
+      - name: ruff format check
+        run: uv run ruff format --check src/hk_ipo_agent tests scripts
+
+      - name: pre-commit (含 detect-secrets / large-files / yaml-toml-json)
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
+  # ---------------------------------------------------------------------------
+  # typecheck — mypy strict on src/hk_ipo_agent
+  # NOTE: non-blocking until R10-11 翻 mypy active (pre-commit stage 是 manual).
+  # 现有 ~23 错误属于 unused-ignore 残留 + 2 个真类型问题，列在 PLAN R10-11。
+  # ---------------------------------------------------------------------------
+  typecheck:
+    name: typecheck (mypy, advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Setup Python 3.11
+        run: uv python install 3.11
+
+      - name: Install deps (含 reports/parse/embeddings extras — 多数 unit 测试需要)
+        run: uv sync --group dev --extra reports --extra parse --extra embeddings-cloud
+
+      - name: mypy (advisory — failures don't block PR)
+        run: uv run mypy src/hk_ipo_agent
+
+  # ---------------------------------------------------------------------------
+  # unit tests — 跨 Python 版本矩阵，不依赖 docker
+  # ---------------------------------------------------------------------------
+  test-unit:
+    name: pytest unit (Py${{ matrix.python }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -24,32 +88,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python ${{ matrix.python }}
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
         with:
-          python-version: ${{ matrix.python }}
-          cache: pip
-          cache-dependency-path: requirements.txt
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install runtime + dev deps
-        # iFindPy 不在 PyPI, CI 中跳过 (相关测试不依赖 iFinD live 调用)
-        run: |
-          python -m pip install --upgrade pip
-          # 不直接装 requirements.txt (含 akshare 太重), 装 CI 必须的子集
-          pip install pandas>=2.0 numpy>=1.24 pyyaml>=6.0 pytest>=7.0 pytest-cov
+      - name: Setup Python ${{ matrix.python }}
+        run: uv python install ${{ matrix.python }}
 
-      - name: Show env
-        run: |
-          python --version
-          pip list | grep -E "pytest|pyyaml|numpy|pandas" || true
+      - name: Install deps (dev + reports/parse/embeddings extras — reporting / extractor 测试需要)
+        run: uv sync --group dev --extra reports --extra parse --extra embeddings-cloud
 
-      - name: Run pytest with coverage
+      - name: pytest unit
         run: |
-          python -m pytest \
-            --cov=src \
+          uv run pytest tests/unit \
+            -v -ra \
+            --cov=src/hk_ipo_agent \
             --cov-report=xml \
-            --cov-report=term-missing:skip-covered \
-            -ra
+            --cov-report=term-missing:skip-covered
 
       - name: Upload coverage artifact
         if: always()
@@ -59,28 +116,80 @@ jobs:
           path: coverage.xml
           if-no-files-found: warn
 
-  lint:
-    name: pre-commit
+  # ---------------------------------------------------------------------------
+  # integration tests — 起 docker-compose (PG + Qdrant + Redis), 仅 PR 触发
+  # ---------------------------------------------------------------------------
+  test-integration:
+    name: pytest integration (docker)
     runs-on: ubuntu-latest
+    # PR 才跑（push 到 main 会被 PR merge commit 上的 test-unit 覆盖；
+    # workflow_dispatch 手动触发也跑）
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    needs: [lint, typecheck]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: hkipo
+          POSTGRES_USER: hkipo
+          POSTGRES_PASSWORD: hkipo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hkipo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+          - 6334:6334
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      HK_IPO__ENVIRONMENT: ci
+      HK_IPO__DATABASE__HOST: localhost
+      HK_IPO__DATABASE__PORT: "5432"
+      HK_IPO__DATABASE__NAME: hkipo
+      HK_IPO__DATABASE__USER: hkipo
+      HK_IPO__DATABASE__PASSWORD: hkipo
+      HK_IPO__QDRANT__URL: http://localhost:6333
+      HK_IPO__REDIS__URL: redis://localhost:6379/0
+      # CI 没有真实 LLM key — 测试要么 mock 要么 skip
+      HK_IPO__LLM__KIMI_API_KEY: sk-ci-fixture-not-real
+      HK_IPO__LLM__KIMI_URL: http://127.0.0.1:0
+      HK_IPO__AUTH__JWT_SECRET: ci-only-fixture-jwt-secret-min-32-chars
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
         with:
-          python-version: "3.11"
-          cache: pip
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install pre-commit
-        run: pip install pre-commit
+      - name: Setup Python 3.11
+        run: uv python install 3.11
 
-      - name: Cache pre-commit envs
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: pre-commit-${{ runner.os }}-
+      - name: Install deps (含 reports/parse/embeddings extras — 多数 unit 测试需要)
+        run: uv sync --group dev --extra reports --extra parse --extra embeddings-cloud
 
-      - name: Run pre-commit
-        # CI 上跑全仓; 非 commit 阶段, 只跑标记 stage=pre-commit 的 hooks
-        # mypy 默认 stage=manual, CI 不阻塞 (与 .pre-commit-config.yaml 一致)
-        run: pre-commit run --all-files --show-diff-on-failure
+      - name: Run alembic migrations
+        run: |
+          uv run alembic -c src/hk_ipo_agent/data/migrations/alembic.ini upgrade head
+
+      - name: pytest integration
+        run: uv run pytest tests/integration -v -ra -m integration

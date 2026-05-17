@@ -46,19 +46,14 @@ _CONFIG_PATH = Path(__file__).resolve().parents[5] / "config" / "schedulers.yaml
 
 def _run_daily_scheduler(**context: Any) -> dict[str, Any]:
     """Airflow task entry point. Constructs + runs DailyScheduler once."""
-    from ....data.database import async_session_factory  # noqa: PLC0415
-    from ...alerts import AlertRouter  # noqa: PLC0415
-    from ...attribution import AttributionEngine  # noqa: PLC0415
-    from ...ipo_lifecycle import StaleDetector, StateMachine, TerminalHandler  # noqa: PLC0415
-    from ...outcome_tracker import OutcomeTracker  # noqa: PLC0415
-    from ...registry import PGPredictionRegistry  # noqa: PLC0415
-    from ...review_workflow import ReviewWorkflow  # noqa: PLC0415
-    from ..daily_scheduler import DailyScheduler  # noqa: PLC0415
+    from ....data.database import async_session_factory
+    from ...registry import PGPredictionRegistry
 
     # Production dependencies: each is wired up against the same
     # session_factory so the run runs in one transactional domain.
     sf = async_session_factory()
-    registry = PGPredictionRegistry(session_factory=sf)
+    registry = PGPredictionRegistry(session_factory=sf)  # placeholder — R8-9 wires real run
+    _ = registry  # silence F841 — see R8-9 in docs/PLAN_post_v1.0.md
     # NOTE: production swaps in real iFind + LLM clients via
     # api/main.py lifespan; the DAG fetches them from a service-locator
     # registered there. The stubs below illustrate the wiring shape.
@@ -79,9 +74,9 @@ def _emit_sla_metrics(**context: Any) -> None:
 
 def _on_failure_callback(context: dict[str, Any]) -> None:
     """6-hour SLA per CLAUDE.md v1.2: critical-alert on persistent failure."""
-    from ...alerts import AlertRouter  # noqa: PLC0415
-    from ....common.enums import AlertLevel  # noqa: PLC0415
-    from ....data.database import async_session_factory  # noqa: PLC0415
+    from ....common.enums import AlertLevel
+    from ....data.database import async_session_factory
+    from ...alerts import AlertRouter
 
     async def _emit() -> None:
         sf = async_session_factory()
@@ -137,6 +132,4 @@ if AIRFLOW_AVAILABLE:
         run_scheduler >> emit_metrics
 
 
-__all__ = (
-    "AIRFLOW_AVAILABLE",
-)
+__all__ = ("AIRFLOW_AVAILABLE",)

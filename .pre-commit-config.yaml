@@ -13,7 +13,9 @@
 # See PROJECT_SPEC.md §10.5.
 
 default_language_version:
-  python: python3.11
+  # 不锁死具体小版本，让本地 (Win/3.12/3.13) 和 CI (3.11) 都能起 hook env。
+  # CI 上 ci.yml 显式 `uv python install 3.11` 仍保证 lint job 跑在 3.11。
+  python: python3
 default_stages: [pre-commit]
 
 repos:
