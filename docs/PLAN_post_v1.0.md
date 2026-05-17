@@ -374,8 +374,8 @@ R0 ──> R1 ──> R2 ──> R3 ──┐
 
 | Phase | 状态 | 开始日期 | 完成日期 | tag | 备注 |
 |---|---|---|---|---|---|
-| R0 | 🔄 进行中 | 2026-05-17 | - | - | 工程基线 3 Blocker |
-| R1 | ⏸ 等待 | - | - | - | 数值正确性 |
+| R0 | ✅ 完成 | 2026-05-17 | 2026-05-17 | `v1.0.1-r0` | commits `8ee82bd` (functional) + `d78b34c` (pre-commit auto-fix LF/EOF/ruff format)；727 unit tests 全过 |
+| R1 | ✅ 完成 | 2026-05-17 | 2026-05-17 | `v1.0.1-r1` | commit `442e1fc`；5 任务全 red-green-refactor；736 unit tests 全过（+9 新 R1 测试，0 regression）。**BREAKING**: R1-1 DCF 终值公式校正，历史 snapshot 会有 ~5% 差异 |
 | R2 | ⏸ 等待 | - | - | - | 生产安全 + 不可变 |
 | R3 | ⏸ 等待 | - | - | - | 流程伪完成治理 |
 | R4 | ⏸ 等待 | - | - | - | 模型路由 + Jinja2 |
