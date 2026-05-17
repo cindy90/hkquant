@@ -107,5 +107,5 @@ PROJECT_SPEC.md §16（v1.2.1 新增）+ Phase 7 deliverables 列出了 ~50 个�
   - 7.5b-3: whatif endpoint INSERT whatif_calculations (best-effort，FK violation 时 warning + 仍返回 200)
   - 7.5b-3: get_user_by_id_pg + resolve_user PG lookup (in-memory 默认，PG 作 production fallback)
 - [x] **Phase 7.5b (2026-05-16)**: 实装 reviews / proposals / drift routers（3 router 实装 + 11 新单测；ADR 0012 §7.5b 已勾）
-- [ ] **Phase 8**: 实装 backtest router
+- [x] **Phase 8d**: 实装 backtest router（list runs + detail by run_id + count meta；6 单测含 PG-seeded happy + 404 + auth + OpenAPI；存储复用 prediction_snapshots.config_snapshot.backtest_run_id，不开新表）
 - [ ] **Phase 9**: SSO providers + 签名 URL + Redis Pub/Sub

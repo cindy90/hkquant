@@ -1,11 +1,13 @@
-"""API routers (Phase 7).
+"""API routers (Phase 7 → 8d).
 
 Implemented:
-- health / dashboard / auth / ipos / snapshots / analysis / prospectus /
-  whatif / alerts / audit / chat
+- Phase 7 MVP: health / dashboard / auth / ipos / snapshots / analysis /
+  prospectus / whatif / alerts / audit / chat
+- Phase 7.5b: reviews / proposals / drift
+- Phase 8d: backtest
 
-Deferred (Phase 7.5 / 8 per ADR 0011, stubs return 501):
-- reviews / proposals / drift / backtest / settings / system
+Stubs returning 501 (settings / system are Phase 9):
+- settings / system
 """
 
 from __future__ import annotations

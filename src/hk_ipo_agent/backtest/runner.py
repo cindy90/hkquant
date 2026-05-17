@@ -439,6 +439,105 @@ def _coerce_listing_type(raw: str | None) -> ListingType | None:
         return None
 
 
+# ===========================================================================
+# Run persistence (ADR 0013 §8d — reuse prediction_snapshots, no new table)
+# ===========================================================================
+
+
+# Sentinel decision used to mark a snapshot as the product of a
+# backtest run rather than a production analysis. Routers filter on
+# this + the ``backtest_run_id`` config key.
+_BACKTEST_DECISION_MARKER: str = "BACKTEST_ONLY"
+
+
+async def persist_run_to_pg(
+    run: BacktestRun,
+    session_factory: Any,
+    *,
+    system_version: str = "phase-8c.v8lite",
+) -> int:
+    """Write one ``prediction_snapshots`` row per sample, group-tagged by run.
+
+    ADR 0013 §8d binding: backtest runs are stored as a GROUP BY view
+    over ``prediction_snapshots`` filtered on
+    ``config_snapshot->>'backtest_run_id'``. The router queries this
+    same shape.
+
+    Per CLAUDE.md prediction-lifecycle:
+    - Each row is immutable (DB trigger blocks UPDATE/DELETE).
+    - The decision is marked ``BACKTEST_ONLY`` so production dashboards
+      can filter these out.
+    - The unique constraint on (ipo_id, as_of_date, prospectus_version)
+      means re-running the same backtest with the same as_of_date will
+      conflict; we use ``prospectus_version = "backtest:{short_run_id}"``
+      to keep distinct runs separable.
+
+    Returns the count of rows written.
+    """
+    from datetime import UTC as _UTC  # noqa: PLC0415
+    from datetime import datetime as _dt  # noqa: PLC0415
+
+    from ..data.models import PredictionSnapshotRow  # noqa: PLC0415
+
+    short_run = str(run.run_id)[:8]
+    rows_written = 0
+    async with session_factory() as s:
+        for sample in run.samples:
+            row = PredictionSnapshotRow(
+                ipo_id=sample.ipo_id,
+                as_of_date=sample.as_of_date,
+                prospectus_version=f"backtest:{short_run}",
+                input_data_hash="backtest-no-hash",
+                input_data_snapshot={
+                    "stock_code": sample.stock_code,
+                    "listing_type": (
+                        sample.listing_type.value if sample.listing_type else None
+                    ),
+                    "pricing_date": sample.pricing_date.isoformat(),
+                    "regulatory_regime": sample.regulatory_regime.value,
+                },
+                agent_outputs={},
+                valuation_output={
+                    "decision_score": sample.decision_score,
+                    "regime_score": sample.regime_score,
+                    "regime_pass": sample.regime_pass,
+                },
+                debate_output={},
+                decision={
+                    "decision": _BACKTEST_DECISION_MARKER,
+                    "confidence": 0.0,
+                    "rationale": (
+                        f"backtest sample (run_id={short_run}); "
+                        "no live agent debate"
+                    ),
+                    "realized_returns": sample.realized_returns,
+                },
+                system_version=system_version,
+                model_versions={"scorer": "V8LiteScorer"},
+                config_snapshot={
+                    "backtest_run_id": str(run.run_id),
+                    "horizons": list(run.metrics_by_label.get(
+                        "main_board",
+                        compute_report(label="main_board", per_horizon={}),
+                    ).horizons.keys()),
+                    "scorer": "V8LiteScorer",
+                    **run.config_snapshot,
+                },
+                total_cost_usd=None,
+                runtime_seconds=None,
+                created_at=_dt.now(_UTC),
+            )
+            s.add(row)
+            rows_written += 1
+        await s.commit()
+    logger.info(
+        "backtest_run_persisted",
+        run_id=str(run.run_id),
+        rows=rows_written,
+    )
+    return rows_written
+
+
 __all__ = (
     "DEFAULT_HORIZONS",
     "REGIME_GATE_THRESHOLD",
@@ -450,6 +549,7 @@ __all__ = (
     "ScoreOutput",
     "V8LiteScorer",
     "load_backtest_inputs_from_pg",
+    "persist_run_to_pg",
     "run_walk_forward",
 )
 

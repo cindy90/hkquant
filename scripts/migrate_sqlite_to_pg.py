@@ -315,7 +315,9 @@ def map_cornerstone_investment(row: sqlite3.Row) -> dict[str, Any]:
         "commitment_amount_hkd": to_decimal(row["ticket_size_hkd"]),
         "pct_of_offering": to_decimal(row["subscribe_pct"]),
         "lockup_months": to_int(row["lockup_months_actual"]),
-        "disclosure_date": to_date(row["as_of_date"]),
+        # NACS v8 SQLite schema doesn't track disclosure_date — leave null;
+        # Phase 9 re-loader from primary HKEX filings will backfill.
+        "disclosure_date": None,
         "is_anchor": False,  # NACS doesn't distinguish anchor vs cornerstone
     }
 

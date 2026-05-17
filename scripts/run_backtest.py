@@ -40,6 +40,7 @@ from hk_ipo_agent.backtest.runner import (
     DEFAULT_HORIZONS,
     V8LiteScorer,
     load_backtest_inputs_from_pg,
+    persist_run_to_pg,
     run_walk_forward,
 )
 from hk_ipo_agent.common.settings import get_settings
@@ -100,6 +101,13 @@ async def _amain(args: argparse.Namespace) -> int:
         )
         print(f"[backtest] report → {report_path}")
 
+        if args.persist:
+            n = await persist_run_to_pg(run, sf)
+            print(
+                f"[backtest] persisted {n} prediction_snapshots rows for "
+                f"run_id={run.run_id} — visible via /api/backtest/runs"
+            )
+
         if args.output is not None:
             yaml_text = dump_weights_yaml(
                 cal.candidate_weights_yaml,
@@ -138,6 +146,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional path to write candidate weights YAML.",
+    )
+    p.add_argument(
+        "--persist",
+        action="store_true",
+        help=(
+            "Persist BacktestRun samples to prediction_snapshots so the "
+            "/api/backtest/runs endpoint can surface them."
+        ),
     )
     return p.parse_args(argv)
 

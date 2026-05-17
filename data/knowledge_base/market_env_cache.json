@@ -1,7 +1,7 @@
 {
   "source": "nacs_v8_sqlite_migration",
-  "dumped_at": "2026-05-16T04:26:49.747480+00:00",
-  "row_count": 55,
+  "dumped_at": "2026-05-17T01:47:59.561676+00:00",
+  "row_count": 54,
   "rows": [
     {
       "asof_month": "2021-12-01",
@@ -14,7 +14,7 @@
       "southbound_30d_net_normalized": 0.0,
       "sector_60d_vol_annualized": 0.3,
       "source": "fallback",
-      "created_at": "2026-05-09 21:31:56"
+      "created_at": "2026-05-09 08:47:58"
     },
     {
       "asof_month": "2022-01-01",
@@ -704,19 +704,6 @@
       "sector_60d_vol_annualized": 0.22167945712453224,
       "source": "ifind_partial",
       "created_at": "2026-05-09 07:25:02"
-    },
-    {
-      "asof_month": "2026-09-01",
-      "hsi_60d_return": 0.03,
-      "hsi_60d_vol_annualized": 0.2,
-      "hsi_60d_vol_pct_rank": 0.5,
-      "hsi_valuation_pct": 0.5,
-      "hk_ipo_30d_avg_d30": 0.05,
-      "hk_ipo_30d_breakage_rate": 0.5,
-      "southbound_30d_net_normalized": 0.0,
-      "sector_60d_vol_annualized": 0.3,
-      "source": "fallback",
-      "created_at": "2026-05-09 12:40:42"
     }
   ]
 }
