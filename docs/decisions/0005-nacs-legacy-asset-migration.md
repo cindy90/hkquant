@@ -168,3 +168,6 @@ NACS 87 单元测试中，绝大多数耦合 NACS 模型代码，无法迁移。
 - [x] **Phase 9a**：`themes/` 旧目录归档到 `legacy/themes/`（5 JSON + theme_tracker / _audit_codes / research_premium / README + _premium_research_cache）；kb_tool 的 `_LEGACY_THEMES` 指向 `legacy/themes/`，theme_loader docstring 更新
 - [x] **Phase 9a**：`data/nacs_real.db` + 4 `.bak_*` 归档到 `legacy/data/`；migrate_sqlite_to_pg.py + export_market_env_cache.py 用 try-legacy-first 路径策略
 - [x] **Phase 9a**：NACS 顶层脚本（`build_perf_cache.py` / `check_health.py` / `run_v7_backtest.py` / `nacs_checklist_tool.html`）归档到 `legacy/scripts/`；同时 archive `configs/` → `legacy/configs/` + `src/{config.py, nacs_model.py, data/, data_sources/}` → `legacy/src/`
+- [x] **Phase 9a (post-tag stragglers, ADR 0016)**：`scripts/evaluate_new_ipo.py` / `scripts/check_data_completeness.py` / `scripts/migrate_schema_pk_fix.py` 归档到 `legacy/scripts/`；`run_cv_backtest.py` → `legacy/`；`tests/test_cv_backtest.py` → `legacy/tests/`；一次性探查脚本 `scripts/search_yifei_tech.py` 直接删除（无审计价值）
+- [x] **Phase 9a (post-tag stragglers, ADR 0016)**：作废的 YAML workflow stub 整目录删除（`workflows/{backtest,full_analysis,monitoring}.yaml`）— LangGraph DSL 已完全替代（ADR 0001 + `orchestrator/graph.py`）
+- [x] **Phase 9a (post-tag stragglers, ADR 0016)**：`pyproject.toml` ruff `extend-exclude` 移除已归档的 `run_cv_backtest.py` 顶层条目（被 `legacy` 条目自然 cover）

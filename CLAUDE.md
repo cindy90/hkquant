@@ -30,7 +30,7 @@
 | **Phase 7.5** 预测档案 + 生命周期 | PROJECT_SPEC.md §3.11 / §3.11.1 / §3.11.2 + §10 + **ADR 0012**（强制） + ADR 0011 Progress（遗留收尾） | 切 7.5a/b/c/d 4 子阶段，每个子阶段独立 commit + 单测 + 停下来等确认；7.5a 一次性 18 表 + 4 trigger + Registry PG 化 + Phase 7 in-memory PG 化；7.5b 数据流闭环 + reviews/proposals/drift router；7.5c 状态机 + 代码映射 + 财报比对 + 警报；7.5d 三层调度器 + Airflow + 端到端晶泰；snapshot immutability 必须 DB trigger 强制；LISTED 三重验证 |
 | **Phase 8** 回测与校准 | **ADR 0005 §3**（强制） + **ADR 0013**（强制） + PROJECT_SPEC.md §3.9 | 切 8a/b/c/d 4 子阶段：as_of_data + regime_detection / IC L-S t-stat metrics / runner + calibration + reports + 50+ 全量回测 / backtest router 收尾。`backtest/metrics.py` 实现 IC / L-S / t-stat 三件套；`calibration.py` 用 v8 5 轮 iteration archive 作单调性约束；`regime_detection.py` 用 `market_environment_cache` JSON fixture；防泄漏 `as_of_data.py` 是地基 |
 | **Phase 9** 端到端验证 | **ADR 0005 §Progress（归档段）** | 把 `themes/` / `data/nacs_real.db` / NACS 顶层脚本归档到 `legacy/`；勾选 ADR 0005 Progress 全部条目 |
-| **Phase 10** 持续学习闭环 | PROJECT_SPEC.md §3.12 | drift_detector / counterfactual / adjustment_applier 强制人工 gate |
+| **Phase 10** 持续学习闭环 | PROJECT_SPEC.md §3.12 + **ADR 0015**（实施切片 10a/b/c） + **ADR 0016**（前置任务） | drift_detector / counterfactual / adjustment_applier 强制人工 gate；Phase 10 启动前先做 ADR 0016 第三类：参数化 `scripts/run_e2e_test.py` → `scripts/analyze_pdf.py`（堵住"每来一个新 IPO 就写一次性脚本"成因） |
 
 **核对方法**：每个 Phase 第一个 commit 前，必须在 `docs/decisions/0005-...md` 末尾 Progress 段确认相关条目状态。未勾选条目不得标记 Phase 完成。
 
@@ -205,6 +205,7 @@
   - [x] **8d** backtest router (list runs + detail + _meta/count，6 单测) + runner.persist_run_to_pg + CLI --persist + **374 样本全量回测跑通**（277 regime-pass，报告写 `reports/backtest/2026-05-17_*.md`，374 行 prediction_snapshots 持久化）+ ETL bug fix + tag `v0.8`
 - [x] Phase 9 — 端到端验证（DONE：tag `v0.9` + ADR 0014 全勾 + ADR 0005 100% 收尾 + 5 case studies 文档）
   - [x] **9a** (22c36fa) NACS legacy 归档（themes / nacs_real.db + 4 backups / 4 顶层脚本 / configs / src/{config,nacs_model,data,data_sources}）+ legacy/README.md + 路径修复 + 642 单测 0 regression + ADR 0005 §Progress Phase 9 三项 ✓
+  - [x] **9a post-tag stragglers**（ADR 0016）：补归档 `scripts/{evaluate_new_ipo,check_data_completeness,migrate_schema_pk_fix}.py` / `run_cv_backtest.py` / `tests/test_cv_backtest.py` → `legacy/`；删 `scripts/search_yifei_tech.py`（一次性探查）+ `workflows/` 整目录（LangGraph 已替代，ADR 0001）+ `pyproject.toml` ruff exclude 顶层 5 条已归档项清理；登记**后续任务**：参数化 `scripts/run_e2e_test.py` → `scripts/analyze_pdf.py`（堵住"一次性脚本积累"成因）
   - [x] **9b** (234e9e2) FullPipelineScorer (backtest/full_scorer.py，30min SLO timeout + LookAhead skip) + 13 新单测 + 晶泰 2228.HK e2e case (5 测试，用真实 ipo_postmarket 数据) + 全 pipeline mock-graph smoke + 性能探针 scripts/perf_smoke.py（V8Lite ~0.8ms/IPO，2.3M× SLO headroom）+ tests/e2e/conftest.py auto-ETL fixture + 661 全仓单测 + e2e 全通过
   - [x] **9c** 5 家 case study 文档（docs/case_studies/{README, 2228_quantumpharm, 2533_black_sesame, 2432_dobot, 3750_catl_h, 9660_horizon_robotics}.md）+ CHANGELOG v0.9 + tag `v0.9`
 - [x] Phase 10 — 持续学习闭环（DONE：tag `v1.0` 项目主要 release + ADR 0015 全勾 + 751 全套测试 0 failure + e2e propose→accept→apply→rollback 闭环已实证）

@@ -23,6 +23,9 @@
 | [0011](0011-phase7-scope-and-deferrals.md) | Phase 7 范围 + 延期项 | **Accepted** | **Phase 7, 7.5, 8, 9** | MVP 实现 10 核心 router + 全套 middleware + auth (无 SSO) + SSE/WS 骨架 + reporting；reviews/proposals/drift 延 Phase 7.5；backtest 延 Phase 8；SSO 延 Phase 9 |
 | [0012](0012-phase7.5-scope-and-substages.md) | Phase 7.5 范围 + 4 子阶段切片 | **Accepted** | **Phase 7.5** | 18 表 + 4 trigger + Registry PG 化 / Outcome+Event+Attribution+Review 闭环 / 状态机 + CodeMapper + EarningsComparator + Alerts / 三层调度器 + Airflow + 端到端晶泰 — 切成 7.5a→b→c→d 四子阶段 |
 | [0013](0013-phase8-scope-and-substages.md) | Phase 8 范围 + 4 子阶段切片 | **Accepted** | **Phase 8** | 防泄漏 as_of_data + regime_detection / IC L-S t-stat metrics + NACS v8 baselines / walk-forward runner + Bayesian calibration + reports + 50+ 样本回测 / backtest router 收尾 — 切成 8a→b→c→d 四子阶段；继承 NACS market_environment_cache + 5 轮 iteration archive 作单调性约束 |
+| [0014](0014-phase9-scope-and-substages.md) | Phase 9 范围 + 3 子阶段切片 | **Accepted** | **Phase 9** | NACS legacy 归档 / FullPipelineScorer + e2e 测试骨架 / 5 家案例 stub + tag v0.9 — 切成 9a→b→c 三子阶段 |
+| [0015](0015-phase10-scope-and-substages.md) | Phase 10 范围 + 3 子阶段切片 | **Accepted** | **Phase 10** | drift_detector + attribution_aggregator + counterfactual + version_manager / adjustment_proposer + applier (强制 human gate) + reports / CLI + LEARNING_PROTOCOL + e2e 闭环 — 切成 10a→b→c 三子阶段 + tag v1.0 |
+| [0016](0016-phase9-stragglers-cleanup-and-e2e-cli-parametrization.md) | Phase 9a 补归档 + 参数化 e2e CLI 入口 | **Accepted** | **Phase 9 (post-tag), Phase 10 prep** | 6 个 NACS 同源遗漏脚本归档/删除 + 删 workflows/ stub + 登记 `scripts/analyze_pdf.py` 参数化任务（堵住"一次性脚本积累"成因） |
 
 ---
 
@@ -42,8 +45,8 @@
 | Phase 7 报告 + API + UI 集成层 | **0008** / **★ 0011** | **是** — ADR 0011 定 MVP 范围；reviews/proposals/drift/backtest 延后；SSO 延 Phase 9；in-memory audit/chat/whatif 沿用 Phase 6 snapshot 模式 |
 | Phase 7.5 预测档案 + 生命周期 | **★ 0012** | **是** — ADR 0012 切 7.5a/b/c/d 4 子阶段；7.5a 同时收掉 ADR 0011 遗留的 Phase 7 in-memory PG 化；7.5b 实装 reviews/proposals/drift |
 | Phase 8 回测与校准 | **★ 0005 §3** + **★ 0013** | **是** — ADR 0013 切 8a/b/c/d 4 子阶段；`backtest/{metrics,calibration,regime_detection}.py` 继承 v8 baseline + IC 三件套；8d 收掉 ADR 0011 最后遗留的 backtest router |
-| Phase 9 端到端验证 | **★ 0005 §Progress 归档段** | **是** — 把 themes/ / nacs_real.db / NACS 顶层脚本归档到 legacy/ |
-| Phase 10 持续学习闭环 | 0005（参考归因部分） | 否 |
+| Phase 9 端到端验证 | **★ 0005 §Progress 归档段** + **0014** + **0016**（post-tag stragglers） | **是** — 把 themes/ / nacs_real.db / NACS 顶层脚本归档到 legacy/；ADR 0016 收尾 9a 漏归档 + 登记 Phase 10 前置任务 |
+| Phase 10 持续学习闭环 | **★ 0015** (实施切片 10a/b/c) + **★ 0016** (前置任务) + 0005（参考归因部分） | **是** — ADR 0015 切 10a/b/c 三子阶段；启动前先做 ADR 0016 第三类参数化 e2e CLI |
 
 ---
 

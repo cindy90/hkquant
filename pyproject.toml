@@ -12,7 +12,7 @@ authors = [{ name = "HK IPO Agent Team" }]
 dependencies = [
     # LLM orchestration & client
     "langgraph>=0.2",
-    "anthropic>=0.40",
+    "openai>=1.0",
 
     # Data validation & settings
     "pydantic>=2.7",
@@ -173,12 +173,7 @@ extend-exclude = [
     "src/data",
     "src/data_sources",
     "src/reports",
-    # ----- Legacy NACS top-level scripts -----
-    "build_perf_cache.py",
-    "check_health.py",
-    "run_v7_backtest.py",
-    "run_cv_backtest.py",
-    "nacs_checklist_tool.html",
+    # ----- Legacy NACS top-level scripts (all archived to legacy/ — covered by the "legacy" entry below; kept comment for orientation only) -----
     # ----- Legacy NACS tests -----
     "tests/test_config.py",
     "tests/test_dao.py",
@@ -264,5 +259,5 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["langchain.*", "langgraph.*", "qdrant_client.*", "llama_parse.*", "ifindpy.*"]
+module = ["langchain.*", "langgraph.*", "qdrant_client.*", "llama_parse.*", "ifindpy.*", "openai.*"]
 ignore_missing_imports = true
