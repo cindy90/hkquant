@@ -129,6 +129,7 @@ async def test_llamaparse_page_numbers_skip_empty_pages_correctly(
     # get_settings by-name (``from ..common.settings import get_settings``),
     # so we must patch parser's local binding.
     from hk_ipo_agent.prospectus import parser as parser_module
+
     fake_settings = MagicMock()
     fake_settings.prospectus.llama_cloud_api_key.get_secret_value.return_value = "fake-key"
     monkeypatch.setattr(parser_module, "get_settings", lambda: fake_settings)
@@ -136,9 +137,7 @@ async def test_llamaparse_page_numbers_skip_empty_pages_correctly(
     pdf = tmp_path / "fake.pdf"
     pdf.touch()
 
-    result = await _parse_with_llamaparse(
-        pdf, "P-R1-2", ParserConfig(prefer_llamaparse=True)
-    )
+    result = await _parse_with_llamaparse(pdf, "P-R1-2", ParserConfig(prefer_llamaparse=True))
 
     assert result.backend == ParserBackend.LLAMAPARSE
     # Every block must carry the physical PDF page number, not a compacted index.

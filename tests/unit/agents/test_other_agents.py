@@ -159,7 +159,7 @@ async def test_fundamental_agent_fallback_path_preserves_full_prompt(
 
     captured: dict[str, str] = {}
 
-    async def _capture(*, model: str, messages: list[dict], **kw):  # noqa: ARG001
+    async def _capture(*, model: str, messages: list[dict], **kw):
         captured["user"] = next(m["content"] for m in messages if m["role"] == "user")
         return mock_llm_response(text="narrative")
 
@@ -201,7 +201,7 @@ async def test_liquidity_agent_fallback_path_preserves_full_prompt(
 
     captured: dict[str, str] = {}
 
-    async def _capture(*, model: str, messages: list[dict], **kw):  # noqa: ARG001
+    async def _capture(*, model: str, messages: list[dict], **kw):
         captured["user"] = next(m["content"] for m in messages if m["role"] == "user")
         return mock_llm_response(text="narrative")
 

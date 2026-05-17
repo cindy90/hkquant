@@ -75,7 +75,12 @@ jobs:
         run: uv run mypy src/hk_ipo_agent
 
   # ---------------------------------------------------------------------------
-  # unit tests — 跨 Python 版本矩阵，不依赖 docker
+  # unit tests — 跨 Python 版本矩阵
+  #
+  # NOTE: tests/unit/prediction_registry/ + tests/unit/learning_loop/ 等子集
+  # 实际依赖真 PG（_pg_available 检测 + psycopg 真连接），属于 PLAN R9-7 列出的
+  # "分层倒置" 遗留问题。在 R9-7 重构完成前，CI 上的 test-unit 也起 PG service
+  # 让"伪 unit test" 能跑通。这是临时妥协，R9 完成后会拆分。
   # ---------------------------------------------------------------------------
   test-unit:
     name: pytest unit (Py${{ matrix.python }})
@@ -84,6 +89,31 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.11", "3.12"]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: hkipo
+          POSTGRES_USER: hkipo
+          POSTGRES_PASSWORD: hkipo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hkipo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      HK_IPO__DATABASE__HOST: localhost
+      HK_IPO__DATABASE__PORT: "5432"
+      HK_IPO__DATABASE__NAME: hkipo
+      HK_IPO__DATABASE__USER: hkipo
+      HK_IPO__DATABASE__PASSWORD: hkipo
+      HK_IPO__AUTH__JWT_SECRET: ci-only-fixture-jwt-secret-min-32-chars
+      HK_IPO__LLM__KIMI_API_KEY: sk-ci-fixture-not-real
+      HK_IPO__LLM__KIMI_URL: http://127.0.0.1:0
 
     steps:
       - uses: actions/checkout@v4
@@ -99,6 +129,10 @@ jobs:
 
       - name: Install deps (dev + reports/parse/embeddings extras — reporting / extractor 测试需要)
         run: uv sync --group dev --extra reports --extra parse --extra embeddings-cloud
+
+      - name: Run alembic migrations (PG schema needed by "unit" tests that use real PG)
+        run: |
+          uv run alembic -c src/hk_ipo_agent/data/migrations/alembic.ini upgrade head
 
       - name: pytest unit
         run: |

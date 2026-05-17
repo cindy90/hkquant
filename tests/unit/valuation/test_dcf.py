@@ -165,8 +165,7 @@ async def test_dcf_terminal_delta_wc_uses_g_not_cagr() -> None:
 
     # The fix must also record the basis in key_assumptions for audit.
     assert "delta_wc_terminal_basis" in out.key_assumptions, (
-        "key_assumptions must record which growth rate scales terminal ΔWC "
-        "(R1-1 audit trail)"
+        "key_assumptions must record which growth rate scales terminal ΔWC (R1-1 audit trail)"
     )
     assert "g" in str(out.key_assumptions["delta_wc_terminal_basis"]).lower()
 

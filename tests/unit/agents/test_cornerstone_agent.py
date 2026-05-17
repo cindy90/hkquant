@@ -17,7 +17,6 @@ from hk_ipo_agent.common.enums import ListingType
 from hk_ipo_agent.common.schemas import Citation, ProspectusExtraction, RiskFactor
 from hk_ipo_agent.valuation.base import MarketData
 
-
 # Minimum risk_factor so _pick_extraction_citations has a fallback citation.
 # R1-3 enforces "no silent Citation(page=1) fabrication" — real extractions
 # always have at least one risk_factor, so test fixtures must too.

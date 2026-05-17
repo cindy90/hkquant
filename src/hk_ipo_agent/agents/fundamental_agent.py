@@ -112,11 +112,9 @@ class FundamentalAgent(BaseAgent):
             else "- Revenue CAGR: insufficient periods\n"
         )
         top1_line = (
-            f"- Gross margin (last 3): {margins}\n"
-            f"- Top-1 customer concentration: {top1:.2%}\n"
+            f"- Gross margin (last 3): {margins}\n- Top-1 customer concentration: {top1:.2%}\n"
             if top1 is not None
-            else f"- Gross margin (last 3): {margins}\n"
-            "- Top-1 customer concentration: n/a\n"
+            else f"- Gross margin (last 3): {margins}\n- Top-1 customer concentration: n/a\n"
         )
         user_msg = (
             f"# Target IPO\n"
