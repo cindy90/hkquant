@@ -18,14 +18,16 @@ from __future__ import annotations
 import json
 import re
 import time
+import uuid as _uuid
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from dataclasses import fields as dc_fields
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from uuid import UUID, uuid4, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -34,11 +36,18 @@ from ..common.enums import ListingType
 from ..common.llm_client import LLMClient
 from ..common.settings import clear_config_caches
 from ..orchestrator.graph import build_main_graph
-from ..prediction_registry.registry import InMemoryPredictionRegistry, set_registry
+from ..prediction_registry.registry import (
+    InMemoryPredictionRegistry,
+    PGPredictionRegistry,
+    set_registry,
+)
 from ..prospectus.chunker import ChunkConfig, chunk_document
-from ..prospectus.extractor import ExtractionConfig, ProspectusExtractor
+from ..prospectus.extractor import ExtractionConfig, ExtractionResult, ProspectusExtractor
 from ..prospectus.parser import ParserConfig, parse_prospectus
 from ..valuation.base import MarketData
+
+# Namespace for deterministic UUID generation (prospectus docs).
+_NAMESPACE_PROSPECTUS = _uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
 
 
 class PipelineConfig(BaseModel):
@@ -65,6 +74,11 @@ class PipelineConfig(BaseModel):
     chunk_max_chars: int = 2500
     max_chunks_per_section: int = 10
     prefer_llamaparse: bool = False
+
+    # Persistence options.
+    persist_to_pg: bool = False  # Save extraction to PostgreSQL
+    persist_to_qdrant: bool = False  # Upsert chunks to Qdrant vector store
+    use_cached_extraction: bool = True  # Skip steps 1-3 if PG has cached extraction
 
     # Reporting.
     write_report: bool = True
@@ -139,6 +153,137 @@ def _group_chunks_by_section(chunks: list[Any]) -> dict[str, list[dict[str, Any]
     return groups
 
 
+async def _ensure_ipo_event(
+    config: PipelineConfig,
+) -> UUID:
+    """Find or create the IPO event for this stock code. Returns ipo_event.id."""
+    from ..data.database import async_session_factory
+    from ..data.models import IPOEvent
+    from ..data.repositories.ipo_repo import IPOEventRepository
+
+    sf = async_session_factory()
+    async with sf() as session:
+        repo = IPOEventRepository(session)
+        existing = await repo.find_by_stock_code(config.ipo_id)
+        if existing:
+            return existing.id
+        new_event = IPOEvent(
+            id=uuid4(),
+            stock_code=config.ipo_id,
+            company_name_zh=config.company_name_zh,
+            listing_type=config.listing_type.value,
+            industry_code=config.industry_code,
+        )
+        session.add(new_event)
+        await session.commit()
+        return new_event.id
+
+
+async def _persist_extraction_to_pg(
+    config: PipelineConfig,
+    extraction_result: ExtractionResult,
+    parsed_doc: Any,
+) -> None:
+    """Save extraction to prospectus_docs + prospectus_extractions tables."""
+    from ..data.database import async_session_factory
+    from ..data.models.prospectus import ProspectusDoc, ProspectusExtractionRow
+
+    sf = async_session_factory()
+    async with sf() as session:
+        from ..data.repositories.ipo_repo import IPOEventRepository
+
+        repo = IPOEventRepository(session)
+        existing = await repo.find_by_stock_code(config.ipo_id)
+        if existing:
+            ipo_event_id = existing.id
+        else:
+            from ..data.models import IPOEvent
+
+            new_event = IPOEvent(
+                id=uuid4(),
+                stock_code=config.ipo_id,
+                company_name_zh=config.company_name_zh,
+                listing_type=config.listing_type.value,
+                industry_code=config.industry_code,
+            )
+            session.add(new_event)
+            await session.flush()
+            ipo_event_id = new_event.id
+
+        # Deterministic doc id for idempotent upsert
+        doc_id = uuid5(_NAMESPACE_PROSPECTUS, f"prosp:{config.prospectus_id}")
+
+        doc = ProspectusDoc(
+            id=doc_id,
+            ipo_id=ipo_event_id,
+            version="PHIP",
+            filing_date=date.today(),
+            pdf_path=str(config.pdf_path),
+            page_count=getattr(parsed_doc, "page_count", None),
+        )
+        await session.merge(doc)
+        await session.flush()
+
+        # Save extraction as JSONB
+        ext_row = ProspectusExtractionRow(
+            id=uuid4(),
+            prospectus_id=doc_id,
+            extraction=extraction_result.extraction.model_dump(mode="json"),
+            extraction_version=getattr(
+                extraction_result.extraction, "extraction_version", "1.0"
+            ),
+            needs_human_review=getattr(
+                extraction_result.extraction, "needs_human_review", False
+            ),
+        )
+        session.add(ext_row)
+        await session.commit()
+
+
+async def _persist_chunks_to_qdrant(
+    config: PipelineConfig, chunks: list[Any]
+) -> int:
+    """Embed and upsert all chunks to Qdrant. Returns count."""
+    from ..prospectus.embeddings import get_embedding_provider
+    from ..prospectus.vector_store import ProspectusVectorStore
+
+    provider = get_embedding_provider()
+    store = ProspectusVectorStore(config.prospectus_id, provider=provider)
+    count = await store.upsert_chunks(chunks)
+    return count
+
+
+async def _load_cached_extraction(
+    config: PipelineConfig,
+) -> Any | None:
+    """Try to load a cached extraction from PG. Returns ProspectusExtraction or None."""
+    from ..common.schemas import ProspectusExtraction
+    from ..data.database import async_session_factory
+    from ..data.models.prospectus import ProspectusDoc, ProspectusExtractionRow
+
+    from sqlalchemy import select
+
+    sf = async_session_factory()
+    async with sf() as session:
+        doc_id = uuid5(_NAMESPACE_PROSPECTUS, f"prosp:{config.prospectus_id}")
+        doc = await session.get(ProspectusDoc, doc_id)
+        if doc is None:
+            return None
+
+        stmt = (
+            select(ProspectusExtractionRow)
+            .where(ProspectusExtractionRow.prospectus_id == doc_id)
+            .order_by(ProspectusExtractionRow.created_at.desc())
+            .limit(1)
+        )
+        result = await session.execute(stmt)
+        row = result.scalar_one_or_none()
+        if row is None or row.extraction is None:
+            return None
+
+        return ProspectusExtraction.model_validate(row.extraction)
+
+
 async def run_pdf_to_snapshot(
     config: PipelineConfig,
     market_data: MarketData,
@@ -176,70 +321,108 @@ async def run_pdf_to_snapshot(
     timings: dict[str, float] = {}
     t_total = time.time()
 
-    # --- Step 1: parse ----------------------------------------------------
-    log(f"[1/5] Parsing PDF ({config.pdf_path.name}) ...")
-    t0 = time.time()
-    parsed_doc = await parse_prospectus(
-        config.pdf_path,
-        prospectus_id=config.prospectus_id,
-        config=ParserConfig(
-            prefer_llamaparse=config.prefer_llamaparse,
-            max_pages=config.max_pages,
-        ),
-    )
-    timings["parse"] = time.time() - t0
-    log(
-        f"      backend={parsed_doc.backend} pages={parsed_doc.page_count} "
-        f"blocks={len(parsed_doc.blocks)} chars={len(parsed_doc.full_text):,}"
-    )
+    # --- Step 0: cache check (if persist + cache enabled) -----------------
+    cached_extraction = None
+    if config.persist_to_pg and config.use_cached_extraction:
+        log("[0] Checking PG cache for existing extraction ...")
+        t0 = time.time()
+        cached_extraction = await _load_cached_extraction(config)
+        timings["cache_check"] = time.time() - t0
+        if cached_extraction is not None:
+            log("      [cache-hit] Loaded cached extraction from PG, skipping steps 1-3")
 
-    # --- Step 2: chunk ----------------------------------------------------
-    log("[2/5] Chunking ...")
-    t0 = time.time()
-    chunks = chunk_document(
-        parsed_doc,
-        config=ChunkConfig(
-            target_chars=config.chunk_target_chars,
-            max_chars=config.chunk_max_chars,
-        ),
-    )
-    timings["chunk"] = time.time() - t0
-    section_counts: Counter[str | None] = Counter(c.section for c in chunks)
-    log(f"      total={len(chunks)} sections={dict(section_counts)}")
+    parsed_doc: Any = None
+    chunks: list[Any] = []
+    extraction_result: Any = None
 
-    # --- Step 3: extract --------------------------------------------------
-    log("[3/5] LLM extraction ...")
-    t0 = time.time()
-    chunks_by_section = _group_chunks_by_section(chunks)
-    extractor = ProspectusExtractor(
-        llm_client,
-        config.prospectus_id,
-        config=ExtractionConfig(
-            company_name_zh=config.company_name_zh,
-            listing_type=config.listing_type,
-            industry_code=config.industry_code,
-            industry_description=config.industry_description,
-            max_chunks_per_section=config.max_chunks_per_section,
-        ),
-    )
-    extraction_result = await extractor.extract(chunks_by_section)
-    timings["extract"] = time.time() - t0
-    log(
-        f"      routed={extraction_result.sections_routed} "
-        f"ok={extraction_result.sections_succeeded} "
-        f"fail={extraction_result.sections_failed} "
-        f"cost=${extraction_result.total_cost_usd:.4f}"
-    )
+    if cached_extraction is not None:
+        # Use cached extraction — skip parse/chunk/extract
+        extraction = cached_extraction
+    else:
+        # --- Step 1: parse ------------------------------------------------
+        log(f"[1/5] Parsing PDF ({config.pdf_path.name}) ...")
+        t0 = time.time()
+        parsed_doc = await parse_prospectus(
+            config.pdf_path,
+            prospectus_id=config.prospectus_id,
+            config=ParserConfig(
+                prefer_llamaparse=config.prefer_llamaparse,
+                max_pages=config.max_pages,
+            ),
+        )
+        timings["parse"] = time.time() - t0
+        log(
+            f"      backend={parsed_doc.backend} pages={parsed_doc.page_count} "
+            f"blocks={len(parsed_doc.blocks)} chars={len(parsed_doc.full_text):,}"
+        )
+
+        # --- Step 2: chunk ------------------------------------------------
+        log("[2/5] Chunking ...")
+        t0 = time.time()
+        chunks = chunk_document(
+            parsed_doc,
+            config=ChunkConfig(
+                target_chars=config.chunk_target_chars,
+                max_chars=config.chunk_max_chars,
+            ),
+        )
+        timings["chunk"] = time.time() - t0
+        section_counts: Counter[str | None] = Counter(c.section for c in chunks)
+        log(f"      total={len(chunks)} sections={dict(section_counts)}")
+
+        # Persist chunks to Qdrant (non-blocking to pipeline)
+        if config.persist_to_qdrant and chunks:
+            log("      [persist] Upserting chunks to Qdrant ...")
+            t0 = time.time()
+            qdrant_count = await _persist_chunks_to_qdrant(config, chunks)
+            timings["qdrant_upsert"] = time.time() - t0
+            log(f"      [persist] {qdrant_count} vectors upserted")
+
+        # --- Step 3: extract ----------------------------------------------
+        log("[3/5] LLM extraction ...")
+        t0 = time.time()
+        chunks_by_section = _group_chunks_by_section(chunks)
+        extractor = ProspectusExtractor(
+            llm_client,
+            config.prospectus_id,
+            config=ExtractionConfig(
+                company_name_zh=config.company_name_zh,
+                listing_type=config.listing_type,
+                industry_code=config.industry_code,
+                industry_description=config.industry_description,
+                max_chunks_per_section=config.max_chunks_per_section,
+            ),
+        )
+        extraction_result = await extractor.extract(chunks_by_section)
+        timings["extract"] = time.time() - t0
+        log(
+            f"      routed={extraction_result.sections_routed} "
+            f"ok={extraction_result.sections_succeeded} "
+            f"fail={extraction_result.sections_failed} "
+            f"cost=${extraction_result.total_cost_usd:.4f}"
+        )
+        extraction = extraction_result.extraction
+
+        # Persist extraction to PG
+        if config.persist_to_pg and parsed_doc is not None:
+            log("      [persist] Saving extraction to PostgreSQL ...")
+            t0 = time.time()
+            await _persist_extraction_to_pg(config, extraction_result, parsed_doc)
+            timings["pg_persist"] = time.time() - t0
+            log("      [persist] Extraction saved")
 
     # --- Step 4: graph ----------------------------------------------------
     log("[4/5] LangGraph (7 agents + debate + synthesizer + snapshot) ...")
     t0 = time.time()
-    set_registry(InMemoryPredictionRegistry())
+    if config.persist_to_pg:
+        set_registry(PGPredictionRegistry())
+    else:
+        set_registry(InMemoryPredictionRegistry())
     initial_state = {
         "ipo_id": config.ipo_id,
         "prospectus_id": config.prospectus_id,
         "as_of_date": market_data.as_of_date,
-        "extraction": extraction_result.extraction,
+        "extraction": extraction,
         "extras": WorkflowExtras(),
         "agent_outputs": {},
         "runtime_meta": {"started_at": time.time()},

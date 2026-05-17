@@ -120,6 +120,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="MarketData regime score (default: 0.3, mildly positive)",
     )
     p.add_argument(
+        "--persist",
+        action="store_true",
+        help="Enable full persistence: extraction→PG, chunks→Qdrant, snapshot→PG",
+    )
+    p.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Force re-extraction even if cached extraction exists in PG",
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the resolved plan and exit; no PDF parse, no LLM call",
@@ -146,6 +156,9 @@ def _build_config(args: argparse.Namespace) -> PipelineConfig:
         industry_description=args.industry_desc,
         max_pages=args.max_pages,
         max_chunks_per_section=args.max_chunks_per_section,
+        persist_to_pg=args.persist,
+        persist_to_qdrant=args.persist,
+        use_cached_extraction=not getattr(args, "no_cache", False),
         write_report=not args.no_report,
         output_dir=args.out_dir,
     )
@@ -163,6 +176,9 @@ def _print_plan(config: PipelineConfig, market_data: MarketData) -> None:
     print(f"  Industry:         {config.industry_code} ({config.industry_description})")
     print(f"  Max pages:        {config.max_pages}")
     print(f"  Max chunks/sec:   {config.max_chunks_per_section}")
+    print(f"  Persist to PG:    {config.persist_to_pg}")
+    print(f"  Persist to Qdrant: {config.persist_to_qdrant}")
+    print(f"  Use cache:        {config.use_cached_extraction}")
     print(f"  Write report:     {config.write_report}")
     print(f"  Output dir:       {config.output_dir or '<default outputs/>'}")
     print("  ---")
