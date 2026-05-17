@@ -70,7 +70,9 @@ def test_settings_prod_requires_hitl_enabled(monkeypatch: pytest.MonkeyPatch) ->
     """
     monkeypatch.setenv("HK_IPO__ENVIRONMENT", "prod")
     # Default enable_hitl is False; do not override it.
-    monkeypatch.setenv("HK_IPO__AUTH__JWT_SECRET", "prod-secret-min-32-chars-long-enough-1")  # avoid R2-7
+    monkeypatch.setenv(
+        "HK_IPO__AUTH__JWT_SECRET", "prod-secret-min-32-chars-long-enough-1"
+    )  # avoid R2-7
     with pytest.raises(ConfigurationError, match="HITL must be enabled in production"):
         Settings()
 
@@ -118,10 +120,7 @@ def test_settings_prod_accepts_non_default_jwt_secret(monkeypatch: pytest.Monkey
     monkeypatch.setenv("HK_IPO__ORCHESTRATOR__ENABLE_HITL", "true")
     monkeypatch.setenv("HK_IPO__AUTH__JWT_SECRET", "a-real-prod-secret-not-the-default-one-12345")
     s = Settings()
-    assert (
-        s.auth.jwt_secret.get_secret_value()
-        != "change-me-min-32-chars-long-secret-here"
-    )
+    assert s.auth.jwt_secret.get_secret_value() != "change-me-min-32-chars-long-secret-here"
 
 
 def test_settings_production_alias_also_triggers_guards(monkeypatch: pytest.MonkeyPatch) -> None:

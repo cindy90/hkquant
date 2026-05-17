@@ -61,9 +61,7 @@ def test_alerts_empty(client: TestClient, admin_headers) -> None:
 
 
 @pytest.mark.asyncio
-async def test_audit_log_records_authenticated_user_id(
-    client: TestClient, admin_headers
-) -> None:
+async def test_audit_log_records_authenticated_user_id(client: TestClient, admin_headers) -> None:
     """R2-6 — write requests through audit middleware must capture user_id.
 
     Pre-fix ``audit_middleware.dispatch`` read ``request.state.current_user``

@@ -139,9 +139,7 @@ class InMemoryPredictionRegistry:
             self._reviews.setdefault(snapshot_id, []).append(review)
         return uuid4()
 
-    async def update_snapshot(
-        self, snapshot_id: UUID, snapshot: PredictionSnapshot
-    ) -> None:
+    async def update_snapshot(self, snapshot_id: UUID, snapshot: PredictionSnapshot) -> None:
         """R2-3 — explicit refusal. Snapshots are immutable by design."""
         raise NotImplementedError(_IMMUTABLE_REASON)
 
@@ -251,9 +249,7 @@ class PGPredictionRegistry:
             await session.commit()
         return review_id
 
-    async def update_snapshot(
-        self, snapshot_id: UUID, snapshot: PredictionSnapshot
-    ) -> None:
+    async def update_snapshot(self, snapshot_id: UUID, snapshot: PredictionSnapshot) -> None:
         """R2-3 — explicit refusal at the application layer.
 
         The DB ``snapshot_no_update`` trigger is the physical defence; this
