@@ -37,13 +37,39 @@ SECTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^(摘要|概要|SUMMARY)\s*$", re.IGNORECASE), "summary"),
     (re.compile(r"^(风险因素|風險因素|RISK FACTORS?)\s*$", re.IGNORECASE), "risk_factors"),
     (re.compile(r"^(业务|業務|BUSINESS)\s*$", re.IGNORECASE), "business"),
-    (re.compile(r"^(财务资料|財務資料|财务报表|財務報表|FINANCIAL INFORMATION)\s*", re.IGNORECASE), "financials"),
+    (
+        re.compile(
+            r"^(财务资料|財務資料|财务报表|財務報表|FINANCIAL INFORMATION)\s*", re.IGNORECASE
+        ),
+        "financials",
+    ),
     (re.compile(r"^(管理|管理層|MANAGEMENT)\s*$", re.IGNORECASE), "management"),
-    (re.compile(r"^(主要股东|主要股東|股本|股本及購股權|SUBSTANTIAL SHAREHOLDERS?)\s*", re.IGNORECASE), "shareholders"),
-    (re.compile(r"^(基石投资者|基石投資者|CORNERSTONE INVESTORS?)\s*", re.IGNORECASE), "cornerstone"),
-    (re.compile(r"^(未来计划|未來計劃|所得款項用途|FUTURE PLANS AND USE OF PROCEEDS)\s*", re.IGNORECASE), "use_of_proceeds"),
-    (re.compile(r"^(發售結構|发售结构|STRUCTURE OF THE .*(OFFERING|PLACEMENT))\s*", re.IGNORECASE), "use_of_proceeds"),
-    (re.compile(r"^(中国监管|中國監管|监管概要|監管概要|REGULATORY OVERVIEW)\s*", re.IGNORECASE), "regulatory"),
+    (
+        re.compile(
+            r"^(主要股东|主要股東|股本|股本及購股權|SUBSTANTIAL SHAREHOLDERS?)\s*", re.IGNORECASE
+        ),
+        "shareholders",
+    ),
+    (
+        re.compile(r"^(基石投资者|基石投資者|CORNERSTONE INVESTORS?)\s*", re.IGNORECASE),
+        "cornerstone",
+    ),
+    (
+        re.compile(
+            r"^(未来计划|未來計劃|所得款項用途|FUTURE PLANS AND USE OF PROCEEDS)\s*", re.IGNORECASE
+        ),
+        "use_of_proceeds",
+    ),
+    (
+        re.compile(
+            r"^(發售結構|发售结构|STRUCTURE OF THE .*(OFFERING|PLACEMENT))\s*", re.IGNORECASE
+        ),
+        "use_of_proceeds",
+    ),
+    (
+        re.compile(r"^(中国监管|中國監管|监管概要|監管概要|REGULATORY OVERVIEW)\s*", re.IGNORECASE),
+        "regulatory",
+    ),
     (re.compile(r"^(附录|附錄|附件|APPENDIX)\s*", re.IGNORECASE), "appendix"),
     (re.compile(r"^(歷史及發展|历史及发展|HISTORY AND DEVELOPMENT)\s*", re.IGNORECASE), "business"),
     (re.compile(r"^(行業概覽|行业概览|INDUSTRY OVERVIEW)\s*", re.IGNORECASE), "business"),
@@ -138,9 +164,7 @@ def chunk_document(
         section = first.section
         chunks.append(
             Chunk(
-                chunk_id=_make_chunk_id(
-                    document.prospectus_id, first.char_offset, len(text)
-                ),
+                chunk_id=_make_chunk_id(document.prospectus_id, first.char_offset, len(text)),
                 prospectus_id=document.prospectus_id,
                 page=first.page,
                 section=section,
@@ -164,9 +188,7 @@ def chunk_document(
             flush()
             chunks.append(
                 Chunk(
-                    chunk_id=_make_chunk_id(
-                        document.prospectus_id, block.char_offset, block_len
-                    ),
+                    chunk_id=_make_chunk_id(document.prospectus_id, block.char_offset, block_len),
                     prospectus_id=document.prospectus_id,
                     page=block.page,
                     section=block.section,
@@ -178,11 +200,7 @@ def chunk_document(
             continue
 
         # Flush on section boundary if the buffer has accumulated enough.
-        if (
-            buffer
-            and block.section != buffer[-1].section
-            and buffer_len >= cfg.min_chars
-        ):
+        if buffer and block.section != buffer[-1].section and buffer_len >= cfg.min_chars:
             flush()
 
         # Flush when approaching target.

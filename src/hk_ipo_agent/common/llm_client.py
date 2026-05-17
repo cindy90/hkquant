@@ -21,11 +21,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, TypeVar
 
-from openai import AsyncOpenAI
 from openai import (
     APIConnectionError,
     APIStatusError,
     APITimeoutError,
+    AsyncOpenAI,
     RateLimitError,
 )
 from pydantic import BaseModel, ValidationError
@@ -112,9 +112,7 @@ class CostLog:
         return sum((r.cost_usd for r in self.records), Decimal("0"))
 
     def total_for_agent(self, agent_role: str) -> Decimal:
-        return sum(
-            (r.cost_usd for r in self.records if r.agent_role == agent_role), Decimal("0")
-        )
+        return sum((r.cost_usd for r in self.records if r.agent_role == agent_role), Decimal("0"))
 
 
 @dataclass
@@ -181,19 +179,13 @@ class LLMClient:
         if not resolved_key:
             raise LLMError("KIMI_API_KEY not configured")
 
-        resolved_url = (
-            base_url
-            or os.environ.get("KIMI_URL")
-            or settings.llm.kimi_url
-        )
+        resolved_url = base_url or os.environ.get("KIMI_URL") or settings.llm.kimi_url
 
         self._client = AsyncOpenAI(api_key=resolved_key, base_url=resolved_url)
         self.timeout_seconds = timeout_seconds or settings.llm.timeout_seconds
         self.max_retries = max_retries or settings.llm.max_retries
         self.cost_log = cost_log or CostLog()
-        self.daily_budget_usd = daily_budget_usd or Decimal(
-            str(settings.llm.cost_daily_budget_usd)
-        )
+        self.daily_budget_usd = daily_budget_usd or Decimal(str(settings.llm.cost_daily_budget_usd))
 
     async def acomplete(
         self,
@@ -313,9 +305,7 @@ class LLMClient:
         retry = AsyncRetrying(
             stop=stop_after_attempt(self.max_retries),
             wait=wait_exponential(multiplier=1, min=1, max=20),
-            retry=retry_if_exception_type(
-                (RateLimitError, APITimeoutError, APIConnectionError)
-            ),
+            retry=retry_if_exception_type((RateLimitError, APITimeoutError, APIConnectionError)),
             reraise=False,  # raise RetryError so caller can translate
         )
 
@@ -334,9 +324,7 @@ class LLMClient:
                     raise  # 429 — handled by retry policy
                 except APIStatusError as exc:
                     # Other 4xx / 5xx — do not retry; raise as plain LLMError
-                    raise LLMError(
-                        f"KIMI API status {exc.status_code}: {exc.message}"
-                    ) from exc
+                    raise LLMError(f"KIMI API status {exc.status_code}: {exc.message}") from exc
         raise LLMError("Retry loop exited without result")  # pragma: no cover
 
     def _enforce_daily_budget(self) -> None:

@@ -36,9 +36,7 @@ class IPOEvent(UUIDMixin, TimestampMixin, Base):
     listing_type: Mapped[str | None] = mapped_column(String(20))  # enums.ListingType value
     industry_code: Mapped[str | None] = mapped_column(String(120))
 
-    sponsor_ids: Mapped[list[uuid.UUID] | None] = mapped_column(
-        ARRAY(PgUUID(as_uuid=True))
-    )
+    sponsor_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(PgUUID(as_uuid=True)))
 
     a1_filing_date: Mapped[date | None] = mapped_column(Date)
     hearing_date: Mapped[date | None] = mapped_column(Date)

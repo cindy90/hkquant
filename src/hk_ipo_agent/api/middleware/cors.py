@@ -18,9 +18,7 @@ def install_cors(app: FastAPI) -> None:
     settings = get_settings()
     origins = list(settings.api.cors_origins or [])
     if "*" in origins and settings.environment.lower() == "prod":
-        raise RuntimeError(
-            "CORS origin '*' is not allowed in production (CLAUDE.md v1.2.1)"
-        )
+        raise RuntimeError("CORS origin '*' is not allowed in production (CLAUDE.md v1.2.1)")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,

@@ -27,7 +27,7 @@ def _fresh_async_engine() -> Iterator[None]:
 
     Same pattern as test_reviews_proposals_drift.py.
     """
-    from hk_ipo_agent.data.database import (  # noqa: PLC0415
+    from hk_ipo_agent.data.database import (
         async_session_factory,
         get_engine,
     )
@@ -63,7 +63,9 @@ pg_required = pytest.mark.skipif(
 
 def _sync_dsn() -> str:
     return get_settings().database.url.replace(
-        "postgresql+asyncpg://", "postgresql://", 1,
+        "postgresql+asyncpg://",
+        "postgresql://",
+        1,
     )
 
 
@@ -110,12 +112,12 @@ def _seed_backtest_run(
                 '"regulatory_regime": "pre_new_pricing"}'
             )
             valuation = (
-                '{"decision_score": ' + str(0.5 + i * 0.1) + ', '
+                '{"decision_score": ' + str(0.5 + i * 0.1) + ", "
                 '"regime_score": 0.1, "regime_pass": true}'
             )
             decision = (
                 '{"decision": "BACKTEST_ONLY", "confidence": 0.0, '
-                '"realized_returns": {"5d": ' + str(0.05 + i * 0.01) + '}}'
+                '"realized_returns": {"5d": ' + str(0.05 + i * 0.01) + "}}"
             )
             cur.execute(
                 "INSERT INTO prediction_snapshots "
@@ -127,9 +129,15 @@ def _seed_backtest_run(
                 " '{}'::jsonb, %s::jsonb, '0.0.1', '{}'::jsonb, %s::jsonb, "
                 " 0.0, 0.0, NOW())",
                 (
-                    snap_id, ipo_id, date(2024, 6, 13),
-                    f"backtest:{str(run_id)[:8]}", "0" * 64,
-                    input_data, valuation, decision, config_snapshot,
+                    snap_id,
+                    ipo_id,
+                    date(2024, 6, 13),
+                    f"backtest:{str(run_id)[:8]}",
+                    "0" * 64,
+                    input_data,
+                    valuation,
+                    decision,
+                    config_snapshot,
                 ),
             )
         conn.commit()

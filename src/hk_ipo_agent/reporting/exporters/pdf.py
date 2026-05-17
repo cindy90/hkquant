@@ -36,7 +36,7 @@ _HTML_TEMPLATE = """<!doctype html>
 def _markdown_to_html(md: str) -> str:
     """Light markdown → HTML conversion sufficient for the memo template."""
     try:
-        import markdown as md_lib  # noqa: PLC0415
+        import markdown as md_lib
 
         return md_lib.markdown(  # type: ignore[no-any-return]
             md,
@@ -54,13 +54,11 @@ def export_pdf(snapshot: PredictionSnapshot) -> bytes:
     """
     md = build_memo_markdown(snapshot)
     body_html = _markdown_to_html(md)
-    company = snapshot.input_data_snapshot.get("extraction", {}).get(
-        "company_name_zh", "(unknown)"
-    )
+    company = snapshot.input_data_snapshot.get("extraction", {}).get("company_name_zh", "(unknown)")
     html = _HTML_TEMPLATE.format(company=company, body=body_html)
 
     try:
-        from weasyprint import HTML  # noqa: PLC0415
+        from weasyprint import HTML
 
         weasy_html: Any = HTML(string=html)
         pdf: bytes | None = weasy_html.write_pdf()

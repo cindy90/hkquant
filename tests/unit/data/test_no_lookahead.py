@@ -28,9 +28,7 @@ class _Snap(TypedDict, total=False):
     revenue_rmb: Decimal
 
 
-def visible_financials_at(
-    snapshots: list[_Snap], stock_code: str, as_of: date
-) -> list[_Snap]:
+def visible_financials_at(snapshots: list[_Snap], stock_code: str, as_of: date) -> list[_Snap]:
     """Reference implementation of the as-of filter (NACS rule preserved).
 
     For NACS-style financials with only fiscal_year (no period_end), the rule

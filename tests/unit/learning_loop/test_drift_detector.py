@@ -53,7 +53,7 @@ def test_cusum_k_parameter_changes_sensitivity() -> None:
 
 def test_psi_zero_for_same_distribution() -> None:
     """Identical distributions → PSI ≈ 0."""
-    import random  # noqa: PLC0415
+    import random
 
     rng = random.Random(42)
     data = [rng.gauss(0, 1) for _ in range(100)]
@@ -63,7 +63,7 @@ def test_psi_zero_for_same_distribution() -> None:
 
 def test_psi_high_for_shifted_distribution() -> None:
     """Mean-shifted distribution → PSI > 0.2."""
-    import random  # noqa: PLC0415
+    import random
 
     rng = random.Random(42)
     expected = [rng.gauss(0, 1) for _ in range(200)]
@@ -132,13 +132,11 @@ def test_detector_fires_bear_miss_when_most_negatives_unflagged() -> None:
     """80% of negative outcomes NOT flagged by Bear → fires."""
     detector = DriftDetector(DriftDetectorConfig(window_min_n=10, bear_miss_rate=0.4))
     # 10 negatives, 8 missed by Bear (bear_flag=False)
-    samples = [
-        _sample(negative_realized=True, bear_flag=False) for _ in range(8)
-    ] + [
-        _sample(negative_realized=True, bear_flag=True) for _ in range(2)
-    ] + [
-        _sample(negative_realized=False, bear_flag=True) for _ in range(5)
-    ]
+    samples = (
+        [_sample(negative_realized=True, bear_flag=False) for _ in range(8)]
+        + [_sample(negative_realized=True, bear_flag=True) for _ in range(2)]
+        + [_sample(negative_realized=False, bear_flag=True) for _ in range(5)]
+    )
     signals = detector.detect(samples)
     bear_signals = [s for s in signals if s.signal_type == DriftSignalType.BEAR_MISS_RATE_HIGH]
     assert len(bear_signals) == 1
@@ -147,9 +145,7 @@ def test_detector_fires_bear_miss_when_most_negatives_unflagged() -> None:
 
 def test_detector_fires_agent_calibration_when_high_scores_miss() -> None:
     """Agent that gives score=85 but misses 5/10 times → fires."""
-    detector = DriftDetector(
-        DriftDetectorConfig(window_min_n=10, agent_calibration_drop=0.15)
-    )
+    detector = DriftDetector(DriftDetectorConfig(window_min_n=10, agent_calibration_drop=0.15))
     samples = [
         _sample(
             agent_scores={"fundamental": 85.0},
@@ -158,21 +154,17 @@ def test_detector_fires_agent_calibration_when_high_scores_miss() -> None:
         for i in range(20)
     ]
     signals = detector.detect(samples)
-    calib_signals = [
-        s for s in signals if s.signal_type == DriftSignalType.AGENT_CALIBRATION_DRIFT
-    ]
+    calib_signals = [s for s in signals if s.signal_type == DriftSignalType.AGENT_CALIBRATION_DRIFT]
     assert len(calib_signals) >= 1
     assert calib_signals[0].affected_dimensions == {"agent_role": "fundamental"}
 
 
 def test_detector_fires_valuation_bias_on_skewed_slice() -> None:
     """One listing_type with systematically biased predictions → fires PSI."""
-    import random  # noqa: PLC0415
+    import random
 
     rng = random.Random(42)
-    detector = DriftDetector(
-        DriftDetectorConfig(window_min_n=10, psi_threshold=0.15)
-    )
+    detector = DriftDetector(DriftDetectorConfig(window_min_n=10, psi_threshold=0.15))
     # MB-TECH samples have well-calibrated predictions
     mb_tech = [
         _sample(
@@ -192,19 +184,15 @@ def test_detector_fires_valuation_bias_on_skewed_slice() -> None:
         for _ in range(20)
     ]
     signals = detector.detect(mb_tech + biotech)
-    val_signals = [
-        s for s in signals if s.signal_type == DriftSignalType.VALUATION_BIAS
-    ]
+    val_signals = [s for s in signals if s.signal_type == DriftSignalType.VALUATION_BIAS]
     assert val_signals  # at least one PSI-flagged slice
 
 
 def test_detector_severity_critical_when_psi_doubles_threshold() -> None:
-    import random  # noqa: PLC0415
+    import random
 
     rng = random.Random(42)
-    detector = DriftDetector(
-        DriftDetectorConfig(window_min_n=10, psi_threshold=0.10)
-    )
+    detector = DriftDetector(DriftDetectorConfig(window_min_n=10, psi_threshold=0.10))
     mb_tech = [
         _sample(
             listing_type=ListingType.MAINBOARD_TECH,
@@ -222,7 +210,5 @@ def test_detector_severity_critical_when_psi_doubles_threshold() -> None:
         for _ in range(30)
     ]
     signals = detector.detect(mb_tech + biotech)
-    val_signals = [
-        s for s in signals if s.signal_type == DriftSignalType.VALUATION_BIAS
-    ]
+    val_signals = [s for s in signals if s.signal_type == DriftSignalType.VALUATION_BIAS]
     assert any(s.severity == AlertLevel.CRITICAL for s in val_signals)

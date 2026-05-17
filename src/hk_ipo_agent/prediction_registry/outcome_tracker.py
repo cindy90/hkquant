@@ -132,8 +132,10 @@ class OutcomeTracker:
         except Exception as exc:
             logger.warning(
                 "outcome_price_fetch_failed",
-                snapshot_id=str(snapshot_id), stock_code=stock_code,
-                checkpoint_day=checkpoint_day, error=str(exc),
+                snapshot_id=str(snapshot_id),
+                stock_code=stock_code,
+                checkpoint_day=checkpoint_day,
+                error=str(exc),
             )
             return TrackResult(outcome_id=None, skipped=True, reason=f"price_fetch_failed: {exc}")
 
@@ -148,13 +150,14 @@ class OutcomeTracker:
 
         # 2. Benchmark relative returns
         bm: BenchmarkReturns = await self._benchmarks.compute(
-            t0=listing_date, tn=target_date, industry_peers=industry_peers,
+            t0=listing_date,
+            tn=target_date,
+            industry_peers=industry_peers,
         )
         rel_hsi = (return_since_listing - bm.hsi) if bm.hsi is not None else None
         rel_hstech = (return_since_listing - bm.hstech) if bm.hstech is not None else None
         rel_industry = (
-            (return_since_listing - bm.industry_median)
-            if bm.industry_median is not None else None
+            (return_since_listing - bm.industry_median) if bm.industry_median is not None else None
         )
 
         # 3. Window events (best-effort)
@@ -162,21 +165,26 @@ class OutcomeTracker:
         if self._events is not None and ipo_id is not None:
             try:
                 events = await self._events.scan_events(
-                    ipo_id=ipo_id, stock_code=stock_code,
-                    window_start=listing_date, window_end=target_date,
+                    ipo_id=ipo_id,
+                    stock_code=stock_code,
+                    window_start=listing_date,
+                    window_end=target_date,
                 )
                 events_in_window = [e.model_dump(mode="json") for e in events]
                 await self._persist_events(ipo_id=ipo_id, events=events)
             except Exception as exc:
                 logger.warning(
                     "outcome_event_scan_failed",
-                    snapshot_id=str(snapshot_id), error=str(exc),
+                    snapshot_id=str(snapshot_id),
+                    error=str(exc),
                 )
 
         # 4. Decision-correctness vs predicted band
         snap = await self._registry.get_snapshot(snapshot_id)
         price_in_range = (
-            snap.decision.price_range_low <= Decimal(str(tn_close)) <= snap.decision.price_range_high
+            snap.decision.price_range_low
+            <= Decimal(str(tn_close))
+            <= snap.decision.price_range_high
         )
         decision_correct = self._is_decision_correct(snap, return_since_listing)
 
@@ -191,9 +199,7 @@ class OutcomeTracker:
             relative_return_hstech=rel_hstech,
             relative_return_industry=rel_industry,
             events_in_window=events_in_window or None,
-            earnings_released=any(
-                e.get("event_type") == "earnings" for e in events_in_window
-            ),
+            earnings_released=any(e.get("event_type") == "earnings" for e in events_in_window),
             price_in_predicted_range=price_in_range,
             decision_correct=decision_correct,
             recorded_at=datetime.now(UTC),
@@ -240,9 +246,7 @@ class OutcomeTracker:
         return Decimal(str(max_dd)).quantize(Decimal("0.000001"))
 
     @staticmethod
-    def _is_decision_correct(
-        snap: PredictionSnapshot, return_since_listing: Decimal
-    ) -> bool:
+    def _is_decision_correct(snap: PredictionSnapshot, return_since_listing: Decimal) -> bool:
         """Heuristic: PARTICIPATE/PARTIAL + up move OR SKIP + flat/down move."""
         d = snap.decision.decision.value
         positive = return_since_listing > Decimal("0.05")
@@ -269,8 +273,12 @@ class OutcomeTracker:
                 "severity": e.severity.value,
                 "description": e.description,
                 "source_url": e.source_url,
-                "price_impact_1d": Decimal(str(e.price_impact_1d)) if e.price_impact_1d is not None else None,
-                "price_impact_5d": Decimal(str(e.price_impact_5d)) if e.price_impact_5d is not None else None,
+                "price_impact_1d": Decimal(str(e.price_impact_1d))
+                if e.price_impact_1d is not None
+                else None,
+                "price_impact_5d": Decimal(str(e.price_impact_5d))
+                if e.price_impact_5d is not None
+                else None,
                 "detected_at": datetime.now(UTC),
             }
             for e in events

@@ -63,7 +63,9 @@ pg_required = pytest.mark.skipif(
 
 def _sync_dsn() -> str:
     return get_settings().database.url.replace(
-        "postgresql+asyncpg://", "postgresql://", 1,
+        "postgresql+asyncpg://",
+        "postgresql://",
+        1,
     )
 
 
@@ -74,8 +76,7 @@ def _fetch_quantumpharm_row() -> tuple[str, date, date] | None:
     """
     with psycopg.connect(_sync_dsn()) as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT id, pricing_date, listing_date FROM ipo_events "
-            "WHERE stock_code = %s LIMIT 1",
+            "SELECT id, pricing_date, listing_date FROM ipo_events WHERE stock_code = %s LIMIT 1",
             (QUANTUMPHARM_STOCK_CODE,),
         )
         row = cur.fetchone()
@@ -102,8 +103,7 @@ def test_quantumpharm_row_exists() -> None:
     """Phase 2 + 9a ETL should have populated 晶泰's row."""
     row = _fetch_quantumpharm_row()
     assert row is not None, (
-        "2228.HK row missing from ipo_events — re-run "
-        "scripts/migrate_sqlite_to_pg.py"
+        "2228.HK row missing from ipo_events — re-run scripts/migrate_sqlite_to_pg.py"
     )
     ipo_id, pricing_date, listing_date = row
     assert ipo_id is not None
@@ -145,7 +145,8 @@ async def test_provider_returns_pricing_on_pricing_date(sf) -> None:
 
     # as_of = pricing_date → pricing is now public.
     provider = AsOfDataProvider(
-        as_of_date=pricing_date, session_factory=sf,
+        as_of_date=pricing_date,
+        session_factory=sf,
     )
     pricing = await provider.get_ipo_pricing(ipo_id)
     assert pricing is not None
@@ -167,12 +168,12 @@ async def test_quantumpharm_walk_forward_with_v8lite(sf) -> None:
 
     # Load real inputs (1 IPO filtered by min_pricing_date).
     inputs_all = await load_backtest_inputs_from_pg(
-        sf, min_pricing_date=date(2024, 6, 1),
+        sf,
+        min_pricing_date=date(2024, 6, 1),
     )
     quantumpharm_inputs = [i for i in inputs_all if i.ipo_id == ipo_id]
     assert len(quantumpharm_inputs) == 1, (
-        f"Expected exactly 1 input for {QUANTUMPHARM_STOCK_CODE}, "
-        f"got {len(quantumpharm_inputs)}"
+        f"Expected exactly 1 input for {QUANTUMPHARM_STOCK_CODE}, got {len(quantumpharm_inputs)}"
     )
     sample_input = quantumpharm_inputs[0]
     assert sample_input.pricing_date == pricing_date
@@ -182,7 +183,9 @@ async def test_quantumpharm_walk_forward_with_v8lite(sf) -> None:
 
     # Run the walk-forward harness on this single sample.
     run = await run_walk_forward(
-        [sample_input], scorer=V8LiteScorer(), session_factory=sf,
+        [sample_input],
+        scorer=V8LiteScorer(),
+        session_factory=sf,
     )
     assert run.n_total == 1
     sample = run.samples[0]
@@ -202,11 +205,14 @@ async def test_quantumpharm_persistence_round_trip(sf) -> None:
     ipo_id, _pricing_date, _ = row
 
     inputs_all = await load_backtest_inputs_from_pg(
-        sf, min_pricing_date=date(2024, 6, 1),
+        sf,
+        min_pricing_date=date(2024, 6, 1),
     )
     quantumpharm_inputs = [i for i in inputs_all if i.ipo_id == ipo_id]
     run = await run_walk_forward(
-        quantumpharm_inputs, scorer=V8LiteScorer(), session_factory=sf,
+        quantumpharm_inputs,
+        scorer=V8LiteScorer(),
+        session_factory=sf,
     )
     rows_written = await persist_run_to_pg(run, sf)
     assert rows_written == 1

@@ -150,7 +150,9 @@ class BacktestScorer(Protocol):
     leak-prevention contract."""
 
     async def score(
-        self, provider: AsOfDataProvider, sample_input: BacktestInput,
+        self,
+        provider: AsOfDataProvider,
+        sample_input: BacktestInput,
     ) -> ScoreOutput: ...
 
 
@@ -210,12 +212,8 @@ class V8LiteScorer:
             if sample_input.listing_type is not None
             else 0.30
         )
-        cluster_bonus = min(
-            sample_input.cornerstone_count * self._cluster_unit, self._cluster_cap
-        )
-        regime_bonus = (
-            self._regime_pass if regime >= REGIME_GATE_THRESHOLD else self._regime_fail
-        )
+        cluster_bonus = min(sample_input.cornerstone_count * self._cluster_unit, self._cluster_cap)
+        regime_bonus = self._regime_pass if regime >= REGIME_GATE_THRESHOLD else self._regime_fail
         if regime < REGIME_GATE_THRESHOLD:
             notes.append(
                 f"regime_score={regime:.3f} < {REGIME_GATE_THRESHOLD}; "
@@ -272,7 +270,8 @@ async def run_walk_forward(
         as_of = sample_input.pricing_date - timedelta(days=1)
         try:
             provider = AsOfDataProvider(
-                as_of_date=as_of, session_factory=session_factory,
+                as_of_date=as_of,
+                session_factory=session_factory,
             )
         except LookAheadError as exc:
             logger.warning(
@@ -365,9 +364,9 @@ async def load_backtest_inputs_from_pg(
       day1/5/22/126/252 scalars present (we fall back to scalars when
       the JSONB column wasn't backfilled)
     """
-    from sqlalchemy import select as sa_select  # noqa: PLC0415
+    from sqlalchemy import select as sa_select
 
-    from ..data.models import IPOEvent, IPOPostMarket  # noqa: PLC0415
+    from ..data.models import IPOEvent, IPOPostMarket
 
     inputs: list[BacktestInput] = []
     async with session_factory() as s:
@@ -377,9 +376,7 @@ async def load_backtest_inputs_from_pg(
         events = list((await s.execute(stmt)).scalars().all())
         for ev in events:
             pm = (
-                await s.execute(
-                    sa_select(IPOPostMarket).where(IPOPostMarket.ipo_id == ev.id)
-                )
+                await s.execute(sa_select(IPOPostMarket).where(IPOPostMarket.ipo_id == ev.id))
             ).scalar_one_or_none()
             realized = _coerce_returns(pm, horizons) if pm is not None else {}
             if not realized:
@@ -399,7 +396,8 @@ async def load_backtest_inputs_from_pg(
 
 
 def _coerce_returns(
-    pm: Any, horizons: tuple[str, ...],
+    pm: Any,
+    horizons: tuple[str, ...],
 ) -> dict[str, float]:
     """Pull returns out of ``ipo_postmarket`` in either format."""
     out: dict[str, float] = {}
@@ -474,10 +472,10 @@ async def persist_run_to_pg(
 
     Returns the count of rows written.
     """
-    from datetime import UTC as _UTC  # noqa: PLC0415
-    from datetime import datetime as _dt  # noqa: PLC0415
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
 
-    from ..data.models import PredictionSnapshotRow  # noqa: PLC0415
+    from ..data.models import PredictionSnapshotRow
 
     short_run = str(run.run_id)[:8]
     rows_written = 0
@@ -490,9 +488,7 @@ async def persist_run_to_pg(
                 input_data_hash="backtest-no-hash",
                 input_data_snapshot={
                     "stock_code": sample.stock_code,
-                    "listing_type": (
-                        sample.listing_type.value if sample.listing_type else None
-                    ),
+                    "listing_type": (sample.listing_type.value if sample.listing_type else None),
                     "pricing_date": sample.pricing_date.isoformat(),
                     "regulatory_regime": sample.regulatory_regime.value,
                 },
@@ -506,20 +502,19 @@ async def persist_run_to_pg(
                 decision={
                     "decision": _BACKTEST_DECISION_MARKER,
                     "confidence": 0.0,
-                    "rationale": (
-                        f"backtest sample (run_id={short_run}); "
-                        "no live agent debate"
-                    ),
+                    "rationale": (f"backtest sample (run_id={short_run}); no live agent debate"),
                     "realized_returns": sample.realized_returns,
                 },
                 system_version=system_version,
                 model_versions={"scorer": "V8LiteScorer"},
                 config_snapshot={
                     "backtest_run_id": str(run.run_id),
-                    "horizons": list(run.metrics_by_label.get(
-                        "main_board",
-                        compute_report(label="main_board", per_horizon={}),
-                    ).horizons.keys()),
+                    "horizons": list(
+                        run.metrics_by_label.get(
+                            "main_board",
+                            compute_report(label="main_board", per_horizon={}),
+                        ).horizons.keys()
+                    ),
                     "scorer": "V8LiteScorer",
                     **run.config_snapshot,
                 },

@@ -92,7 +92,8 @@ class AlertRouter:
         if await self._is_duplicate(level, category, related_ipo_id):
             logger.debug(
                 "alert_suppressed_dedup",
-                level=level.value, category=category,
+                level=level.value,
+                category=category,
                 related_ipo_id=str(related_ipo_id) if related_ipo_id else None,
             )
             return None
@@ -161,15 +162,18 @@ class AlertRouter:
         if not channels:
             logger.info(
                 "alert_routed_log_only",
-                level=alert.level.value, category=alert.category,
+                level=alert.level.value,
+                category=alert.category,
                 message=alert.message[:200],
             )
             return
         for channel in channels:
             logger.info(
                 "alert_routed",
-                level=alert.level.value, channel=channel,
-                category=alert.category, message=alert.message[:200],
+                level=alert.level.value,
+                channel=channel,
+                category=alert.category,
+                message=alert.message[:200],
                 actionable_info=alert.actionable_info[:200],
             )
 

@@ -48,9 +48,7 @@ def test_terminal_states_have_no_outgoing() -> None:
 def test_no_backwards_transitions() -> None:
     """State machine must never allow LISTED -> PRE_LISTING etc."""
     assert IPOLifecycleStateType.PRE_LISTING not in VALID_TRANSITIONS[IPOLifecycleStateType.LISTED]
-    assert (
-        IPOLifecycleStateType.PRE_LISTING not in VALID_TRANSITIONS[IPOLifecycleStateType.PRICING]
-    )
+    assert IPOLifecycleStateType.PRE_LISTING not in VALID_TRANSITIONS[IPOLifecycleStateType.PRICING]
     assert IPOLifecycleStateType.PRICING not in VALID_TRANSITIONS[IPOLifecycleStateType.LISTED]
 
 

@@ -48,10 +48,18 @@ def _make_run() -> BacktestRun:
         n_total=5,
         horizons={
             "5d": SliceMetrics(
-                horizon="5d", n=5, ic=0.12, ls_spread=0.03, ls_t_stat=0.5,
+                horizon="5d",
+                n=5,
+                ic=0.12,
+                ls_spread=0.03,
+                ls_t_stat=0.5,
             ),
             "60d": SliceMetrics(
-                horizon="60d", n=5, ic=0.18, ls_spread=0.05, ls_t_stat=1.1,
+                horizon="60d",
+                n=5,
+                ic=0.18,
+                ls_spread=0.05,
+                ls_t_stat=1.1,
             ),
         },
     )
@@ -60,7 +68,11 @@ def _make_run() -> BacktestRun:
         n_total=5,
         horizons={
             "60d": SliceMetrics(
-                horizon="60d", n=5, ic=0.20, ls_spread=0.06, ls_t_stat=1.3,
+                horizon="60d",
+                n=5,
+                ic=0.20,
+                ls_spread=0.06,
+                ls_t_stat=1.3,
             ),
         },
     )
@@ -70,7 +82,8 @@ def _make_run() -> BacktestRun:
         finished_at=datetime(2026, 5, 17, 10, 5, 0, tzinfo=UTC),
         samples=tuple(samples),
         metrics_by_label={
-            "main_board": metrics_main, "regime_pass": metrics_regime,
+            "main_board": metrics_main,
+            "regime_pass": metrics_regime,
         },
         config_snapshot={"scorer": "V8LiteScorer", "horizons": ["5d", "60d"]},
     )
@@ -140,7 +153,7 @@ def test_write_report_creates_missing_directories(tmp_path: Path) -> None:
 
 
 def test_write_report_with_calibration(tmp_path: Path) -> None:
-    from hk_ipo_agent.backtest.calibration import (  # noqa: PLC0415
+    from hk_ipo_agent.backtest.calibration import (
         CalibrationResult,
         SliceCalibration,
     )

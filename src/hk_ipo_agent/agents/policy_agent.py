@@ -71,7 +71,9 @@ async def compute_regime_score(ctx: AgentContext) -> _RegimeComputation:
 
     pricing = ctx.extras.pricing_date or ctx.market_data.as_of_date
     if not isinstance(pricing, date):
-        return _RegimeComputation(score=None, sample_size=0, window_start=None, window_end=None, raw_returns=[])
+        return _RegimeComputation(
+            score=None, sample_size=0, window_start=None, window_end=None, raw_returns=[]
+        )
 
     window_start = pricing - timedelta(days=120)
     window_end = pricing - timedelta(days=30)
@@ -89,9 +91,7 @@ async def compute_regime_score(ctx: AgentContext) -> _RegimeComputation:
         history_raw = await ctx.ifind_tool.ipo_history(
             as_of_date=window_end, start=window_start, pool_filter="AHK"
         )
-        history: list[dict[str, Any]] = (
-            history_raw if isinstance(history_raw, list) else []
-        )
+        history: list[dict[str, Any]] = history_raw if isinstance(history_raw, list) else []
     except Exception:
         return _RegimeComputation(
             score=None,
@@ -220,11 +220,7 @@ class PolicyAgent(BaseAgent):
             scores=score_card.score_dict(),
             overall_score=max(0.0, min(100.0, score_card.overall())),
             key_findings=findings,
-            uncertainty_flags=(
-                ["regime_score_unavailable"]
-                if regime.score is None
-                else []
-            ),
+            uncertainty_flags=(["regime_score_unavailable"] if regime.score is None else []),
             data_sources_used=[
                 DataSource(source="ifind", detail="get_ipo_history (regime window)"),
                 DataSource(source="prospectus", detail=ctx.extraction.prospectus_id),

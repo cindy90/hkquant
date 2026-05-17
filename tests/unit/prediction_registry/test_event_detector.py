@@ -68,8 +68,10 @@ async def test_scan_detects_single_day_anomaly(llm_mock) -> None:
         llm=llm_mock,
     )
     events = await detector.scan_events(
-        ipo_id=uuid4(), stock_code="TEST.HK",
-        window_start=date(2026, 2, 1), window_end=date(2026, 2, 2),
+        ipo_id=uuid4(),
+        stock_code="TEST.HK",
+        window_start=date(2026, 2, 1),
+        window_end=date(2026, 2, 2),
     )
     assert len(events) == 1
     assert events[0].event_type == PostIPOEventType.OTHER
@@ -89,8 +91,10 @@ async def test_scan_ignores_below_threshold_moves(llm_mock) -> None:
         llm=llm_mock,
     )
     events = await detector.scan_events(
-        ipo_id=uuid4(), stock_code="TEST.HK",
-        window_start=date(2026, 2, 1), window_end=date(2026, 2, 2),
+        ipo_id=uuid4(),
+        stock_code="TEST.HK",
+        window_start=date(2026, 2, 1),
+        window_end=date(2026, 2, 2),
     )
     assert events == []
 
@@ -100,13 +104,22 @@ async def test_scan_classifies_announcement_via_llm(llm_mock) -> None:
     detector = EventDetector(
         ifind=_StubPrices([]),
         announcements=_StubAnnouncements(
-            [{"filing_date": "2026-03-15", "doc_type": "10-K", "title": "年度业绩公告", "url": "https://x"}]
+            [
+                {
+                    "filing_date": "2026-03-15",
+                    "doc_type": "10-K",
+                    "title": "年度业绩公告",
+                    "url": "https://x",
+                }
+            ]
         ),
         llm=llm_mock,
     )
     events = await detector.scan_events(
-        ipo_id=uuid4(), stock_code="TEST.HK",
-        window_start=date(2026, 3, 1), window_end=date(2026, 3, 31),
+        ipo_id=uuid4(),
+        stock_code="TEST.HK",
+        window_start=date(2026, 3, 1),
+        window_end=date(2026, 3, 31),
     )
     assert len(events) == 1
     assert events[0].event_type == PostIPOEventType.EARNINGS
@@ -118,19 +131,23 @@ async def test_scan_dedupes_overlapping_events(llm_mock) -> None:
     """If an earnings announcement *and* a price spike land same day, keep one."""
     rows = [
         {"time": "2026-03-14", "thscode": "TEST.HK", "close": 100.0},
-        {"time": "2026-03-15", "thscode": "TEST.HK", "close": 200.0},  # +100% — would emit OTHER/CRITICAL
+        {
+            "time": "2026-03-15",
+            "thscode": "TEST.HK",
+            "close": 200.0,
+        },  # +100% — would emit OTHER/CRITICAL
     ]
     # LLM classifies as EARNINGS/MAJOR (different category) — both should survive.
     detector = EventDetector(
         ifind=_StubPrices(rows),
-        announcements=_StubAnnouncements(
-            [{"filing_date": "2026-03-15", "title": "年度业绩"}]
-        ),
+        announcements=_StubAnnouncements([{"filing_date": "2026-03-15", "title": "年度业绩"}]),
         llm=llm_mock,
     )
     events = await detector.scan_events(
-        ipo_id=uuid4(), stock_code="TEST.HK",
-        window_start=date(2026, 3, 14), window_end=date(2026, 3, 16),
+        ipo_id=uuid4(),
+        stock_code="TEST.HK",
+        window_start=date(2026, 3, 14),
+        window_end=date(2026, 3, 16),
     )
     # 1 earnings + 1 price anomaly = 2 distinct (event_type, severity) keys.
     assert len(events) == 2
@@ -154,8 +171,10 @@ async def test_scan_robust_to_announcement_failure(llm_mock) -> None:
         llm=llm_mock,
     )
     events = await detector.scan_events(
-        ipo_id=uuid4(), stock_code="TEST.HK",
-        window_start=date(2026, 2, 1), window_end=date(2026, 2, 2),
+        ipo_id=uuid4(),
+        stock_code="TEST.HK",
+        window_start=date(2026, 2, 1),
+        window_end=date(2026, 2, 2),
     )
     assert len(events) == 1
     assert events[0].event_type == PostIPOEventType.OTHER

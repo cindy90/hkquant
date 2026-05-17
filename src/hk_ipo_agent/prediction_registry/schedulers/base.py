@@ -53,11 +53,13 @@ class RunStats:
     def record_error(self, err: Exception, *, context: dict[str, Any] | None = None) -> None:
         self.errors_encountered += 1
         self.error_details = self.error_details or []
-        self.error_details.append({
-            "error_type": type(err).__name__,
-            "message": str(err),
-            "context": context or {},
-        })
+        self.error_details.append(
+            {
+                "error_type": type(err).__name__,
+                "message": str(err),
+                "context": context or {},
+            }
+        )
 
 
 @dataclass
@@ -110,9 +112,12 @@ class BaseScheduler(abc.ABC):
                     run_id=run_id,
                 )
                 return RunResult(
-                    run_id=run_id, scheduler_type=self.scheduler_type,
+                    run_id=run_id,
+                    scheduler_type=self.scheduler_type,
                     status=SchedulerStatus.FAILED,  # didn't actually run
-                    stats=RunStats(), started_at=started, completed_at=started,
+                    stats=RunStats(),
+                    started_at=started,
+                    completed_at=started,
                     locked=False,
                 )
 
@@ -133,9 +138,12 @@ class BaseScheduler(abc.ABC):
             completed = datetime.now(UTC)
             await self._write_run_complete(run_id, completed, stats, final_status)
             return RunResult(
-                run_id=run_id, scheduler_type=self.scheduler_type,
-                status=final_status, stats=stats,
-                started_at=started, completed_at=completed,
+                run_id=run_id,
+                scheduler_type=self.scheduler_type,
+                status=final_status,
+                stats=stats,
+                started_at=started,
+                completed_at=completed,
                 locked=True,
             )
 
@@ -152,7 +160,8 @@ class BaseScheduler(abc.ABC):
         logger.error(
             "scheduler_alert_default",
             scheduler_type=self.scheduler_type.value,
-            run_id=run_id, error=str(error),
+            run_id=run_id,
+            error=str(error),
         )
 
     # ------------------------------------------------------------------

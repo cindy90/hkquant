@@ -23,9 +23,7 @@ async def test_publish_to_subscribers() -> None:
     task = asyncio.create_task(sub())
     # Allow subscribe() to register
     await asyncio.sleep(0.01)
-    await bus.publish(
-        RealtimeEventType.SCHEDULER_STARTED, payload={"x": 1}
-    )
+    await bus.publish(RealtimeEventType.SCHEDULER_STARTED, payload={"x": 1})
     await asyncio.wait_for(task, timeout=1.0)
     assert len(received) == 1
     assert received[0].event_type == RealtimeEventType.SCHEDULER_STARTED

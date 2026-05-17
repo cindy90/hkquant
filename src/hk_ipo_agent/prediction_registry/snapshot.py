@@ -62,7 +62,9 @@ def compute_input_hash(
     Used both as ``PredictionSnapshot.input_data_hash`` and for re-read
     integrity verification.
     """
-    sorted_agents = {role: agent_outputs[role].model_dump(mode="json") for role in sorted(agent_outputs)}
+    sorted_agents = {
+        role: agent_outputs[role].model_dump(mode="json") for role in sorted(agent_outputs)
+    }
     payload = {
         "extraction": extraction.model_dump(mode="json"),
         "agent_outputs": sorted_agents,
@@ -126,9 +128,7 @@ def build_snapshot(
 def verify_snapshot(snapshot: PredictionSnapshot) -> None:
     """Recompute hash; raise ``SnapshotIntegrityError`` if mismatch."""
     recomputed = compute_input_hash(
-        extraction=ProspectusExtraction.model_validate(
-            snapshot.input_data_snapshot["extraction"]
-        ),
+        extraction=ProspectusExtraction.model_validate(snapshot.input_data_snapshot["extraction"]),
         agent_outputs=snapshot.agent_outputs,
         valuation=snapshot.valuation_output,
         debate=snapshot.debate_output,

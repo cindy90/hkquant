@@ -171,7 +171,8 @@ def _describe(d: Distribution) -> dict[str, Any]:
     """Compact dict representation of a distribution for key_assumptions."""
     cls = d.__class__.__name__
     fields = {
-        f: getattr(d, f) for f in d.__dataclass_fields__  # type: ignore[attr-defined]
+        f: getattr(d, f)
+        for f in d.__dataclass_fields__  # type: ignore[attr-defined]
     }
     return {"type": cls, **fields}
 

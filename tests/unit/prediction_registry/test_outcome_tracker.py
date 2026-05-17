@@ -36,9 +36,13 @@ from hk_ipo_agent.prediction_registry.snapshot import build_snapshot
 
 def _build_snapshot():
     dist = ValuationDistribution(
-        p10=Decimal("9"), p25=Decimal("9.5"), p50=Decimal("10"),
-        p75=Decimal("10.5"), p90=Decimal("11"),
-        mean=Decimal("10"), std=Decimal("0.5"),
+        p10=Decimal("9"),
+        p25=Decimal("9.5"),
+        p50=Decimal("10"),
+        p75=Decimal("10.5"),
+        p90=Decimal("11"),
+        mean=Decimal("10"),
+        std=Decimal("0.5"),
     )
     return build_snapshot(
         ipo_id=uuid.uuid4(),
@@ -55,7 +59,9 @@ def _build_snapshot():
         agent_outputs={
             "fundamental": AgentOutput(
                 agent_role=AgentRole.FUNDAMENTAL,
-                scores={"x": 70.0}, overall_score=70.0, runtime_seconds=0.1,
+                scores={"x": 70.0},
+                overall_score=70.0,
+                runtime_seconds=0.1,
             ),
         },
         valuation=ValuationEnsembleOutput(
@@ -70,11 +76,16 @@ def _build_snapshot():
         debate=DebateOutput(final_consensus="balanced"),
         decision=FinalDecision(
             decision=DecisionType.PARTICIPATE,
-            confidence=0.7, suggested_allocation_pct=0.02,
-            price_range_low=Decimal("9"), price_range_fair=Decimal("10"), price_range_high=Decimal("11"),
-            expected_return_6m=dist, expected_return_12m=dist,
+            confidence=0.7,
+            suggested_allocation_pct=0.02,
+            price_range_low=Decimal("9"),
+            price_range_fair=Decimal("10"),
+            price_range_high=Decimal("11"),
+            expected_return_6m=dist,
+            expected_return_12m=dist,
         ),
-        total_cost_usd=Decimal("0.05"), runtime_seconds=5.0,
+        total_cost_usd=Decimal("0.05"),
+        runtime_seconds=5.0,
     )
 
 
@@ -120,10 +131,12 @@ async def pg_setup():
     engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
     sf = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
     async with sf() as s:
-        await s.execute(text(
-            "TRUNCATE TABLE prediction_reviews, prediction_outcomes, post_ipo_events, "
-            "prediction_snapshots, ipo_events RESTART IDENTITY CASCADE"
-        ))
+        await s.execute(
+            text(
+                "TRUNCATE TABLE prediction_reviews, prediction_outcomes, post_ipo_events, "
+                "prediction_snapshots, ipo_events RESTART IDENTITY CASCADE"
+            )
+        )
         await s.commit()
     try:
         yield sf, PGPredictionRegistry(session_factory=sf)
@@ -158,8 +171,10 @@ async def test_track_records_outcome_with_expected_returns(pg_setup) -> None:
     )
     listing_d = date(2026, 1, 15)
     result = await tracker.track(
-        snapshot_id=snap.id, checkpoint_day=30,
-        stock_code="TEST.HK", listing_date=listing_d,
+        snapshot_id=snap.id,
+        checkpoint_day=30,
+        stock_code="TEST.HK",
+        listing_date=listing_d,
     )
     assert isinstance(result, TrackResult)
     assert not result.skipped
@@ -178,8 +193,12 @@ async def test_track_is_idempotent(pg_setup) -> None:
         price_fetcher=_StubPrices(t0_close=10.0, tn_close=11.0, stock_code="TEST.HK"),
     )
     listing_d = date(2026, 1, 15)
-    r1 = await tracker.track(snapshot_id=snap.id, checkpoint_day=30, stock_code="TEST.HK", listing_date=listing_d)
-    r2 = await tracker.track(snapshot_id=snap.id, checkpoint_day=30, stock_code="TEST.HK", listing_date=listing_d)
+    r1 = await tracker.track(
+        snapshot_id=snap.id, checkpoint_day=30, stock_code="TEST.HK", listing_date=listing_d
+    )
+    r2 = await tracker.track(
+        snapshot_id=snap.id, checkpoint_day=30, stock_code="TEST.HK", listing_date=listing_d
+    )
     assert not r1.skipped
     assert r2.skipped
     assert r2.reason == "already_recorded"
@@ -191,13 +210,17 @@ async def test_track_rejects_invalid_checkpoint_day(pg_setup) -> None:
     snap = _build_snapshot()
     await _seed_snapshot(sf, registry, snap)
     tracker = OutcomeTracker(
-        session_factory=sf, snapshot_resolver=registry,
-        benchmarks=_StubBenchmarks(), price_fetcher=_StubPrices(10.0, 11.0, "TEST.HK"),
+        session_factory=sf,
+        snapshot_resolver=registry,
+        benchmarks=_StubBenchmarks(),
+        price_fetcher=_StubPrices(10.0, 11.0, "TEST.HK"),
     )
     with pytest.raises(ValueError, match="not in spec"):
         await tracker.track(
-            snapshot_id=snap.id, checkpoint_day=42,
-            stock_code="TEST.HK", listing_date=date(2026, 1, 15),
+            snapshot_id=snap.id,
+            checkpoint_day=42,
+            stock_code="TEST.HK",
+            listing_date=date(2026, 1, 15),
         )
 
 
@@ -207,12 +230,16 @@ async def test_track_skips_when_price_fetch_fails(pg_setup) -> None:
     snap = _build_snapshot()
     await _seed_snapshot(sf, registry, snap)
     tracker = OutcomeTracker(
-        session_factory=sf, snapshot_resolver=registry,
-        benchmarks=_StubBenchmarks(), price_fetcher=_FailingPrices(),
+        session_factory=sf,
+        snapshot_resolver=registry,
+        benchmarks=_StubBenchmarks(),
+        price_fetcher=_FailingPrices(),
     )
     result = await tracker.track(
-        snapshot_id=snap.id, checkpoint_day=30,
-        stock_code="TEST.HK", listing_date=date(2026, 1, 15),
+        snapshot_id=snap.id,
+        checkpoint_day=30,
+        stock_code="TEST.HK",
+        listing_date=date(2026, 1, 15),
     )
     assert result.skipped
     assert "price_fetch_failed" in (result.reason or "")

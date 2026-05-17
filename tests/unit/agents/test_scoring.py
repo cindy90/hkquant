@@ -20,7 +20,7 @@ from hk_ipo_agent.agents.scoring import (
 
 
 def test_extract_json_block_finds_fenced_block() -> None:
-    text = "Some analysis here\n```json\n{\"a\": 1, \"b\": 2}\n```\nAnd more."
+    text = 'Some analysis here\n```json\n{"a": 1, "b": 2}\n```\nAnd more.'
     assert extract_json_block(text) == {"a": 1, "b": 2}
 
 
@@ -34,7 +34,7 @@ def test_extract_json_block_returns_none_on_malformed() -> None:
 
 
 def test_strip_json_blocks_removes_fences() -> None:
-    text = "head\n```json\n{\"a\": 1}\n```\ntail"
+    text = 'head\n```json\n{"a": 1}\n```\ntail'
     assert "head" in strip_json_blocks(text)
     assert "tail" in strip_json_blocks(text)
     assert "{" not in strip_json_blocks(text)
@@ -59,7 +59,7 @@ def test_base_score_card_overall_averages_numeric_fields() -> None:
 
 
 def test_fundamental_card_validates_bounds() -> None:
-    from pydantic import ValidationError  # noqa: PLC0415 — local for ruff B017 fix
+    from pydantic import ValidationError
 
     FundamentalScoreCard(business_quality=50.0, financial_health=50.0, governance=50.0)
     with pytest.raises(ValidationError):

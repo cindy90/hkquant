@@ -65,9 +65,7 @@ class PredictionRegistryProtocol(Protocol):
         window_days: int = DEFAULT_ACTIVE_WINDOW_DAYS,
     ) -> list[PredictionSnapshot]: ...
 
-    async def attach_review(
-        self, snapshot_id: UUID, review: PredictionReview
-    ) -> UUID: ...
+    async def attach_review(self, snapshot_id: UUID, review: PredictionReview) -> UUID: ...
 
 
 # ---------------------------------------------------------------------------
@@ -119,9 +117,7 @@ class InMemoryPredictionRegistry:
         async with self._lock:
             return [s for s in self._snapshots.values() if s.created_at >= cutoff]
 
-    async def attach_review(
-        self, snapshot_id: UUID, review: PredictionReview
-    ) -> UUID:
+    async def attach_review(self, snapshot_id: UUID, review: PredictionReview) -> UUID:
         async with self._lock:
             if snapshot_id not in self._snapshots:
                 raise KeyError(snapshot_id)
@@ -203,9 +199,7 @@ class PGPredictionRegistry:
             rows = (await session.execute(stmt)).scalars().all()
         return [self._from_row(r) for r in rows]
 
-    async def attach_review(
-        self, snapshot_id: UUID, review: PredictionReview
-    ) -> UUID:
+    async def attach_review(self, snapshot_id: UUID, review: PredictionReview) -> UUID:
         async with self._sf() as session:
             snap = await session.get(PredictionSnapshotRow, snapshot_id)
             if snap is None:

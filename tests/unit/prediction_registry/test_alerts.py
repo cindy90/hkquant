@@ -92,13 +92,17 @@ async def test_emit_rejects_empty_actionable_info(fresh_sf) -> None:
     router = AlertRouter(session_factory=fresh_sf, config={})
     with pytest.raises(ValueError, match="actionable_info"):
         await router.emit(
-            level=AlertLevel.CRITICAL, category="x",
-            message="something failed", actionable_info="",
+            level=AlertLevel.CRITICAL,
+            category="x",
+            message="something failed",
+            actionable_info="",
         )
     with pytest.raises(ValueError):
         await router.emit(
-            level=AlertLevel.CRITICAL, category="x",
-            message="x", actionable_info="   ",  # whitespace only
+            level=AlertLevel.CRITICAL,
+            category="x",
+            message="x",
+            actionable_info="   ",  # whitespace only
         )
 
 
@@ -114,13 +118,17 @@ async def test_dedup_suppresses_second_emit_in_window(fresh_sf) -> None:
     _seed_ipo(ipo_id)
     router = AlertRouter(session_factory=fresh_sf, config={})
     first = await router.emit(
-        level=AlertLevel.WARNING, category="stale_pricing",
-        message="first", actionable_info="check",
+        level=AlertLevel.WARNING,
+        category="stale_pricing",
+        message="first",
+        actionable_info="check",
         related_ipo_id=ipo_id,
     )
     second = await router.emit(
-        level=AlertLevel.WARNING, category="stale_pricing",
-        message="second", actionable_info="check",
+        level=AlertLevel.WARNING,
+        category="stale_pricing",
+        message="second",
+        actionable_info="check",
         related_ipo_id=ipo_id,
     )
     assert first is not None
@@ -138,12 +146,18 @@ async def test_dedup_differentiates_by_category(fresh_sf) -> None:
     _seed_ipo(ipo_id)
     router = AlertRouter(session_factory=fresh_sf, config={})
     a = await router.emit(
-        level=AlertLevel.WARNING, category="stale_pricing",
-        message="x", actionable_info="check", related_ipo_id=ipo_id,
+        level=AlertLevel.WARNING,
+        category="stale_pricing",
+        message="x",
+        actionable_info="check",
+        related_ipo_id=ipo_id,
     )
     b = await router.emit(
-        level=AlertLevel.WARNING, category="earnings_review_needed",
-        message="y", actionable_info="check", related_ipo_id=ipo_id,
+        level=AlertLevel.WARNING,
+        category="earnings_review_needed",
+        message="y",
+        actionable_info="check",
+        related_ipo_id=ipo_id,
     )
     assert a is not None
     assert b is not None
@@ -157,12 +171,18 @@ async def test_dedup_differentiates_by_level(fresh_sf) -> None:
     _seed_ipo(ipo_id)
     router = AlertRouter(session_factory=fresh_sf, config={})
     warn = await router.emit(
-        level=AlertLevel.WARNING, category="stale_pricing",
-        message="warn", actionable_info="check", related_ipo_id=ipo_id,
+        level=AlertLevel.WARNING,
+        category="stale_pricing",
+        message="warn",
+        actionable_info="check",
+        related_ipo_id=ipo_id,
     )
     crit = await router.emit(
-        level=AlertLevel.CRITICAL, category="stale_pricing",
-        message="crit", actionable_info="escalate", related_ipo_id=ipo_id,
+        level=AlertLevel.CRITICAL,
+        category="stale_pricing",
+        message="crit",
+        actionable_info="escalate",
+        related_ipo_id=ipo_id,
     )
     assert warn is not None
     assert crit is not None
@@ -176,12 +196,18 @@ async def test_dedup_differentiates_by_ipo_id(fresh_sf) -> None:
     _seed_ipo(ipo_b)
     router = AlertRouter(session_factory=fresh_sf, config={})
     a = await router.emit(
-        level=AlertLevel.WARNING, category="stale_pricing",
-        message="x", actionable_info="c", related_ipo_id=ipo_a,
+        level=AlertLevel.WARNING,
+        category="stale_pricing",
+        message="x",
+        actionable_info="c",
+        related_ipo_id=ipo_a,
     )
     b = await router.emit(
-        level=AlertLevel.WARNING, category="stale_pricing",
-        message="y", actionable_info="c", related_ipo_id=ipo_b,
+        level=AlertLevel.WARNING,
+        category="stale_pricing",
+        message="y",
+        actionable_info="c",
+        related_ipo_id=ipo_b,
     )
     assert a is not None
     assert b is not None
@@ -197,8 +223,10 @@ async def test_ack_marks_alert_acknowledged(fresh_sf) -> None:
     _truncate_alerts()
     router = AlertRouter(session_factory=fresh_sf, config={})
     alert = await router.emit(
-        level=AlertLevel.WARNING, category="stale_pricing",
-        message="x", actionable_info="c",
+        level=AlertLevel.WARNING,
+        category="stale_pricing",
+        message="x",
+        actionable_info="c",
     )
     assert alert is not None
     # Find the just-written row's id.
@@ -224,8 +252,10 @@ async def test_ack_returns_false_when_already_acknowledged(fresh_sf) -> None:
     _truncate_alerts()
     router = AlertRouter(session_factory=fresh_sf, config={})
     await router.emit(
-        level=AlertLevel.WARNING, category="x",
-        message="x", actionable_info="c",
+        level=AlertLevel.WARNING,
+        category="x",
+        message="x",
+        actionable_info="c",
     )
     async with fresh_sf() as s:
         row = (await s.execute(select(AlertRow))).scalar_one()

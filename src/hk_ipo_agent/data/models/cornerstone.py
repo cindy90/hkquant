@@ -74,6 +74,4 @@ class CornerstoneInvestment(UUIDMixin, TimestampMixin, Base):
     ipo: Mapped[IPOEvent] = relationship(back_populates="cornerstone_investments")
     investor: Mapped[CornerstoneInvestor] = relationship(back_populates="investments")
 
-    __table_args__ = (
-        Index("ix_cornerstone_investments_ipo_investor", "ipo_id", "investor_id"),
-    )
+    __table_args__ = (Index("ix_cornerstone_investments_ipo_investor", "ipo_id", "investor_id"),)

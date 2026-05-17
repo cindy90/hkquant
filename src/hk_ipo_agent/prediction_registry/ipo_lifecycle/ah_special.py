@@ -82,7 +82,8 @@ class AHSpecialHandler:
 
     @staticmethod
     def resolve_checkpoint_date(
-        ah_context: AHContext, checkpoint_day: int,
+        ah_context: AHContext,
+        checkpoint_day: int,
     ) -> date | None:
         """Compute calendar date for a T+N checkpoint.
 
@@ -92,7 +93,7 @@ class AHSpecialHandler:
         anchor = ah_context.checkpoint_anchor_date
         if anchor is None:
             return None
-        from datetime import timedelta  # noqa: PLC0415
+        from datetime import timedelta
 
         return anchor + timedelta(days=max(checkpoint_day, 0))
 
@@ -109,10 +110,7 @@ class AHSpecialHandler:
         """
         if not ah_context.is_ah_pair:
             return agent_findings
-        return [
-            {**f, "pre_discounted_in_a_share": True}
-            for f in agent_findings
-        ]
+        return [{**f, "pre_discounted_in_a_share": True} for f in agent_findings]
 
 
 __all__ = (

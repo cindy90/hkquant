@@ -68,14 +68,20 @@ def _findings() -> list[AggregatedFinding]:
 def _cf() -> CounterfactualReport:
     return CounterfactualReport(
         if_bear=IfBearReport(
-            n_total=10, n_bull_won=10, n_bull_won_bad=5,
-            bull_won_bad_rate=0.5, n_bear_would_have_avoided=4,
+            n_total=10,
+            n_bull_won=10,
+            n_bull_won_bad=5,
+            bull_won_bad_rate=0.5,
+            n_bear_would_have_avoided=4,
             bear_advantage=0.8,
         ),
         if_single_model=IfSingleModelReport(
-            n_samples=10, ensemble_hit_rate=0.6,
-            model_hit_rates={"dcf": 0.7}, best_single_model="dcf",
-            best_single_hit_rate=0.7, ensemble_advantage=-0.1,
+            n_samples=10,
+            ensemble_hit_rate=0.6,
+            model_hit_rates={"dcf": 0.7},
+            best_single_model="dcf",
+            best_single_hit_rate=0.7,
+            ensemble_advantage=-0.1,
         ),
         summary="Bear bias detected",
     )
@@ -147,15 +153,17 @@ def test_render_calibration_table_has_rows() -> None:
 
 
 def test_render_empty_sections_render_placeholders() -> None:
-    md = render_markdown(LearningReport(
-        period_label="2026-05",
-        calibration_rows=[],
-        drift_signals=[],
-        findings=[],
-        counterfactual=None,
-        pending_proposals=[],
-        applied_adjustments=[],
-    ))
+    md = render_markdown(
+        LearningReport(
+            period_label="2026-05",
+            calibration_rows=[],
+            drift_signals=[],
+            findings=[],
+            counterfactual=None,
+            pending_proposals=[],
+            applied_adjustments=[],
+        )
+    )
     assert "no completed predictions" in md
     assert "no signals fired" in md
     assert "no systemic patterns" in md
@@ -164,10 +172,12 @@ def test_render_empty_sections_render_placeholders() -> None:
 
 
 def test_render_skips_counterfactual_when_none() -> None:
-    md = render_markdown(LearningReport(
-        period_label="2026-05",
-        counterfactual=None,
-    ))
+    md = render_markdown(
+        LearningReport(
+            period_label="2026-05",
+            counterfactual=None,
+        )
+    )
     assert "## Counterfactual analysis" not in md
 
 

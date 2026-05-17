@@ -48,9 +48,7 @@ def _mini_inputs() -> list[BacktestInput]:
             pricing_date=date(2024, 6, 14),
             stock_code=f"{i:04d}.HK",
             listing_type=(
-                ListingType.MAINBOARD_TECH
-                if i % 2 == 0
-                else ListingType.CH18C_COMMERCIALIZED
+                ListingType.MAINBOARD_TECH if i % 2 == 0 else ListingType.CH18C_COMMERCIALIZED
             ),
             realized_returns={
                 "5d": 0.02 * (i + 1),
@@ -70,7 +68,9 @@ async def test_backtest_end_to_end_smoke(sqlite_sf, tmp_path: Path) -> None:
 
     # Step 1: walk-forward
     run = await run_walk_forward(
-        inputs, scorer=V8LiteScorer(), session_factory=sqlite_sf,
+        inputs,
+        scorer=V8LiteScorer(),
+        session_factory=sqlite_sf,
     )
     assert run.n_total == 5
     assert run.metrics_by_label["main_board"].n_total > 0
@@ -83,10 +83,7 @@ async def test_backtest_end_to_end_smoke(sqlite_sf, tmp_path: Path) -> None:
     }
     cal = calibrate(list(run.samples), current_weights=current_weights)
     # 5 samples / listing_type < MIN_SLICE_N=20 → both baselines retained.
-    assert all(
-        slc.chosen_weights == slc.baseline_weights
-        for slc in cal.per_listing_type.values()
-    )
+    assert all(slc.chosen_weights == slc.baseline_weights for slc in cal.per_listing_type.values())
 
     # Step 3: report
     report_path = write_report(run, calibration=cal, out_dir=tmp_path / "reports")
@@ -101,7 +98,7 @@ async def test_backtest_end_to_end_smoke(sqlite_sf, tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_backtest_smoke_skips_future_pricing(sqlite_sf) -> None:
-    from datetime import timedelta  # noqa: PLC0415
+    from datetime import timedelta
 
     inputs = [
         BacktestInput(
@@ -122,7 +119,9 @@ async def test_backtest_smoke_skips_future_pricing(sqlite_sf) -> None:
         ),
     ]
     run = await run_walk_forward(
-        inputs, scorer=V8LiteScorer(), session_factory=sqlite_sf,
+        inputs,
+        scorer=V8LiteScorer(),
+        session_factory=sqlite_sf,
     )
     # Only the past-pricing input is scored.
     assert run.n_total == 1

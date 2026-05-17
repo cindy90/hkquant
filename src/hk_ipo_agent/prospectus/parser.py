@@ -106,7 +106,7 @@ async def _parse_with_llamaparse(
         )
 
     try:
-        from llama_parse import LlamaParse  # noqa: PLC0415
+        from llama_parse import LlamaParse
     except ImportError as exc:
         raise MissingDependencyError(
             "llama-parse package not installed. `uv sync --extra parse`",
@@ -214,7 +214,7 @@ async def _parse_with_pymupdf(
 ) -> ParsedDocument:
     """PyMuPDF fallback. Always available (pip dependency)."""
     try:
-        import pymupdf  # noqa: PLC0415
+        import pymupdf
     except ImportError as exc:
         raise MissingDependencyError(
             "pymupdf package not installed. It should be in pyproject.toml core deps.",

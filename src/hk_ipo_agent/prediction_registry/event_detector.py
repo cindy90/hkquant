@@ -89,7 +89,9 @@ class EventDetector:
         other; the missing signal is logged at WARNING.
         """
         price_events = await self._scan_price_anomalies(stock_code, window_start, window_end)
-        ann_events = await self._scan_announcements(stock_code, window_start, window_end, ipo_id=ipo_id)
+        ann_events = await self._scan_announcements(
+            stock_code, window_start, window_end, ipo_id=ipo_id
+        )
         # De-dupe on (event_date, event_type, severity).
         seen: set[tuple[date, str, str]] = set()
         merged: list[PostIPOEvent] = []
@@ -119,7 +121,8 @@ class EventDetector:
         except Exception as exc:
             logger.warning(
                 "event_price_fetch_failed",
-                stock_code=stock_code, error=str(exc),
+                stock_code=stock_code,
+                error=str(exc),
             )
             return []
         series = _close_series(payload)
@@ -128,9 +131,7 @@ class EventDetector:
 
         # Sort by date; pull this stock's closes only.
         timeline: list[tuple[date, float]] = sorted(
-            (d, vals[stock_code])
-            for d, vals in series.items()
-            if stock_code in vals
+            (d, vals[stock_code]) for d, vals in series.items() if stock_code in vals
         )
         if len(timeline) < 2:
             return []
@@ -145,21 +146,26 @@ class EventDetector:
                 rolling.pop(0)
             five_day_ret = (
                 (rolling[-1] - rolling[0]) / rolling[0]
-                if len(rolling) >= 5 and rolling[0] else None
+                if len(rolling) >= 5 and rolling[0]
+                else None
             )
 
             if abs(day_ret) > PRICE_ANOMALY_SINGLE_DAY_THRESHOLD:
                 events.append(
                     self._build_price_event(
-                        event_date=d, day_ret=day_ret,
-                        five_day_ret=five_day_ret, kind="single_day",
+                        event_date=d,
+                        day_ret=day_ret,
+                        five_day_ret=five_day_ret,
+                        kind="single_day",
                     )
                 )
             elif five_day_ret is not None and abs(five_day_ret) > PRICE_ANOMALY_5D_THRESHOLD:
                 events.append(
                     self._build_price_event(
-                        event_date=d, day_ret=day_ret,
-                        five_day_ret=five_day_ret, kind="five_day",
+                        event_date=d,
+                        day_ret=day_ret,
+                        five_day_ret=five_day_ret,
+                        kind="five_day",
                     )
                 )
             prev_close = close
@@ -180,7 +186,9 @@ class EventDetector:
             severity = EventSeverity.MAJOR
         else:
             severity = EventSeverity.MINOR
-        direction = "up" if (day_ret if kind == "single_day" else (five_day_ret or 0.0)) > 0 else "down"
+        direction = (
+            "up" if (day_ret if kind == "single_day" else (five_day_ret or 0.0)) > 0 else "down"
+        )
         return PostIPOEvent(
             event_date=event_date,
             event_type=PostIPOEventType.OTHER,
@@ -207,11 +215,15 @@ class EventDetector:
         except Exception as exc:
             logger.warning(
                 "event_announcements_fetch_failed",
-                stock_code=stock_code, ipo_id=str(ipo_id), error=str(exc),
+                stock_code=stock_code,
+                ipo_id=str(ipo_id),
+                error=str(exc),
             )
             return []
         # Window filter
-        in_window = [f for f in filings if _in_window(f.get("filing_date"), window_start, window_end)]
+        in_window = [
+            f for f in filings if _in_window(f.get("filing_date"), window_start, window_end)
+        ]
         if not in_window:
             return []
 
@@ -257,7 +269,9 @@ class EventDetector:
         except Exception as exc:
             logger.warning(
                 "event_classification_failed",
-                ipo_id=str(ipo_id), title=title[:80], error=str(exc),
+                ipo_id=str(ipo_id),
+                title=title[:80],
+                error=str(exc),
             )
             return None
 
@@ -302,7 +316,7 @@ def _format_classification_prompt(filing: dict[str, Any]) -> str:
 
 def iter_window_dates(start: date, end: date) -> Iterable[date]:
     """Yield calendar dates over [start, end]. Public for tests."""
-    from datetime import timedelta as _td  # noqa: PLC0415
+    from datetime import timedelta as _td
 
     d = start
     while d <= end:

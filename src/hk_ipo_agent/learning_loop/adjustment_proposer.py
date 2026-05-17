@@ -101,7 +101,8 @@ class AdjustmentProposer:
     # ------------------------------------------------------------------
 
     def _from_drift_signals(
-        self, drift_signals: list[DriftSignal],
+        self,
+        drift_signals: list[DriftSignal],
     ) -> list[ProposedAdjustment]:
         out: list[ProposedAdjustment] = []
         for signal in drift_signals:
@@ -112,16 +113,15 @@ class AdjustmentProposer:
                     n=signal.sample_count,
                 )
                 continue
-            target_template = DEFAULT_TARGETS.get(
-                signal.signal_type, "config/unknown.yaml"
-            )
+            target_template = DEFAULT_TARGETS.get(signal.signal_type, "config/unknown.yaml")
             target = (
                 target_template.format(**signal.affected_dimensions)
                 if "{" in target_template
                 else target_template
             )
             adjustment_type = DEFAULT_TYPES.get(
-                signal.signal_type, AdjustmentType.LOGIC_CHANGE,
+                signal.signal_type,
+                AdjustmentType.LOGIC_CHANGE,
             )
             evidence: list[UUID] = []
             for sid in signal.related_snapshot_ids:
@@ -157,7 +157,8 @@ class AdjustmentProposer:
     # ------------------------------------------------------------------
 
     def _from_findings(
-        self, findings: list[AggregatedFinding],
+        self,
+        findings: list[AggregatedFinding],
     ) -> list[ProposedAdjustment]:
         out: list[ProposedAdjustment] = []
         for f in findings:
@@ -174,10 +175,7 @@ class AdjustmentProposer:
                 target = "config/synthesizer.yaml"
                 adj_type = AdjustmentType.LOGIC_CHANGE
             evidence = list(f.related_snapshot_ids)
-            confidence = (
-                Confidence.HIGH if f.severity == "critical"
-                else Confidence.MEDIUM
-            )
+            confidence = Confidence.HIGH if f.severity == "critical" else Confidence.MEDIUM
             out.append(
                 ProposedAdjustment(
                     target_path=target,
@@ -205,7 +203,8 @@ class AdjustmentProposer:
     # ------------------------------------------------------------------
 
     def _from_counterfactual(
-        self, cf: CounterfactualReport | None,
+        self,
+        cf: CounterfactualReport | None,
     ) -> list[ProposedAdjustment]:
         if cf is None:
             return []
@@ -260,10 +259,7 @@ class AdjustmentProposer:
 def _confidence_for(signal: DriftSignal) -> Confidence:
     """Crit severity → MEDIUM; warning → LOW (matches CLAUDE.md
     conservatism — high LLM-uncertainty unless evidence is overwhelming)."""
-    sev = (
-        signal.severity.value if hasattr(signal.severity, "value")
-        else str(signal.severity)
-    )
+    sev = signal.severity.value if hasattr(signal.severity, "value") else str(signal.severity)
     if sev == "critical":
         return Confidence.MEDIUM
     return Confidence.LOW
@@ -302,11 +298,11 @@ async def persist_proposals_to_review(
 
     Returns the new review_id.
     """
-    from datetime import UTC as _UTC  # noqa: PLC0415
-    from datetime import datetime as _dt  # noqa: PLC0415
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
 
-    from ..common.enums import AdjustmentStatus  # noqa: PLC0415
-    from ..data.models import PredictionReviewRow  # noqa: PLC0415
+    from ..common.enums import AdjustmentStatus
+    from ..data.models import PredictionReviewRow
 
     proposals_json = [p.model_dump(mode="json") for p in proposals]
     async with session_factory() as s:

@@ -44,8 +44,13 @@ async def _probe(n: int) -> dict[str, float | int]:
     try:
         inputs = await load_backtest_inputs_from_pg(sf)
         if not inputs:
-            return {"n_total": 0, "n_eligible": 0, "elapsed_total_s": 0.0,
-                    "elapsed_per_ipo_s": 0.0, "max_per_ipo_s": 0.0}
+            return {
+                "n_total": 0,
+                "n_eligible": 0,
+                "elapsed_total_s": 0.0,
+                "elapsed_per_ipo_s": 0.0,
+                "max_per_ipo_s": 0.0,
+            }
         subset = inputs[:n]
         scorer = V8LiteScorer()
 
@@ -53,7 +58,9 @@ async def _probe(n: int) -> dict[str, float | int]:
         for sample in subset:
             t0 = time.perf_counter()
             await run_walk_forward(
-                [sample], scorer=scorer, session_factory=sf,
+                [sample],
+                scorer=scorer,
+                session_factory=sf,
             )
             per_ipo.append(time.perf_counter() - t0)
 
@@ -88,20 +95,19 @@ def _write_report(metrics: dict[str, float | int], out_dir: Path) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="V8LiteScorer wall-clock probe (Phase 9b)"
-    )
+    parser = argparse.ArgumentParser(description="V8LiteScorer wall-clock probe (Phase 9b)")
     parser.add_argument("--n", type=int, default=DEFAULT_N)
     parser.add_argument(
-        "--report-dir", type=Path, default=Path("reports/perf"),
+        "--report-dir",
+        type=Path,
+        default=Path("reports/perf"),
     )
     args = parser.parse_args(argv)
 
     metrics = asyncio.run(_probe(args.n))
     if metrics["n_eligible"] == 0:
         print(
-            "[perf-smoke] no eligible IPOs in PG; run "
-            "scripts/migrate_sqlite_to_pg.py first",
+            "[perf-smoke] no eligible IPOs in PG; run scripts/migrate_sqlite_to_pg.py first",
             file=sys.stderr,
         )
         return 2
@@ -109,8 +115,10 @@ def main(argv: list[str] | None = None) -> int:
     out_path = _write_report(metrics, args.report_dir)
     print(f"[perf-smoke] median per-IPO: {metrics['elapsed_per_ipo_s']:.4f}s")
     print(f"[perf-smoke] worst per-IPO: {metrics['max_per_ipo_s']:.4f}s")
-    print(f"[perf-smoke] SLO headroom: "
-          f"{SLO_SECONDS_PER_IPO / max(float(metrics['max_per_ipo_s']), 1e-6):.0f}x")
+    print(
+        f"[perf-smoke] SLO headroom: "
+        f"{SLO_SECONDS_PER_IPO / max(float(metrics['max_per_ipo_s']), 1e-6):.0f}x"
+    )
     print(f"[perf-smoke] report → {out_path}")
 
     # SLO assertion (return non-zero exit if smoke breaks SLO).

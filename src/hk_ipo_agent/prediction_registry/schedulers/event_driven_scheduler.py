@@ -105,7 +105,9 @@ class EventDrivenScheduler(BaseScheduler):
                 if handled:
                     stats.events_detected += 1
             except Exception as exc:
-                stats.record_error(exc, context={"event_kind": event.kind, "ipo_id": str(event.ipo_id)})
+                stats.record_error(
+                    exc, context={"event_kind": event.kind, "ipo_id": str(event.ipo_id)}
+                )
 
     async def _dispatch(self, event: EventPayload, stats: RunStats) -> bool:
         if event.kind == EVENT_KIND_EARNINGS:
@@ -126,7 +128,7 @@ class EventDrivenScheduler(BaseScheduler):
             logger.warning("earnings_no_snapshot", ipo_id=str(event.ipo_id))
             return False
         # Resolve full snapshot for the comparator.
-        from ..registry import get_registry  # noqa: PLC0415
+        from ..registry import get_registry
 
         try:
             snap = await get_registry().get_snapshot(snapshot_id)
@@ -151,7 +153,7 @@ class EventDrivenScheduler(BaseScheduler):
         severity = event.payload.get("severity", "minor")
         if severity != "critical":
             return True
-        from ...common.enums import AlertLevel  # noqa: PLC0415
+        from ...common.enums import AlertLevel
 
         try:
             await self._alerts.emit(
@@ -172,7 +174,8 @@ class EventDrivenScheduler(BaseScheduler):
         consumes 披露易 deltas)."""
         logger.info(
             "cornerstone_event",
-            ipo_id=str(event.ipo_id), payload_keys=list(event.payload.keys()),
+            ipo_id=str(event.ipo_id),
+            payload_keys=list(event.payload.keys()),
         )
         return True
 
@@ -180,7 +183,7 @@ class EventDrivenScheduler(BaseScheduler):
         """Regulatory filing routed to alerts as info-level."""
         if self._alerts is None:
             return True
-        from ...common.enums import AlertLevel  # noqa: PLC0415
+        from ...common.enums import AlertLevel
 
         try:
             await self._alerts.emit(
@@ -212,7 +215,7 @@ def _parse_date(d: Any) -> date | None:
 def _decimal(v: Any) -> Any:
     if v is None or v == "":
         return None
-    from decimal import Decimal  # noqa: PLC0415
+    from decimal import Decimal
 
     try:
         return Decimal(str(v))

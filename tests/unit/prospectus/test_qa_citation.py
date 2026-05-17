@@ -104,7 +104,7 @@ async def test_ask_filters_hallucinated_ids_but_keeps_valid_ones() -> None:
 @pytest.mark.asyncio
 async def test_pydantic_rejects_empty_citation_list() -> None:
     """The _LLMAnswer model enforces min_length=1 on cited_chunk_ids."""
-    from pydantic import ValidationError  # noqa: PLC0415
+    from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
         _LLMAnswer(answer="some answer", cited_chunk_ids=[])

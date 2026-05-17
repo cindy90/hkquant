@@ -303,7 +303,9 @@ def map_cornerstone_investor(
         "aliases": {"items": aliases} if aliases else None,
         "extra_metadata": {
             "nacs_cornerstone_id": row["cornerstone_id"],
-            "aum_usd_latest": float(row["aum_usd_latest"]) if row["aum_usd_latest"] is not None else None,
+            "aum_usd_latest": float(row["aum_usd_latest"])
+            if row["aum_usd_latest"] is not None
+            else None,
             "aum_asof_date": row["aum_asof_date"],
             "is_chinese": bool(row["is_chinese"]),
             "is_longterm": bool(row["is_longterm"]),
@@ -502,9 +504,7 @@ async def migrate_cornerstone_investments(
     valid_ipo_ids = {r["id"] for r in rows}
     skipped = 0
     if valid_ipo_ids:
-        existing_stmt = select(IPOEvent.id).where(
-            IPOEvent.id.in_({r["ipo_id"] for r in rows})
-        )
+        existing_stmt = select(IPOEvent.id).where(IPOEvent.id.in_({r["ipo_id"] for r in rows}))
         existing = {row[0] for row in (await inv_repo.session.execute(existing_stmt)).all()}
         before = len(rows)
         rows = [r for r in rows if r["ipo_id"] in existing]
@@ -536,9 +536,7 @@ async def migrate_companies_and_financials(con: sqlite3.Connection) -> tuple[int
 
         stmt = pg_insert(Company.__table__).values(company_rows)
         update_cols = {k: stmt.excluded[k] for k in company_rows[0] if k != "id"}
-        await session.execute(
-            stmt.on_conflict_do_update(index_elements=["id"], set_=update_cols)
-        )
+        await session.execute(stmt.on_conflict_do_update(index_elements=["id"], set_=update_cols))
         log.info("migrated_companies", count=len(company_rows))
 
         # 2. Financial snapshots
@@ -571,9 +569,7 @@ async def migrate_companies_and_financials(con: sqlite3.Connection) -> tuple[int
 def dump_market_env_cache(con: sqlite3.Connection, out_dir: Path) -> Path:
     """ADR 0007 §1: dump as JSON fixture; NOT a PG table."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    cur = con.execute(
-        "SELECT * FROM market_environment_cache ORDER BY asof_month ASC"
-    )
+    cur = con.execute("SELECT * FROM market_environment_cache ORDER BY asof_month ASC")
     records = [dict(r) for r in cur.fetchall()]
     out = out_dir / "market_env_cache.json"
     with out.open("w", encoding="utf-8") as fh:
@@ -624,9 +620,7 @@ async def run_migration(
             counts["ipo_postmarket"] = await migrate_ipo_postmarket(con, postmarket_repo)
 
             inv_repo = CornerstoneInvestorRepository(session)
-            counts["cornerstone_investors"] = await migrate_cornerstone_investors(
-                con, inv_repo
-            )
+            counts["cornerstone_investors"] = await migrate_cornerstone_investors(con, inv_repo)
 
             link_repo = CornerstoneInvestmentRepository(session)
             counts["cornerstone_investments"] = await migrate_cornerstone_investments(

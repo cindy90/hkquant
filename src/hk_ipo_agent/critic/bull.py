@@ -47,11 +47,7 @@ async def run_bull(
 ) -> tuple[str, float, Any]:
     """Run one Bull turn. Returns ``(argument, cost_delta, raw_resp)``."""
     body, _frontmatter = load_prompt("debate/bull.md")
-    bear_block = (
-        f"\n\n# Previous Bear argument (to rebut)\n{prior_bear}\n"
-        if prior_bear
-        else ""
-    )
+    bear_block = f"\n\n# Previous Bear argument (to rebut)\n{prior_bear}\n" if prior_bear else ""
     user_msg = (
         f"# Round {round_number}\n"
         f"# Agent outputs\n{_agent_briefs(agent_outputs)}\n\n"

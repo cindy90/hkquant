@@ -158,9 +158,7 @@ class BenchmarkPriceService:
             )
         return BenchmarkReturns(hsi=hsi, hstech=hstech, industry_median=industry_median)
 
-    async def _index_return(
-        self, index_key: str, t0: date, tn: date
-    ) -> Decimal | None:
+    async def _index_return(self, index_key: str, t0: date, tn: date) -> Decimal | None:
         try:
             payload = await self._ifind.get_macro_index_history(
                 tn, start=t0, index_keys=[index_key]
@@ -168,7 +166,9 @@ class BenchmarkPriceService:
         except Exception as exc:
             logger.warning(
                 "benchmark_index_fetch_failed",
-                index_key=index_key, t0=t0.isoformat(), tn=tn.isoformat(),
+                index_key=index_key,
+                t0=t0.isoformat(),
+                tn=tn.isoformat(),
                 error=str(exc),
             )
             return None
@@ -186,17 +186,15 @@ class BenchmarkPriceService:
             return None
         return _return_pct(t0_close, tn_close)
 
-    async def _industry_median_return(
-        self, peers: list[str], t0: date, tn: date
-    ) -> Decimal | None:
+    async def _industry_median_return(self, peers: list[str], t0: date, tn: date) -> Decimal | None:
         try:
-            payload = await self._ifind.get_hk_history_prices(
-                peers, tn, start=t0
-            )
+            payload = await self._ifind.get_hk_history_prices(peers, tn, start=t0)
         except Exception as exc:
             logger.warning(
                 "benchmark_industry_fetch_failed",
-                peers_count=len(peers), t0=t0.isoformat(), tn=tn.isoformat(),
+                peers_count=len(peers),
+                t0=t0.isoformat(),
+                tn=tn.isoformat(),
                 error=str(exc),
             )
             return None

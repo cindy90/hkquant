@@ -38,9 +38,13 @@ from hk_ipo_agent.prediction_registry.snapshot import build_snapshot
 
 def _dist(p50: Decimal) -> ValuationDistribution:
     return ValuationDistribution(
-        p10=p50 - Decimal("2"), p25=p50 - Decimal("1"), p50=p50,
-        p75=p50 + Decimal("1"), p90=p50 + Decimal("2"),
-        mean=p50, std=Decimal("1"),
+        p10=p50 - Decimal("2"),
+        p25=p50 - Decimal("1"),
+        p50=p50,
+        p75=p50 + Decimal("1"),
+        p90=p50 + Decimal("2"),
+        mean=p50,
+        std=Decimal("1"),
     )
 
 
@@ -49,26 +53,38 @@ def _snapshot():
     return build_snapshot(
         ipo_id=uuid4(),
         extraction=ProspectusExtraction(
-            prospectus_id="P-ATT-1", company_name_zh="测试 ATT",
+            prospectus_id="P-ATT-1",
+            company_name_zh="测试 ATT",
             listing_type=ListingType.MAINBOARD_TECH,
-            industry_code="TECH", industry_description="AI", business_model="B2B",
-            extraction_version="0.0.1", extracted_at=datetime.now(UTC),
+            industry_code="TECH",
+            industry_description="AI",
+            business_model="B2B",
+            extraction_version="0.0.1",
+            extracted_at=datetime.now(UTC),
         ),
         agent_outputs={
             "fundamental": AgentOutput(
                 agent_role=AgentRole.FUNDAMENTAL,
-                scores={"x": 80.0}, overall_score=80.0, runtime_seconds=0.1,
+                scores={"x": 80.0},
+                overall_score=80.0,
+                runtime_seconds=0.1,
             ),
             "cornerstone": AgentOutput(
                 agent_role=AgentRole.CORNERSTONE_SIGNAL,
-                scores={"x": 60.0}, overall_score=60.0, runtime_seconds=0.1,
+                scores={"x": 60.0},
+                overall_score=60.0,
+                runtime_seconds=0.1,
             ),
         },
         valuation=ValuationEnsembleOutput(
             company_id="P-ATT-1",
             single_models=[
                 SingleModelValuation(model_name="dcf", applicable=True, valuation_distribution=d),
-                SingleModelValuation(model_name="comparable", applicable=True, valuation_distribution=_dist(Decimal("9"))),
+                SingleModelValuation(
+                    model_name="comparable",
+                    applicable=True,
+                    valuation_distribution=_dist(Decimal("9")),
+                ),
             ],
             weights_used={"dcf": 0.5, "comparable": 0.5},
             ensemble_distribution=d,
@@ -76,18 +92,28 @@ def _snapshot():
         ),
         debate=DebateOutput(
             rounds=[
-                DebateRound(round_number=1, bull_argument="growth strong", bear_argument="customer concentration",
-                            devil_challenge="margin compression?", resolution="保留 bull"),
+                DebateRound(
+                    round_number=1,
+                    bull_argument="growth strong",
+                    bear_argument="customer concentration",
+                    devil_challenge="margin compression?",
+                    resolution="保留 bull",
+                ),
             ],
             final_consensus="positive overall",
         ),
         decision=FinalDecision(
             decision=DecisionType.PARTICIPATE,
-            confidence=0.7, suggested_allocation_pct=0.02,
-            price_range_low=Decimal("8"), price_range_fair=Decimal("10"), price_range_high=Decimal("12"),
-            expected_return_6m=d, expected_return_12m=d,
+            confidence=0.7,
+            suggested_allocation_pct=0.02,
+            price_range_low=Decimal("8"),
+            price_range_fair=Decimal("10"),
+            price_range_high=Decimal("12"),
+            expected_return_6m=d,
+            expected_return_12m=d,
         ),
-        total_cost_usd=Decimal("0.1"), runtime_seconds=10.0,
+        total_cost_usd=Decimal("0.1"),
+        runtime_seconds=10.0,
     )
 
 
@@ -119,7 +145,8 @@ def llm_mock(monkeypatch) -> LLMClient:
                 _ProposedAdjustmentLLM(
                     target_path="config/valuation_weights.yaml",
                     adjustment_type=AdjustmentType.WEIGHT_CHANGE,
-                    current_value=0.5, proposed_value=0.4,
+                    current_value=0.5,
+                    proposed_value=0.4,
                     rationale="降 DCF 权重",
                     expected_impact="提高 P50 准确率",
                     confidence=Confidence.MEDIUM,
@@ -136,7 +163,9 @@ async def test_attribute_builds_full_three_layer_blob(llm_mock) -> None:
     snap = _snapshot()
     outcome = _outcome(snap.id, ret=-0.15)  # loss → bear validated
     attribution = await engine.attribute(
-        snapshot=snap, outcome=outcome, actual_price=Decimal("8.5"),
+        snapshot=snap,
+        outcome=outcome,
+        actual_price=Decimal("8.5"),
     )
     assert attribution.snapshot_id == snap.id
     assert attribution.checkpoint_day == 30
@@ -158,7 +187,9 @@ async def test_attribute_handles_llm_failure_gracefully(monkeypatch, llm_mock) -
     snap = _snapshot()
     outcome = _outcome(snap.id, ret=0.10)
     attribution = await engine.attribute(
-        snapshot=snap, outcome=outcome, actual_price=Decimal("11"),
+        snapshot=snap,
+        outcome=outcome,
+        actual_price=Decimal("11"),
     )
     assert attribution.primary_attribution == "diagnosis_unavailable"
     assert "Opus down" in attribution.llm_diagnosis

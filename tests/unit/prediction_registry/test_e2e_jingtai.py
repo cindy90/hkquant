@@ -65,7 +65,6 @@ from hk_ipo_agent.prediction_registry.review_workflow import ReviewWorkflow
 from hk_ipo_agent.prediction_registry.schedulers import DailyScheduler, IPOMetadata
 from hk_ipo_agent.prediction_registry.snapshot import build_snapshot
 
-
 # Jingtai facts (2228.HK / 晶泰控股):
 JINGTAI_LISTING_DATE = date(2024, 6, 13)
 JINGTAI_STOCK_CODE = "2228.HK"
@@ -98,36 +97,44 @@ def _truncate_e2e_tables() -> None:
 def _build_jingtai_snapshot():
     """Snapshot mimicking the system's analysis at 晶泰 PHIP time."""
     dist = ValuationDistribution(
-        p10=Decimal("4.50"), p25=Decimal("5.00"), p50=Decimal("5.50"),
-        p75=Decimal("6.00"), p90=Decimal("6.50"),
-        mean=Decimal("5.50"), std=Decimal("0.60"),
+        p10=Decimal("4.50"),
+        p25=Decimal("5.00"),
+        p50=Decimal("5.50"),
+        p75=Decimal("6.00"),
+        p90=Decimal("6.50"),
+        mean=Decimal("5.50"),
+        std=Decimal("0.60"),
     )
     return build_snapshot(
         ipo_id=uuid.uuid4(),
         extraction=ProspectusExtraction(
             prospectus_id="P-JINGTAI-2228",
-            company_name_zh="晶泰控股", company_name_en="QuantumPharm Inc.",
+            company_name_zh="晶泰控股",
+            company_name_en="QuantumPharm Inc.",
             listing_type=ListingType.CH18C_COMMERCIALIZED,
             industry_code="BIOTECH-AI",
             industry_description="AI for drug discovery / pre-commercial 18C",
             business_model="AI-driven CRO + SaaS for pharma R&D",
-            extraction_version="0.0.1", extracted_at=datetime(2024, 5, 1, tzinfo=UTC),
+            extraction_version="0.0.1",
+            extracted_at=datetime(2024, 5, 1, tzinfo=UTC),
         ),
         agent_outputs={
             "fundamental": AgentOutput(
                 agent_role=AgentRole.FUNDAMENTAL,
-                scores={"business_quality": 72.0, "financial_health": 55.0,
-                        "governance": 80.0},
-                overall_score=68.0, runtime_seconds=0.1,
+                scores={"business_quality": 72.0, "financial_health": 55.0, "governance": 80.0},
+                overall_score=68.0,
+                runtime_seconds=0.1,
             ),
             "industry": AgentOutput(
                 agent_role=AgentRole.INDUSTRY,
-                scores={"tam": 85.0, "moat": 70.0}, overall_score=78.0,
+                scores={"tam": 85.0, "moat": 70.0},
+                overall_score=78.0,
                 runtime_seconds=0.1,
             ),
             "cornerstone": AgentOutput(
                 agent_role=AgentRole.CORNERSTONE_SIGNAL,
-                scores={"signal_strength": 75.0}, overall_score=75.0,
+                scores={"signal_strength": 75.0},
+                overall_score=75.0,
                 runtime_seconds=0.1,
             ),
         },
@@ -135,11 +142,13 @@ def _build_jingtai_snapshot():
             company_id="P-JINGTAI-2228",
             single_models=[
                 SingleModelValuation(
-                    model_name="comparable", applicable=True,
+                    model_name="comparable",
+                    applicable=True,
                     valuation_distribution=dist,
                 ),
                 SingleModelValuation(
-                    model_name="dcf", applicable=True,
+                    model_name="dcf",
+                    applicable=True,
                     valuation_distribution=dist,
                 ),
             ],
@@ -165,14 +174,18 @@ def _build_jingtai_snapshot():
         ),
         decision=FinalDecision(
             decision=DecisionType.PARTIAL,
-            confidence=0.72, suggested_allocation_pct=0.025,
-            price_range_low=Decimal("5.00"), price_range_fair=Decimal("5.50"),
+            confidence=0.72,
+            suggested_allocation_pct=0.025,
+            price_range_low=Decimal("5.00"),
+            price_range_fair=Decimal("5.50"),
             price_range_high=Decimal("6.00"),
-            expected_return_6m=dist, expected_return_12m=dist,
+            expected_return_6m=dist,
+            expected_return_12m=dist,
             key_reasons_for=["Tier-1 cornerstone", "18C AI moat", "Solid revenue growth"],
             key_reasons_against=["Pre-commercial profitability", "Customer concentration"],
         ),
-        total_cost_usd=Decimal("1.85"), runtime_seconds=480.0,
+        total_cost_usd=Decimal("1.85"),
+        runtime_seconds=480.0,
     )
 
 
@@ -206,10 +219,13 @@ class _JingtaiPrices:
         d = start
         ticker = tickers if isinstance(tickers, str) else tickers[0]
         while d <= as_of_date:
-            rows.append({
-                "time": d.isoformat(), "thscode": ticker,
-                "close": round(self._close_at(d), 4),
-            })
+            rows.append(
+                {
+                    "time": d.isoformat(),
+                    "thscode": ticker,
+                    "close": round(self._close_at(d), 4),
+                }
+            )
             d += timedelta(days=1)
         return {"data": rows}
 
@@ -254,15 +270,18 @@ async def test_jingtai_2228_full_lifecycle_e2e(e2e_sf) -> None:
     sm = StateMachine(e2e_sf)
     await sm.initialize(snap.ipo_id)
     await sm.transition_to(
-        snap.ipo_id, IPOLifecycleStateType.PRICING,
+        snap.ipo_id,
+        IPOLifecycleStateType.PRICING,
         triggered_by=TransitionTrigger.AUTO_DETECTOR,
         evidence={"source": "hkex_filing", "title": "招股价区间公告"},
     )
     await sm.transition_to(
-        snap.ipo_id, IPOLifecycleStateType.LISTED,
+        snap.ipo_id,
+        IPOLifecycleStateType.LISTED,
         triggered_by=TransitionTrigger.AUTO_DETECTOR,
         evidence={
-            "hkex_listings_count": 1, "stock_code": JINGTAI_STOCK_CODE,
+            "hkex_listings_count": 1,
+            "stock_code": JINGTAI_STOCK_CODE,
             "ifind_quote_date": JINGTAI_LISTING_DATE.isoformat(),
         },
     )
@@ -277,12 +296,15 @@ async def test_jingtai_2228_full_lifecycle_e2e(e2e_sf) -> None:
             return datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
 
     import hk_ipo_agent.prediction_registry.schedulers.daily_scheduler as ds_mod
+
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(ds_mod, "datetime", _TodayClock)
     try:
         tracker = OutcomeTracker(
-            session_factory=e2e_sf, snapshot_resolver=registry,
-            benchmarks=_JingtaiBenchmarks(), price_fetcher=_JingtaiPrices(),
+            session_factory=e2e_sf,
+            snapshot_resolver=registry,
+            benchmarks=_JingtaiBenchmarks(),
+            price_fetcher=_JingtaiPrices(),
         )
         llm = LLMClient(api_key="sk-test", daily_budget_usd=Decimal("100"))
         llm.acomplete_json = AsyncMock(  # type: ignore[method-assign]
@@ -293,31 +315,45 @@ async def test_jingtai_2228_full_lifecycle_e2e(e2e_sf) -> None:
             )
         )
         workflow = ReviewWorkflow(
-            registry=registry, attribution=AttributionEngine(llm=llm),
+            registry=registry,
+            attribution=AttributionEngine(llm=llm),
             session_factory=e2e_sf,
         )
-        repo = _JingtaiRepo({
-            snap.ipo_id: IPOMetadata(
-                ipo_id=snap.ipo_id, stock_code=JINGTAI_STOCK_CODE,
-                listing_date=JINGTAI_LISTING_DATE,
-                industry_peers=["6160.HK", "9988.HK"],
-                actual_price_at_checkpoint={},
-            ),
-        })
+        repo = _JingtaiRepo(
+            {
+                snap.ipo_id: IPOMetadata(
+                    ipo_id=snap.ipo_id,
+                    stock_code=JINGTAI_STOCK_CODE,
+                    listing_date=JINGTAI_LISTING_DATE,
+                    industry_peers=["6160.HK", "9988.HK"],
+                    actual_price_at_checkpoint={},
+                ),
+            }
+        )
         # IMPORTANT: the auto-terminate check fires at day >= 360 BEFORE
         # outcomes are written. So to get all 11 checkpoint outcomes we
         # run two days, day=358 (writes outcomes) + day=365 (terminates).
         monkeypatch.setattr(
-            ds_mod, "datetime",
-            type("_C358", (), {
-                "now": staticmethod(lambda tz=None: datetime.combine(
-                    JINGTAI_LISTING_DATE + timedelta(days=358), datetime.min.time(),
-                ).replace(tzinfo=UTC)),
-            }),
+            ds_mod,
+            "datetime",
+            type(
+                "_C358",
+                (),
+                {
+                    "now": staticmethod(
+                        lambda tz=None: datetime.combine(
+                            JINGTAI_LISTING_DATE + timedelta(days=358),
+                            datetime.min.time(),
+                        ).replace(tzinfo=UTC)
+                    ),
+                },
+            ),
         )
         sched = DailyScheduler(
-            session_factory=e2e_sf, state_machine=sm,
-            outcome_tracker=tracker, review_workflow=workflow,
+            session_factory=e2e_sf,
+            state_machine=sm,
+            outcome_tracker=tracker,
+            review_workflow=workflow,
             stale_detector=StaleDetector(e2e_sf),
             terminal_handler=TerminalHandler(session_factory=e2e_sf, registry=registry),
             ipo_repo=repo,
@@ -327,12 +363,20 @@ async def test_jingtai_2228_full_lifecycle_e2e(e2e_sf) -> None:
 
         # Now jump to T+365 and run again — auto-terminate should fire.
         monkeypatch.setattr(
-            ds_mod, "datetime",
-            type("_C365", (), {
-                "now": staticmethod(lambda tz=None: datetime.combine(
-                    JINGTAI_LISTING_DATE + timedelta(days=365), datetime.min.time(),
-                ).replace(tzinfo=UTC)),
-            }),
+            ds_mod,
+            "datetime",
+            type(
+                "_C365",
+                (),
+                {
+                    "now": staticmethod(
+                        lambda tz=None: datetime.combine(
+                            JINGTAI_LISTING_DATE + timedelta(days=365),
+                            datetime.min.time(),
+                        ).replace(tzinfo=UTC)
+                    ),
+                },
+            ),
         )
         result_second = await sched.run()
         assert result_second.status is SchedulerStatus.COMPLETED
@@ -342,31 +386,42 @@ async def test_jingtai_2228_full_lifecycle_e2e(e2e_sf) -> None:
     # 4. Verify 11 canonical checkpoint outcomes exist.
     async with e2e_sf() as s:
         outcomes = (
-            await s.execute(
-                select(PredictionOutcomeRow).where(
-                    PredictionOutcomeRow.snapshot_id == snap.id
+            (
+                await s.execute(
+                    select(PredictionOutcomeRow).where(PredictionOutcomeRow.snapshot_id == snap.id)
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     checkpoint_days = sorted({o.checkpoint_day for o in outcomes})
-    assert checkpoint_days == [1, 5, 10, 22, 30, 60, 90, 126, 180, 252], (
-        f"Expected the 10 pre-360 checkpoints, got {checkpoint_days}"
-    )
+    assert checkpoint_days == [
+        1,
+        5,
+        10,
+        22,
+        30,
+        60,
+        90,
+        126,
+        180,
+        252,
+    ], f"Expected the 10 pre-360 checkpoints, got {checkpoint_days}"
 
     # 5. Major-checkpoint review_drafts written (T+30, +90, +180).
     async with e2e_sf() as s:
         reviews = (
-            await s.execute(
-                select(PredictionReviewRow).where(
-                    PredictionReviewRow.snapshot_id == snap.id
+            (
+                await s.execute(
+                    select(PredictionReviewRow).where(PredictionReviewRow.snapshot_id == snap.id)
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     review_days = {r.review_checkpoint_day for r in reviews}
     # At least the major checkpoints + auto-drafts are present.
-    assert review_days & {30, 90, 180}, (
-        f"Expected reviews at major checkpoints, got {review_days}"
-    )
+    assert review_days & {30, 90, 180}, f"Expected reviews at major checkpoints, got {review_days}"
 
     # 6. State should now be TERMINATED.
     state = await sm.get_state(snap.ipo_id)

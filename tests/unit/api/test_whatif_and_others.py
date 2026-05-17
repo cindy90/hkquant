@@ -7,9 +7,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.mark.asyncio
-async def test_whatif_404_for_missing_snapshot(
-    client: TestClient, admin_headers
-) -> None:
+async def test_whatif_404_for_missing_snapshot(client: TestClient, admin_headers) -> None:
     r = client.post(
         "/api/whatif/run",
         json={
@@ -68,9 +66,7 @@ def test_audit_log_query_no_perm(client: TestClient) -> None:
     )
     assert login.status_code == 200
     token = login.json()["access_token"]
-    r = client.get(
-        "/api/audit/logs", headers={"Authorization": f"Bearer {token}"}
-    )
+    r = client.get("/api/audit/logs", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403
 
 

@@ -26,7 +26,9 @@ def _ensemble() -> ValuationEnsembleOutput:
     )
     return ValuationEnsembleOutput(
         company_id="C",
-        single_models=[SingleModelValuation(model_name="x", applicable=True, valuation_distribution=dist)],
+        single_models=[
+            SingleModelValuation(model_name="x", applicable=True, valuation_distribution=dist)
+        ],
         weights_used={"x": 1.0},
         ensemble_distribution=dist,
         implied_price_range={"low": Decimal("95"), "fair": Decimal("100"), "high": Decimal("105")},

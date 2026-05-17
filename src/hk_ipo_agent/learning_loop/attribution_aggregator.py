@@ -44,7 +44,7 @@ class ReviewRecord:
 
     review_id: UUID
     snapshot_id: UUID
-    primary_attribution: str   # e.g. "valuation_model" / "agent:fundamental"
+    primary_attribution: str  # e.g. "valuation_model" / "agent:fundamental"
     listing_type: ListingType | None
     agent_role: AgentRole | None  # the agent at fault, if any
     created_at: datetime
@@ -113,10 +113,7 @@ class AttributionAggregator:
         out: list[AggregatedFinding] = []
         for attribution, occurrences in counter.most_common():
             share = occurrences / total
-            if (
-                occurrences < self._cfg.min_occurrences
-                or share < self._cfg.min_share
-            ):
+            if occurrences < self._cfg.min_occurrences or share < self._cfg.min_share:
                 continue
             members = [r for r in reviews if r.primary_attribution == attribution]
             out.append(
@@ -135,7 +132,9 @@ class AttributionAggregator:
         return out
 
     def _slice_by(
-        self, reviews: list[ReviewRecord], dimension: str,
+        self,
+        reviews: list[ReviewRecord],
+        dimension: str,
     ) -> list[AggregatedFinding]:
         """Group reviews by the named dimension before counting attributions."""
         groups: dict[str, list[ReviewRecord]] = defaultdict(list)
@@ -157,10 +156,7 @@ class AttributionAggregator:
             counter = Counter(r.primary_attribution for r in members)
             for attribution, occurrences in counter.most_common():
                 share = occurrences / slice_total
-                if (
-                    occurrences < self._cfg.min_occurrences
-                    or share < self._cfg.min_share
-                ):
+                if occurrences < self._cfg.min_occurrences or share < self._cfg.min_share:
                     continue
                 rel = [r for r in members if r.primary_attribution == attribution]
                 out.append(

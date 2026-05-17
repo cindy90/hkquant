@@ -65,9 +65,13 @@ def _extraction() -> ProspectusExtraction:
 
 def _decision(kind: DecisionType, conf: float) -> FinalDecision:
     d = ValuationDistribution(
-        p10=Decimal("90"), p25=Decimal("95"), p50=Decimal("100"),
-        p75=Decimal("105"), p90=Decimal("110"),
-        mean=Decimal("100"), std=Decimal("5"),
+        p10=Decimal("90"),
+        p25=Decimal("95"),
+        p50=Decimal("100"),
+        p75=Decimal("105"),
+        p90=Decimal("110"),
+        mean=Decimal("100"),
+        std=Decimal("5"),
     )
     return FinalDecision(
         decision=kind,
@@ -97,11 +101,12 @@ def _sample() -> BacktestInput:
 def _reset_engine_cache(monkeypatch: pytest.MonkeyPatch):
     """Drop the cached AsyncEngine between tests."""
     monkeypatch.setenv("KIMI_API_KEY", "sk-test")
-    from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
-    from hk_ipo_agent.data.database import (  # noqa: PLC0415
+    from hk_ipo_agent.common.settings import get_settings
+    from hk_ipo_agent.data.database import (
         async_session_factory,
         get_engine,
     )
+
     get_settings.cache_clear()
     get_engine.cache_clear()  # type: ignore[attr-defined]
     async_session_factory.cache_clear()  # type: ignore[attr-defined]
@@ -112,7 +117,7 @@ def _reset_engine_cache(monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture
 async def sf():
-    from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
+    from hk_ipo_agent.common.settings import get_settings
 
     engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
     sf_ = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
@@ -131,7 +136,7 @@ async def test_full_pipeline_smoke_with_mocked_graph(sf, monkeypatch):
     walk through 7 agents' prompts — that integration is tested in
     Phase 5 / 6 unit suites.
     """
-    from unittest.mock import patch  # noqa: PLC0415
+    from unittest.mock import patch
 
     fake_graph = MagicMock()
     fake_graph.ainvoke = AsyncMock(

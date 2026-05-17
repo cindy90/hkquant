@@ -44,7 +44,7 @@ pg_required = pytest.mark.skipif(
 
 @pytest.fixture(autouse=True)
 def _fresh_engine() -> Iterator[None]:
-    from hk_ipo_agent.data.database import async_session_factory, get_engine  # noqa: PLC0415
+    from hk_ipo_agent.data.database import async_session_factory, get_engine
 
     get_engine.cache_clear()  # type: ignore[attr-defined]
     async_session_factory.cache_clear()  # type: ignore[attr-defined]
@@ -55,7 +55,9 @@ def _fresh_engine() -> Iterator[None]:
 
 def _sync_dsn() -> str:
     return get_settings().database.url.replace(
-        "postgresql+asyncpg://", "postgresql://", 1,
+        "postgresql+asyncpg://",
+        "postgresql://",
+        1,
     )
 
 

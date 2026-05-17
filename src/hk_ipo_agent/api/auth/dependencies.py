@@ -100,10 +100,10 @@ async def get_user_by_id_pg(user_id: UUID) -> _UserRecord | None:
     Returns ``None`` if the user is absent or inactive. Caller is
     responsible for falling back to the in-memory store when None.
     """
-    from sqlalchemy import select  # noqa: PLC0415
+    from sqlalchemy import select
 
-    from ...data.database import async_session_factory  # noqa: PLC0415
-    from ...data.models import UserAccountRow, UserRoleRow  # noqa: PLC0415
+    from ...data.database import async_session_factory
+    from ...data.models import UserAccountRow, UserRoleRow
 
     sf = async_session_factory()
     async with sf() as s:
@@ -111,8 +111,10 @@ async def get_user_by_id_pg(user_id: UUID) -> _UserRecord | None:
         if user is None or not user.is_active:
             return None
         role_rows = (
-            await s.execute(select(UserRoleRow).where(UserRoleRow.user_id == user_id))
-        ).scalars().all()
+            (await s.execute(select(UserRoleRow).where(UserRoleRow.user_id == user_id)))
+            .scalars()
+            .all()
+        )
     roles = [UserRole(r.role) for r in role_rows if r.role in {ur.value for ur in UserRole}]
     return _UserRecord(
         id=user.id,
@@ -136,9 +138,7 @@ def resolve_user(user_id: UUID) -> _UserRecord | None:
 def _seed_defaults() -> None:
     if not _USERS:
         create_user(email="viewer@hk.local", password="viewer", roles=[UserRole.VIEWER])
-        create_user(
-            email="reviewer@hk.local", password="reviewer", roles=[UserRole.REVIEWER]
-        )
+        create_user(email="reviewer@hk.local", password="reviewer", roles=[UserRole.REVIEWER])
         create_user(email="admin@hk.local", password="admin", roles=[UserRole.ADMIN])
 
 

@@ -70,12 +70,14 @@ def _make_hits(texts: list[str]) -> list[SearchHit]:
 
 
 def test_bm25_search_returns_relevant_results() -> None:
-    chunks = _make_hits([
-        "Revenue for FY2024 was RMB 1.2 billion, growing 35% year over year.",
-        "The company operates a B2B SaaS platform for enterprise customers.",
-        "Revenue concentration: top 5 customers account for 61% of revenue.",
-        "Risk: dependency on a small number of key customers.",
-    ])
+    chunks = _make_hits(
+        [
+            "Revenue for FY2024 was RMB 1.2 billion, growing 35% year over year.",
+            "The company operates a B2B SaaS platform for enterprise customers.",
+            "Revenue concentration: top 5 customers account for 61% of revenue.",
+            "Risk: dependency on a small number of key customers.",
+        ]
+    )
     index = _BM25Index(chunks)
     results = index.search("revenue customers", top_k=3, section_filter=None)
     assert len(results) >= 2
@@ -86,11 +88,13 @@ def test_bm25_search_returns_relevant_results() -> None:
 
 
 def test_bm25_search_with_section_filter() -> None:
-    chunks = _make_hits([
-        "Revenue grew 50%.",  # section=financials (i=0)
-        "Business model is SaaS.",  # section=business (i=1)
-        "Revenue from services.",  # section=financials (i=2)
-    ])
+    chunks = _make_hits(
+        [
+            "Revenue grew 50%.",  # section=financials (i=0)
+            "Business model is SaaS.",  # section=business (i=1)
+            "Revenue from services.",  # section=financials (i=2)
+        ]
+    )
     index = _BM25Index(chunks)
     results = index.search("revenue", top_k=10, section_filter="financials")
     # Only chunks with section="financials" should appear
@@ -114,12 +118,14 @@ def test_bm25_search_no_match_returns_empty() -> None:
 
 
 def test_bm25_search_respects_top_k() -> None:
-    chunks = _make_hits([
-        "Revenue from product A.",
-        "Revenue from product B.",
-        "Revenue from product C.",
-        "Revenue from product D.",
-    ])
+    chunks = _make_hits(
+        [
+            "Revenue from product A.",
+            "Revenue from product B.",
+            "Revenue from product C.",
+            "Revenue from product D.",
+        ]
+    )
     index = _BM25Index(chunks)
     results = index.search("revenue product", top_k=2, section_filter=None)
     assert len(results) == 2
@@ -132,11 +138,13 @@ def test_bm25_empty_corpus() -> None:
 
 
 def test_bm25_idf_weights_rare_terms_higher() -> None:
-    chunks = _make_hits([
-        "apple banana cherry",  # chunk-0
-        "apple banana dragonfruit",  # chunk-1
-        "apple elderberry fig",  # chunk-2
-    ])
+    chunks = _make_hits(
+        [
+            "apple banana cherry",  # chunk-0
+            "apple banana dragonfruit",  # chunk-1
+            "apple elderberry fig",  # chunk-2
+        ]
+    )
     index = _BM25Index(chunks)
     # "cherry" only in doc 0; "apple" in all docs → IDF of "cherry" > IDF of "apple"
     assert index._idf["cherry"] > index._idf["apple"]
@@ -198,9 +206,9 @@ async def test_hybrid_retriever_vector_only_hit_still_returned() -> None:
 
     retriever = HybridRetriever(store, rrf_k=60)
     # BM25 corpus doesn't contain "patent" so query "patent" won't find anything in BM25
-    retriever._bm25 = _BM25Index([
-        SearchHit("chunk-Z", "P-TEST", 2, "other", 100, "something else entirely", 0.0, {})
-    ])
+    retriever._bm25 = _BM25Index(
+        [SearchHit("chunk-Z", "P-TEST", 2, "other", 100, "something else entirely", 0.0, {})]
+    )
 
     results = await retriever.search("patent filing", top_k=3)
     assert len(results) >= 1
@@ -220,7 +228,9 @@ async def test_hybrid_retriever_respects_top_k() -> None:
     store.collection_name = "prospectus_p_test"
 
     hits = [
-        SearchHit(f"chunk-{i}", "P-TEST", i, "financials", i * 100, f"revenue item {i}", 0.9 - i * 0.1, {})
+        SearchHit(
+            f"chunk-{i}", "P-TEST", i, "financials", i * 100, f"revenue item {i}", 0.9 - i * 0.1, {}
+        )
         for i in range(10)
     ]
     store.search = AsyncMock(return_value=hits)

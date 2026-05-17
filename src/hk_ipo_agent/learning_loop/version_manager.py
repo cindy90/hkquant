@@ -91,7 +91,7 @@ class VersionManager:
 
     async def get_active_version(self, target_path: str) -> ConfigVersion | None:
         """Latest row for ``target_path`` by ``applied_at`` desc."""
-        from ..data.models import ConfigVersionRow  # noqa: PLC0415
+        from ..data.models import ConfigVersionRow
 
         async with self._sf() as s:
             stmt = (
@@ -104,10 +104,13 @@ class VersionManager:
         return _row_to_dataclass(row) if row is not None else None
 
     async def list_versions(
-        self, target_path: str, *, limit: int = 50,
+        self,
+        target_path: str,
+        *,
+        limit: int = 50,
     ) -> list[ConfigVersion]:
         """All versions for a path, newest-first."""
-        from ..data.models import ConfigVersionRow  # noqa: PLC0415
+        from ..data.models import ConfigVersionRow
 
         async with self._sf() as s:
             stmt = (
@@ -140,13 +143,11 @@ class VersionManager:
         Returns:
             The newly-written ``ConfigVersion``.
         """
-        from ..data.models import ConfigVersionRow  # noqa: PLC0415
+        from ..data.models import ConfigVersionRow
 
         current = await self.get_active_version(target_path)
         new_version = (
-            bump_semver_patch(current.version)
-            if current is not None
-            else DEFAULT_SEED_VERSION
+            bump_semver_patch(current.version) if current is not None else DEFAULT_SEED_VERSION
         )
         content_hash = hash_content(new_content)
 
@@ -184,7 +185,7 @@ class VersionManager:
         We never modify or delete the version history; rollback is just
         a forward-write that re-instates older content as the active row.
         """
-        from ..data.models import ConfigVersionRow  # noqa: PLC0415
+        from ..data.models import ConfigVersionRow
 
         async with self._sf() as s:
             stmt = select(ConfigVersionRow).where(
@@ -193,9 +194,7 @@ class VersionManager:
             )
             target_row = (await s.execute(stmt)).scalar_one_or_none()
         if target_row is None:
-            raise KeyError(
-                f"version {target_version} for {target_path} not found"
-            )
+            raise KeyError(f"version {target_version} for {target_path} not found")
         # Bump-as-rollback.
         return await self.bump_version(
             target_path,

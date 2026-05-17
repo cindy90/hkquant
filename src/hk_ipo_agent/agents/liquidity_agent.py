@@ -67,7 +67,9 @@ class LiquidityAgent(BaseAgent):
             f"- Listing type: {ctx.extraction.listing_type.value}\n\n"
             f"# Computed primitives\n"
             f"- Controlling shareholder %: "
-            f"{controlling:.1%}\n" if controlling is not None else "- Controlling shareholder: n/a\n"
+            f"{controlling:.1%}\n"
+            if controlling is not None
+            else "- Controlling shareholder: n/a\n"
         )
         user_msg += (
             f"- Buyback-clause investors: {buyback_count}\n"
@@ -134,9 +136,7 @@ class LiquidityAgent(BaseAgent):
             scores=score_card.score_dict(),
             overall_score=max(0.0, min(100.0, score_card.overall())),
             key_findings=findings,
-            uncertainty_flags=(
-                ["no_shareholder_data"] if not ctx.extraction.shareholders else []
-            ),
+            uncertainty_flags=(["no_shareholder_data"] if not ctx.extraction.shareholders else []),
             data_sources_used=[
                 DataSource(source="prospectus", detail=ctx.extraction.prospectus_id),
             ],

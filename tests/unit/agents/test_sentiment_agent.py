@@ -110,14 +110,12 @@ async def test_sentiment_agent_with_kb_writes_theme_heat(
 
     class _KB:
         def themes_heat(self):
-            return {
-                "themes": {
-                    "ai_server": {"heat_score": 72}
-                }
-            }
+            return {"themes": {"ai_server": {"heat_score": 72}}}
 
         def theme_definitions(self):
-            return {"themes": {"ai_server": {"label": "AI 服务器", "keywords": ["AI", "AI 服务器"]}}}
+            return {
+                "themes": {"ai_server": {"label": "AI 服务器", "keywords": ["AI", "AI 服务器"]}}
+            }
 
         def ai_revenue_manual(self):
             return {"samples": []}

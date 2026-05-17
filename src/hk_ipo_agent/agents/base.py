@@ -97,7 +97,7 @@ def load_prompt(prompt_path: str) -> tuple[str, dict[str, Any]]:
             else:
                 frontmatter[key] = val
                 cur_key = key
-    body = full[m.end():]
+    body = full[m.end() :]
     return body, frontmatter
 
 

@@ -39,9 +39,7 @@ class UserAccountRow(UUIDMixin, Base):
     sso_subject: Mapped[str] = mapped_column(String(200), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         Index(
@@ -71,9 +69,7 @@ class UserRoleRow(UUIDMixin, Base):
     )
     role: Mapped[str] = mapped_column(String(50), nullable=False)
     # enums.UserRole: viewer / reviewer / senior_reviewer / operator / admin / auditor
-    granted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     granted_by: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey("user_accounts.id"),

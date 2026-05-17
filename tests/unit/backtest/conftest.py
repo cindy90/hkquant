@@ -16,7 +16,7 @@ def _fresh_async_engine() -> Iterator[None]:
     """Mirror tests/unit/api + tests/unit/prediction_registry pattern —
     clear the lru_cached AsyncEngine so cross-loop reuse doesn't trigger
     asyncpg teardown errors."""
-    from hk_ipo_agent.data.database import async_session_factory, get_engine  # noqa: PLC0415
+    from hk_ipo_agent.data.database import async_session_factory, get_engine
 
     get_engine.cache_clear()  # type: ignore[attr-defined]
     async_session_factory.cache_clear()  # type: ignore[attr-defined]
@@ -34,7 +34,7 @@ async def fresh_sf():
     rest of the suite uses the sf only as an IPC handle (no actual
     queries fire in V8LiteScorer / runner harness paths).
     """
-    from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
+    from hk_ipo_agent.common.settings import get_settings
 
     engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
     sf = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
@@ -51,9 +51,9 @@ def _pg_available() -> bool:
     when the dev DB happens to be down. CI / Airflow always have PG
     running so this is dev-loop only.
     """
-    import psycopg  # noqa: PLC0415
+    import psycopg
 
-    from hk_ipo_agent.common.settings import get_settings  # noqa: PLC0415
+    from hk_ipo_agent.common.settings import get_settings
 
     url = get_settings().database.url
     dsn = url.replace("postgresql+asyncpg://", "postgresql://", 1)

@@ -147,16 +147,26 @@ class PGChatStore:
     ) -> ChatSession:
         now = datetime.now(UTC)
         row = ChatSessionRow(
-            id=uuid4(), user_id=user_id, snapshot_id=snapshot_id, ipo_id=ipo_id,
-            title=title, created_at=now, last_active_at=now, archived=False,
+            id=uuid4(),
+            user_id=user_id,
+            snapshot_id=snapshot_id,
+            ipo_id=ipo_id,
+            title=title,
+            created_at=now,
+            last_active_at=now,
+            archived=False,
         )
         async with self._sf() as s:
             s.add(row)
             await s.commit()
         return ChatSession(
-            id=row.id, user_id=row.user_id, snapshot_id=row.snapshot_id,
-            ipo_id=row.ipo_id, title=row.title or "",
-            created_at=row.created_at, last_active_at=row.last_active_at,
+            id=row.id,
+            user_id=row.user_id,
+            snapshot_id=row.snapshot_id,
+            ipo_id=row.ipo_id,
+            title=row.title or "",
+            created_at=row.created_at,
+            last_active_at=row.last_active_at,
             archived=row.archived,
         )
 
@@ -166,9 +176,13 @@ class PGChatStore:
         if row is None:
             return None
         return ChatSession(
-            id=row.id, user_id=row.user_id, snapshot_id=row.snapshot_id,
-            ipo_id=row.ipo_id, title=row.title or "",
-            created_at=row.created_at, last_active_at=row.last_active_at,
+            id=row.id,
+            user_id=row.user_id,
+            snapshot_id=row.snapshot_id,
+            ipo_id=row.ipo_id,
+            title=row.title or "",
+            created_at=row.created_at,
+            last_active_at=row.last_active_at,
             archived=row.archived,
         )
 
@@ -182,9 +196,14 @@ class PGChatStore:
             rows = (await s.execute(stmt)).scalars().all()
         return [
             ChatSession(
-                id=r.id, user_id=r.user_id, snapshot_id=r.snapshot_id, ipo_id=r.ipo_id,
-                title=r.title or "", created_at=r.created_at,
-                last_active_at=r.last_active_at, archived=r.archived,
+                id=r.id,
+                user_id=r.user_id,
+                snapshot_id=r.snapshot_id,
+                ipo_id=r.ipo_id,
+                title=r.title or "",
+                created_at=r.created_at,
+                last_active_at=r.last_active_at,
+                archived=r.archived,
             )
             for r in rows
         ]
@@ -209,17 +228,25 @@ class PGChatStore:
             next_seq = (max(seqs) + 1) if seqs else 0
             now = datetime.now(UTC)
             msg_row = ChatMessageRow(
-                id=uuid4(), session_id=session_id,
-                role=role.value, content=content, content_json=content_json,
-                sequence=next_seq, created_at=now,
+                id=uuid4(),
+                session_id=session_id,
+                role=role.value,
+                content=content,
+                content_json=content_json,
+                sequence=next_seq,
+                created_at=now,
             )
             s.add(msg_row)
             sess.last_active_at = now
             await s.commit()
         return ChatMessage(
-            id=msg_row.id, session_id=session_id, role=role,
-            content=content, content_json=content_json,
-            sequence=next_seq, created_at=now,
+            id=msg_row.id,
+            session_id=session_id,
+            role=role,
+            content=content,
+            content_json=content_json,
+            sequence=next_seq,
+            created_at=now,
         )
 
     async def list_messages(self, session_id: UUID) -> list[ChatMessage]:
@@ -232,10 +259,13 @@ class PGChatStore:
             rows = (await s.execute(stmt)).scalars().all()
         return [
             ChatMessage(
-                id=r.id, session_id=r.session_id,
+                id=r.id,
+                session_id=r.session_id,
                 role=ChatMessageRole(r.role),
-                content=r.content or "", content_json=r.content_json,
-                sequence=r.sequence, created_at=r.created_at,
+                content=r.content or "",
+                content_json=r.content_json,
+                sequence=r.sequence,
+                created_at=r.created_at,
             )
             for r in rows
         ]

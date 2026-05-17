@@ -75,9 +75,7 @@ async def run_debate(
     settings = get_settings().orchestrator
     max_r = max_rounds if max_rounds is not None else settings.debate_max_rounds
     threshold = (
-        jaccard_threshold
-        if jaccard_threshold is not None
-        else settings.debate_jaccard_threshold
+        jaccard_threshold if jaccard_threshold is not None else settings.debate_jaccard_threshold
     )
 
     rounds: list[DebateRound] = []
@@ -129,11 +127,7 @@ async def run_debate(
         if converged:
             break
 
-    final_consensus = (
-        _build_final_consensus(rounds)
-        if rounds
-        else "No rounds executed."
-    )
+    final_consensus = _build_final_consensus(rounds) if rounds else "No rounds executed."
     unresolved: list[str] = []
     if rounds and rounds[-1].resolution is None:
         unresolved.append("max rounds reached without convergence")
@@ -150,6 +144,7 @@ async def run_debate(
 
 def _summarize_resolution(bull: str, bear: str, devil: str) -> str:
     """Deterministic last-round summary; LLM-free to keep cost bounded."""
+
     # Take first sentence of each — Phase 8 may use a tiny LLM call to merge.
     def first_sentence(s: str) -> str:
         s = s.strip()

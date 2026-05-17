@@ -131,9 +131,7 @@ async def test_run_debate_runs_max_rounds_without_convergence(
     def side_effect(*args, **kwargs):
         counter["i"] += 1
         # Alternate completely different texts.
-        return mock_llm_response(
-            text=f"unique_response_{counter['i']}_xyz_qwerty_alpha_bravo"
-        )
+        return mock_llm_response(text=f"unique_response_{counter['i']}_xyz_qwerty_alpha_bravo")
 
     mock_llm_client._client.chat.completions.create = AsyncMock(side_effect=side_effect)
     debate_out, _cost = await run_debate(
@@ -150,9 +148,7 @@ async def test_run_debate_runs_max_rounds_without_convergence(
 
 
 @pytest.mark.asyncio
-async def test_run_debate_empty_max_rounds_zero(
-    mock_llm_client, mock_llm_response
-) -> None:
+async def test_run_debate_empty_max_rounds_zero(mock_llm_client, mock_llm_response) -> None:
     """max_rounds=0 produces empty debate."""
     mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="ignored")

@@ -41,14 +41,14 @@ logger = get_logger(__name__)
 
 # Default thresholds — every one is tunable via DriftDetectorConfig and
 # documented in docs/LEARNING_PROTOCOL.md once 10c lands.
-DEFAULT_CUSUM_THRESHOLD: float = 4.0      # tabular value for k=0.5, h=4
-DEFAULT_CUSUM_K: float = 0.5              # half-stdev slack
-DEFAULT_PSI_THRESHOLD: float = 0.20       # PSI > 0.2 = "significant shift"
-DEFAULT_BEAR_MISS_RATE: float = 0.40      # >40% missed negatives = drift
+DEFAULT_CUSUM_THRESHOLD: float = 4.0  # tabular value for k=0.5, h=4
+DEFAULT_CUSUM_K: float = 0.5  # half-stdev slack
+DEFAULT_PSI_THRESHOLD: float = 0.20  # PSI > 0.2 = "significant shift"
+DEFAULT_BEAR_MISS_RATE: float = 0.40  # >40% missed negatives = drift
 DEFAULT_AGENT_CALIBRATION_DROP: float = 0.15
-DEFAULT_WINDOW_MIN_N: int = 10            # need at least 10 samples to fire
-DEFAULT_ACCURACY_BASELINE: float = 0.70   # expected decision_correct rate;
-                                          # CUSUM detects drops below this
+DEFAULT_WINDOW_MIN_N: int = 10  # need at least 10 samples to fire
+DEFAULT_ACCURACY_BASELINE: float = 0.70  # expected decision_correct rate;
+# CUSUM detects drops below this
 
 
 @dataclass(frozen=True)
@@ -79,7 +79,7 @@ class OutcomeWindowSample:
     decision_correct: bool | None
     predicted_median_price: float | None
     realized_price_at_60d: float | None
-    bear_flagged_risk: bool | None       # did debate_output.bear flag risk?
+    bear_flagged_risk: bool | None  # did debate_output.bear flag risk?
     realized_outcome_negative: bool | None  # did realized return < 0?
     agent_scores: dict[str, float] = field(default_factory=dict)
     agent_realized_hits: dict[str, bool] = field(default_factory=dict)
@@ -202,9 +202,7 @@ class DriftDetector:
         for regime in (RegulatoryRegime.PRE_20250804, RegulatoryRegime.POST_20250804):
             slice_ = [s for s in samples if s.regulatory_regime == regime]
             series = [
-                1.0 if s.decision_correct else 0.0
-                for s in slice_
-                if s.decision_correct is not None
+                1.0 if s.decision_correct else 0.0 for s in slice_ if s.decision_correct is not None
             ]
             if len(series) < self._cfg.window_min_n:
                 continue
@@ -239,15 +237,9 @@ class DriftDetector:
         for s in samples:
             pred = s.predicted_median_price
             real = s.realized_price_at_60d
-            if (
-                s.listing_type is None
-                or pred is None or pred == 0.0
-                or real is None or real == 0.0
-            ):
+            if s.listing_type is None or pred is None or pred == 0.0 or real is None or real == 0.0:
                 continue
-            ratios_by_lt.setdefault(s.listing_type, []).append(
-                float(np.log(pred / real))
-            )
+            ratios_by_lt.setdefault(s.listing_type, []).append(float(np.log(pred / real)))
         # Compare each listing_type's distribution to the cross-LT pooled
         # baseline — if a single slice has drifted vs the population it's
         # signal.
@@ -264,7 +256,8 @@ class DriftDetector:
                         detection_time=datetime.now(UTC),
                         signal_type=DriftSignalType.VALUATION_BIAS,
                         severity=(
-                            AlertLevel.CRITICAL if psi > 2 * self._cfg.psi_threshold
+                            AlertLevel.CRITICAL
+                            if psi > 2 * self._cfg.psi_threshold
                             else AlertLevel.WARNING
                         ),
                         affected_dimensions={"listing_type": lt.value},
@@ -299,8 +292,7 @@ class DriftDetector:
                     threshold=self._cfg.bear_miss_rate,
                     sample_count=len(negatives),
                     evidence=(
-                        f"{len(missed)}/{len(negatives)} negative outcomes "
-                        "were NOT flagged by Bear"
+                        f"{len(missed)}/{len(negatives)} negative outcomes were NOT flagged by Bear"
                     ),
                     related_snapshot_ids=_uuids(missed),
                 )
@@ -308,7 +300,8 @@ class DriftDetector:
         return []
 
     def _agent_calibration_drift(
-        self, samples: list[OutcomeWindowSample],
+        self,
+        samples: list[OutcomeWindowSample],
     ) -> list[DriftSignal]:
         """High-confidence (score ≥ 70) agents whose realized hit-rate dropped."""
         # Build (agent, hit_rate) from samples that have hit data.
@@ -355,7 +348,7 @@ class DriftDetector:
 
 
 def _uuids(samples: Iterable[OutcomeWindowSample]) -> list[Any]:
-    from uuid import UUID  # noqa: PLC0415
+    from uuid import UUID
 
     out: list[Any] = []
     for s in samples:

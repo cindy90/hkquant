@@ -47,7 +47,7 @@ _DEFAULT_MAPPING_RULES_PATH = Path(__file__).resolve().parents[3] / "config" / "
 class FilingNumbers:
     """The slice of an earnings filing we actually consume."""
 
-    report_period: str   # 'FY2025' / 'H1-2025' / 'Q1-2025'
+    report_period: str  # 'FY2025' / 'H1-2025' / 'Q1-2025'
     filing_date: date
     actual_revenue: Decimal | None
     actual_net_profit: Decimal | None
@@ -133,7 +133,9 @@ class EarningsComparator:
             predicted_net_profit=predicted.get("net_profit"),
             profit_deviation_pct=float(profit_dev) if profit_dev is not None else None,
             actual_gross_margin=(
-                float(filing.actual_gross_margin) if filing.actual_gross_margin is not None else None
+                float(filing.actual_gross_margin)
+                if filing.actual_gross_margin is not None
+                else None
             ),
             predicted_gross_margin=(
                 float(predicted_margin) if predicted_margin is not None else None
@@ -148,9 +150,7 @@ class EarningsComparator:
         await self._persist(cmp_obj)
         return cmp_obj
 
-    def _predicted_from_extraction(
-        self, snapshot: PredictionSnapshot
-    ) -> dict[str, Decimal | None]:
+    def _predicted_from_extraction(self, snapshot: PredictionSnapshot) -> dict[str, Decimal | None]:
         """Extract the most recent FY revenue / profit / margin from the prospectus.
 
         Mapping rules (per industry type) live in ``mapping_rules.yaml`` and let
@@ -185,7 +185,7 @@ class EarningsComparator:
 
     async def _prior_run_count(self) -> int:
         async with self._sf() as s:
-            from sqlalchemy import func  # noqa: PLC0415
+            from sqlalchemy import func
 
             row = (
                 await s.execute(select(func.count()).select_from(EarningsComparisonRow))
@@ -203,25 +203,30 @@ class EarningsComparator:
                 "predicted_revenue_from_prospectus": cmp.predicted_revenue_from_prospectus,
                 "revenue_deviation_pct": (
                     Decimal(str(cmp.revenue_deviation_pct))
-                    if cmp.revenue_deviation_pct is not None else None
+                    if cmp.revenue_deviation_pct is not None
+                    else None
                 ),
                 "actual_net_profit": cmp.actual_net_profit,
                 "predicted_net_profit": cmp.predicted_net_profit,
                 "profit_deviation_pct": (
                     Decimal(str(cmp.profit_deviation_pct))
-                    if cmp.profit_deviation_pct is not None else None
+                    if cmp.profit_deviation_pct is not None
+                    else None
                 ),
                 "actual_gross_margin": (
                     Decimal(str(cmp.actual_gross_margin))
-                    if cmp.actual_gross_margin is not None else None
+                    if cmp.actual_gross_margin is not None
+                    else None
                 ),
                 "predicted_gross_margin": (
                     Decimal(str(cmp.predicted_gross_margin))
-                    if cmp.predicted_gross_margin is not None else None
+                    if cmp.predicted_gross_margin is not None
+                    else None
                 ),
                 "margin_deviation_pp": (
                     Decimal(str(cmp.margin_deviation_pp))
-                    if cmp.margin_deviation_pp is not None else None
+                    if cmp.margin_deviation_pp is not None
+                    else None
                 ),
                 "qualitative_deviations": list(cmp.qualitative_deviations),
                 "overall_assessment": cmp.overall_assessment.value,
@@ -230,8 +235,12 @@ class EarningsComparator:
                 "requires_human_review": cmp.requires_human_review,
             }
             # Upsert on (snapshot_id, report_period) UNIQUE — idempotent.
-            stmt = pg_insert(EarningsComparisonRow).values(row).on_conflict_do_nothing(
-                index_elements=["snapshot_id", "report_period"],
+            stmt = (
+                pg_insert(EarningsComparisonRow)
+                .values(row)
+                .on_conflict_do_nothing(
+                    index_elements=["snapshot_id", "report_period"],
+                )
             )
             await s.execute(stmt)
             await s.commit()

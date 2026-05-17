@@ -136,7 +136,7 @@ HK_MACRO_QUOTE: dict[str, str] = {
 def _load_ifindpy() -> Any:
     """Import iFinDPy on demand. Raises MissingDependencyError if absent."""
     try:
-        import iFinDPy  # noqa: PLC0415 — intentional lazy import
+        import iFinDPy
     except ImportError as exc:
         raise MissingDependencyError(
             "iFinDPy is not installed. It ships with the Tonghuashun "
@@ -208,14 +208,10 @@ class IFindClient:
         sources_cfg = load_data_sources_config().get("ifind", {})
         self.username = username or settings.ifind.username
         self.password = (
-            password
-            if password is not None
-            else settings.ifind.password.get_secret_value()
+            password if password is not None else settings.ifind.password.get_secret_value()
         )
         self.qps_limit = qps_limit or int(sources_cfg.get("qps_limit", settings.ifind.qps_limit))
-        self.timeout_seconds = timeout_seconds or int(
-            sources_cfg.get("timeout_seconds", 30)
-        )
+        self.timeout_seconds = timeout_seconds or int(sources_cfg.get("timeout_seconds", 30))
         self.max_retries = max_retries or int(sources_cfg.get("retry_max", 3))
         self._rate_limiter = _RateLimiter(self.qps_limit)
         self._sdk: Any | None = None
@@ -229,9 +225,7 @@ class IFindClient:
             return
         self._sdk = _load_ifindpy()
         # iFinDPy.THS_iFinDLogin is blocking; offload to thread.
-        result = await asyncio.to_thread(
-            self._sdk.THS_iFinDLogin, self.username, self.password
-        )
+        result = await asyncio.to_thread(self._sdk.THS_iFinDLogin, self.username, self.password)
         if result != 0:
             raise DataSourceUnavailableError(
                 f"iFind login failed with code {result}",
@@ -323,9 +317,7 @@ class IFindClient:
                 kwargs={},
                 as_of_date=as_of_date,
             ),
-            lambda sdk: sdk.THS_DataPool(
-                "newshare", params, HK_IPO_CALENDAR_INDICATORS
-            ),
+            lambda sdk: sdk.THS_DataPool("newshare", params, HK_IPO_CALENDAR_INDICATORS),
         )
 
     async def get_ipo_basics(
@@ -427,9 +419,7 @@ class IFindClient:
                 kwargs={},
                 as_of_date=as_of_date,
             ),
-            lambda sdk: sdk.THS_BasicData(
-                joined, VALUATION_SNAPSHOT_INDICATORS, params
-            ),
+            lambda sdk: sdk.THS_BasicData(joined, VALUATION_SNAPSHOT_INDICATORS, params),
         )
 
     async def get_ah_premium_history(
@@ -445,7 +435,7 @@ class IFindClient:
         the premium ratio. Phase 4 valuation/ah_premium.py consumer.
         """
         self._require_as_of(as_of_date)
-        from datetime import timedelta  # noqa: PLC0415
+        from datetime import timedelta
 
         h_ticker, a_ticker = ticker_pair
         start = as_of_date - timedelta(days=lookback_days)
@@ -506,11 +496,7 @@ class IFindClient:
     ) -> Any:
         """Macro EDB time series. ``indicator_ids`` joined with ``;``."""
         self._require_as_of(as_of_date)
-        joined = (
-            ";".join(indicator_ids)
-            if isinstance(indicator_ids, list)
-            else indicator_ids
-        )
+        joined = ";".join(indicator_ids) if isinstance(indicator_ids, list) else indicator_ids
         return await self._call(
             IFindRequest(
                 method="THS_EDBQuery",
@@ -518,9 +504,7 @@ class IFindClient:
                 kwargs={},
                 as_of_date=as_of_date,
             ),
-            lambda sdk: sdk.THS_EDBQuery(
-                joined, start.isoformat(), as_of_date.isoformat()
-            ),
+            lambda sdk: sdk.THS_EDBQuery(joined, start.isoformat(), as_of_date.isoformat()),
         )
 
     # ------------------------------------------------------------------ internals

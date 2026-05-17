@@ -33,9 +33,7 @@ class BaseRepository(Generic[T]):
 
     def __init__(self, session: AsyncSession) -> None:
         if not hasattr(type(self), "model"):
-            raise NotImplementedError(
-                f"{type(self).__name__} must set class attribute `model`"
-            )
+            raise NotImplementedError(f"{type(self).__name__} must set class attribute `model`")
         self.session = session
 
     # ---------------------------------------------------------------- read

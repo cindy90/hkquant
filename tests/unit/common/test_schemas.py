@@ -138,7 +138,11 @@ def test_prediction_snapshot_is_frozen() -> None:
             single_models=[],
             weights_used={},
             ensemble_distribution=_stub_valuation_distribution(),
-            implied_price_range={"low": Decimal("10"), "fair": Decimal("12"), "high": Decimal("14")},
+            implied_price_range={
+                "low": Decimal("10"),
+                "fair": Decimal("12"),
+                "high": Decimal("14"),
+            },
         ),
         debate_output=DebateOutput(final_consensus="ok"),
         decision=_stub_final_decision(),

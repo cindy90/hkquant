@@ -85,9 +85,7 @@ class ComparablePoolBuilder:
                 fetched=fetched,
             )
 
-    async def _ingest(
-        self, ifind_result: object, repo: ComparableCompanyRepository
-    ) -> int:
+    async def _ingest(self, ifind_result: object, repo: ComparableCompanyRepository) -> int:
         """Parse iFind comparable list. Phase 2.1: stub."""
         log.warning(
             "comparable_ingest_stub",

@@ -229,7 +229,8 @@ async def test_get_hk_prices_rejects_start_after_as_of_minus_1(fresh_sf) -> None
 
 def test_assert_within_window_passes_for_on_or_before(fresh_sf) -> None:
     provider = AsOfDataProvider(
-        as_of_date=date(2024, 6, 13), session_factory=fresh_sf,
+        as_of_date=date(2024, 6, 13),
+        session_factory=fresh_sf,
     )
     # No-op on past date.
     provider.assert_within_window(date(2024, 5, 1), field_name="filing_date")
@@ -239,7 +240,8 @@ def test_assert_within_window_passes_for_on_or_before(fresh_sf) -> None:
 
 def test_assert_within_window_raises_for_future_date(fresh_sf) -> None:
     provider = AsOfDataProvider(
-        as_of_date=date(2024, 6, 13), session_factory=fresh_sf,
+        as_of_date=date(2024, 6, 13),
+        session_factory=fresh_sf,
     )
     with pytest.raises(LookAheadError, match="filing_date"):
         provider.assert_within_window(date(2024, 6, 14), field_name="filing_date")
@@ -250,7 +252,8 @@ async def test_post_ipo_events_always_empty_in_walk_forward(fresh_sf) -> None:
     """Walk-forward MUST NEVER see post-IPO events — they're post-listing
     by definition; the convention is documented + enforced."""
     provider = AsOfDataProvider(
-        as_of_date=date(2024, 6, 13), session_factory=fresh_sf,
+        as_of_date=date(2024, 6, 13),
+        session_factory=fresh_sf,
     )
     events = await provider.get_post_ipo_events(uuid.uuid4())
     assert events == []

@@ -89,7 +89,9 @@ class DailyScheduler(BaseScheduler):
             try:
                 await self._process_listed_snapshot(snap_id, ipo_id, stats)
             except Exception as exc:
-                stats.record_error(exc, context={"snapshot_id": str(snap_id), "phase": "listed_processing"})
+                stats.record_error(
+                    exc, context={"snapshot_id": str(snap_id), "phase": "listed_processing"}
+                )
 
         # 3. Terminal-state handlers (WITHDRAWN / HEARING_FAILED / PRICING_PULLED)
         terminal_rows = await self._list_terminal_snapshots_without_outcome()
@@ -100,7 +102,9 @@ class DailyScheduler(BaseScheduler):
                     terminal_state=IPOLifecycleStateType(row.current_state),
                 )
             except Exception as exc:
-                stats.record_error(exc, context={"ipo_id": str(row.ipo_id), "phase": "terminal_handler"})
+                stats.record_error(
+                    exc, context={"ipo_id": str(row.ipo_id), "phase": "terminal_handler"}
+                )
 
         # 4. Stale-detector scan
         try:
@@ -149,19 +153,22 @@ class DailyScheduler(BaseScheduler):
                 if day in MAJOR_CHECKPOINTS:
                     actual_price = self._actual_price_for(meta, day) or self._fallback_price(meta)
                     await self._reviews.generate_draft(
-                        snapshot_id=snapshot_id, checkpoint_day=day,
+                        snapshot_id=snapshot_id,
+                        checkpoint_day=day,
                         actual_price=actual_price,
                     )
                 # Critical-loss bypass at any checkpoint
                 await self._reviews.generate_critical_draft_if_needed(
-                    snapshot_id=snapshot_id, checkpoint_day=day,
+                    snapshot_id=snapshot_id,
+                    checkpoint_day=day,
                     actual_price=self._actual_price_for(meta, day) or self._fallback_price(meta),
                 )
 
     async def _transition_terminate(self, ipo_id: UUID) -> None:
         try:
             await self._sm.transition_to(
-                ipo_id, IPOLifecycleStateType.TERMINATED,
+                ipo_id,
+                IPOLifecycleStateType.TERMINATED,
                 triggered_by=TransitionTrigger.AUTO_DETECTOR,
                 evidence={"reason": "reached_t_plus_360"},
             )
@@ -204,8 +211,10 @@ class DailyScheduler(BaseScheduler):
         """Emit a stale_detector signal through the alert router (if any)."""
         if self._alerts is None:
             logger.info(
-                "stale_signal", ipo_id=str(signal.ipo_id),
-                state=signal.state.value, days=signal.days_in_state,
+                "stale_signal",
+                ipo_id=str(signal.ipo_id),
+                state=signal.state.value,
+                days=signal.days_in_state,
             )
             return
         category = (
@@ -214,8 +223,10 @@ class DailyScheduler(BaseScheduler):
             else "stale_pricing"
         )
         await self._alerts.emit(
-            level=signal.severity, category=category,
-            message=signal.message, actionable_info=signal.actionable_info,
+            level=signal.severity,
+            category=category,
+            message=signal.message,
+            actionable_info=signal.actionable_info,
             related_ipo_id=signal.ipo_id,
         )
 
@@ -230,7 +241,7 @@ class DailyScheduler(BaseScheduler):
         Returns Decimal('0') as a sentinel; review_workflow can still
         attribute and the price-in-range check just becomes False.
         """
-        from decimal import Decimal  # noqa: PLC0415
+        from decimal import Decimal
 
         return Decimal("0")
 

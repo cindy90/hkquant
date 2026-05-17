@@ -181,8 +181,7 @@ def test_proposer_emits_synthesizer_proposal_when_bear_advantage_high() -> None:
     cf = _cf(bear_advantage=0.8)
     proposals = proposer.propose(drift_signals=[], counterfactual=cf)
     assert any(
-        "synthesizer" in p.target_path
-        and p.adjustment_type == AdjustmentType.LOGIC_CHANGE
+        "synthesizer" in p.target_path and p.adjustment_type == AdjustmentType.LOGIC_CHANGE
         for p in proposals
     )
 
@@ -192,8 +191,7 @@ def test_proposer_emits_weight_proposal_when_single_model_wins() -> None:
     cf = _cf(ensemble_advantage=-0.10)
     proposals = proposer.propose(drift_signals=[], counterfactual=cf)
     assert any(
-        "valuation_weights" in p.target_path
-        and p.adjustment_type == AdjustmentType.WEIGHT_CHANGE
+        "valuation_weights" in p.target_path and p.adjustment_type == AdjustmentType.WEIGHT_CHANGE
         for p in proposals
     )
 

@@ -80,6 +80,7 @@ class AHPremiumValuation(ValuationModel):
             premium_source = "industry_fallback"
 
         a_price_f = float(a_price)
+
         # H equity value in RMB = A_price * (1 - premium); share count cancels in ensemble.
         # We model per-share equivalent here; ensemble compares apples-to-apples on per-share.
         def payoff(s: dict[str, np.ndarray]) -> np.ndarray:

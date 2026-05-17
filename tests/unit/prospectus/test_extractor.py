@@ -190,15 +190,20 @@ async def test_extract_risks_invalid_item_skipped(
     mock_llm: LLMClient, extraction_config: ExtractionConfig
 ) -> None:
     fake_response = _RisksResponse(
-        risk_factors=[{"category": "INVALID_CATEGORY", "description": "x", "severity": "high", "citation": {"page": 1}}],
+        risk_factors=[
+            {
+                "category": "INVALID_CATEGORY",
+                "description": "x",
+                "severity": "high",
+                "citation": {"page": 1},
+            }
+        ],
         needs_review=False,
     )
     mock_llm.acomplete_json = AsyncMock(return_value=fake_response)  # type: ignore[method-assign]
 
     extractor = ProspectusExtractor(mock_llm, "P-TEST", config=extraction_config)
-    result = await extractor.extract(
-        {"risks": [{"text": "...", "page": 1, "chunk_id": "c-1"}]}
-    )
+    result = await extractor.extract({"risks": [{"text": "...", "page": 1, "chunk_id": "c-1"}]})
 
     assert len(result.extraction.risk_factors) == 0
     assert result.extraction.needs_human_review is True
@@ -240,7 +245,8 @@ async def test_extract_shareholders_populates_data(
     assert sh.pct_pre_ipo == pytest.approx(0.35)
     assert sh.is_controlling is True
     assert result.extraction.pre_ipo_valuation_rmb == Decimal("8500000000.00")
-    from datetime import date  # noqa: PLC0415
+    from datetime import date
+
     assert result.extraction.last_round_date == date(2023, 6, 15)
 
 
@@ -314,9 +320,7 @@ async def test_extract_ch18c_skipped_for_non_18c_listing(
     mock_llm.acomplete_json = AsyncMock()  # type: ignore[method-assign]
 
     extractor = ProspectusExtractor(mock_llm, "P-TEST", config=config)
-    result = await extractor.extract(
-        {"ch18c": [{"text": "...", "page": 1, "chunk_id": "c-1"}]}
-    )
+    result = await extractor.extract({"ch18c": [{"text": "...", "page": 1, "chunk_id": "c-1"}]})
 
     assert result.extraction.ch18c_qualification is None
     mock_llm.acomplete_json.assert_not_awaited()
@@ -335,15 +339,22 @@ async def test_extract_multiple_sections_records_success_count(
     mock_llm.acomplete_json = AsyncMock(  # type: ignore[method-assign]
         side_effect=[
             _FinancialsResponse(financials_json=[], needs_review=False, notes=""),
-            _BusinessResponse(business_model="SaaS", revenue_streams=[], customer_concentration=[], needs_review=False),
+            _BusinessResponse(
+                business_model="SaaS",
+                revenue_streams=[],
+                customer_concentration=[],
+                needs_review=False,
+            ),
         ]
     )
 
     extractor = ProspectusExtractor(mock_llm, "P-TEST", config=extraction_config)
-    result = await extractor.extract({
-        "financials": [{"text": "...", "page": 1, "chunk_id": "c-1"}],
-        "business": [{"text": "...", "page": 2, "chunk_id": "c-2"}],
-    })
+    result = await extractor.extract(
+        {
+            "financials": [{"text": "...", "page": 1, "chunk_id": "c-1"}],
+            "business": [{"text": "...", "page": 2, "chunk_id": "c-2"}],
+        }
+    )
 
     assert result.sections_routed == 2
     assert result.sections_succeeded == 2
@@ -355,7 +366,7 @@ async def test_extract_section_failure_marks_review(
     mock_llm: LLMClient, extraction_config: ExtractionConfig
 ) -> None:
     """A section that raises ExtractionError is captured gracefully."""
-    from hk_ipo_agent.common.exceptions import ExtractionError  # noqa: PLC0415
+    from hk_ipo_agent.common.exceptions import ExtractionError
 
     mock_llm.acomplete_json = AsyncMock(  # type: ignore[method-assign]
         side_effect=ExtractionError("LLM timeout")
@@ -392,9 +403,7 @@ async def test_extract_opus_fallback_on_sonnet_failure(
     mock_llm.acomplete_json = AsyncMock(side_effect=side_effect)  # type: ignore[method-assign]
 
     extractor = ProspectusExtractor(mock_llm, "P-TEST", config=extraction_config)
-    result = await extractor.extract(
-        {"business": [{"text": "...", "page": 1, "chunk_id": "c-1"}]}
-    )
+    result = await extractor.extract({"business": [{"text": "...", "page": 1, "chunk_id": "c-1"}]})
 
     assert result.extraction.business_model == "Recovered via Opus"
     assert call_count["n"] == 2  # first call failed, second succeeded
@@ -408,9 +417,7 @@ async def test_extract_unknown_section_is_skipped(
     mock_llm.acomplete_json = AsyncMock()  # type: ignore[method-assign]
 
     extractor = ProspectusExtractor(mock_llm, "P-TEST", config=extraction_config)
-    result = await extractor.extract(
-        {"other": [{"text": "...", "page": 1, "chunk_id": "c-1"}]}
-    )
+    result = await extractor.extract({"other": [{"text": "...", "page": 1, "chunk_id": "c-1"}]})
 
     assert result.sections_succeeded == 1  # "other" dispatched ok (just a no-op)
     assert result.sections_failed == []

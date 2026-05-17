@@ -56,9 +56,7 @@ class SemiconductorValuation(ValuationModel):
     ]
 
     def _matches_industry(self, extraction: ProspectusExtraction) -> bool:
-        ind = (extraction.industry_code or "") + " " + (
-            extraction.industry_description or ""
-        )
+        ind = (extraction.industry_code or "") + " " + (extraction.industry_description or "")
         for k in SEMI_INDUSTRY_KEYWORDS:
             if k.isascii():
                 if re.search(rf"\b{re.escape(k)}\b", ind, flags=re.IGNORECASE):

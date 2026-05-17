@@ -62,7 +62,9 @@ pg_required = pytest.mark.skipif(
 
 def _sync_dsn() -> str:
     return get_settings().database.url.replace(
-        "postgresql+asyncpg://", "postgresql://", 1,
+        "postgresql+asyncpg://",
+        "postgresql://",
+        1,
     )
 
 
@@ -75,10 +77,11 @@ async def sf():
     Each learning-loop test seeds its own ipo_event with a fresh UUID
     so there's no FK / unique conflict.
     """
-    from hk_ipo_agent.data.database import (  # noqa: PLC0415
+    from hk_ipo_agent.data.database import (
         async_session_factory,
         get_engine,
     )
+
     get_engine.cache_clear()  # type: ignore[attr-defined]
     async_session_factory.cache_clear()  # type: ignore[attr-defined]
 
@@ -217,8 +220,10 @@ async def test_full_propose_accept_apply_rollback_on_regression(sf) -> None:
         signal_type=DriftSignalType.VALUATION_BIAS,
         severity=AlertLevel.WARNING,
         affected_dimensions={"listing_type": "MB-TECH"},
-        metric_value=0.3, threshold=0.2,
-        sample_count=20, evidence="test",
+        metric_value=0.3,
+        threshold=0.2,
+        sample_count=20,
+        evidence="test",
         related_snapshot_ids=[],
     )
     proposals = proposer.propose(drift_signals=[drift])
@@ -231,7 +236,8 @@ async def test_full_propose_accept_apply_rollback_on_regression(sf) -> None:
     applier = AdjustmentApplier(
         session_factory=sf,
         config=ApplierConfig(
-            write_to_disk=False, run_sanity_backtest=True,
+            write_to_disk=False,
+            run_sanity_backtest=True,
             rebacktest_ic_tolerance=0.02,
         ),
     )
@@ -261,7 +267,7 @@ async def test_full_propose_accept_apply_rollback_on_regression(sf) -> None:
 @pytest.mark.asyncio
 async def test_apply_refuses_when_not_accepted(sf) -> None:
     """Even with proposals persisted, apply must refuse without ACCEPT."""
-    from hk_ipo_agent.common.exceptions import AdjustmentNotApprovedError  # noqa: PLC0415
+    from hk_ipo_agent.common.exceptions import AdjustmentNotApprovedError
 
     snap_id = _seed_snapshot()
     proposer = AdjustmentProposer()
@@ -270,13 +276,18 @@ async def test_apply_refuses_when_not_accepted(sf) -> None:
         signal_type=DriftSignalType.VALUATION_BIAS,
         severity=AlertLevel.WARNING,
         affected_dimensions={"listing_type": "MB-TECH"},
-        metric_value=0.3, threshold=0.2,
-        sample_count=20, evidence="test",
+        metric_value=0.3,
+        threshold=0.2,
+        sample_count=20,
+        evidence="test",
         related_snapshot_ids=[],
     )
     proposals = proposer.propose(drift_signals=[drift])
     review_id = await persist_proposals_to_review(
-        snap_id, proposals, sf, reviewer="",  # empty reviewer
+        snap_id,
+        proposals,
+        sf,
+        reviewer="",  # empty reviewer
     )
 
     applier = AdjustmentApplier(

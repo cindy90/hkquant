@@ -38,26 +38,33 @@ from hk_ipo_agent.common.enums import ListingType, RegulatoryRegime
 @pytest.mark.asyncio
 async def test_v8lite_scorer_base_score_by_listing_type(fresh_sf) -> None:
     """18C-COMM (commercialized) > 18A (biotech pre-com)."""
-    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider  # noqa: PLC0415
+    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider
 
     provider = AsOfDataProvider(
-        as_of_date=date(2024, 6, 13), session_factory=fresh_sf,
+        as_of_date=date(2024, 6, 13),
+        session_factory=fresh_sf,
     )
     scorer = V8LiteScorer()
     out_com = await scorer.score(
         provider,
         BacktestInput(
-            ipo_id=uuid.uuid4(), pricing_date=date(2024, 6, 14),
-            stock_code="0001.HK", listing_type=ListingType.CH18C_COMMERCIALIZED,
-            realized_returns={}, cornerstone_count=0,
+            ipo_id=uuid.uuid4(),
+            pricing_date=date(2024, 6, 14),
+            stock_code="0001.HK",
+            listing_type=ListingType.CH18C_COMMERCIALIZED,
+            realized_returns={},
+            cornerstone_count=0,
         ),
     )
     out_bio = await scorer.score(
         provider,
         BacktestInput(
-            ipo_id=uuid.uuid4(), pricing_date=date(2024, 6, 14),
-            stock_code="0002.HK", listing_type=ListingType.CH18A_BIOTECH,
-            realized_returns={}, cornerstone_count=0,
+            ipo_id=uuid.uuid4(),
+            pricing_date=date(2024, 6, 14),
+            stock_code="0002.HK",
+            listing_type=ListingType.CH18A_BIOTECH,
+            realized_returns={},
+            cornerstone_count=0,
         ),
     )
     assert out_com.decision_score > out_bio.decision_score
@@ -66,28 +73,36 @@ async def test_v8lite_scorer_base_score_by_listing_type(fresh_sf) -> None:
 @pytest.mark.asyncio
 async def test_v8lite_scorer_cornerstone_bonus_capped(fresh_sf) -> None:
     """20 cornerstones × 0.05 = 1.0 — but capped at 0.20."""
-    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider  # noqa: PLC0415
+    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider
 
     provider = AsOfDataProvider(
-        as_of_date=date(2024, 6, 13), session_factory=fresh_sf,
+        as_of_date=date(2024, 6, 13),
+        session_factory=fresh_sf,
     )
     scorer = V8LiteScorer(
-        cluster_bonus_per_investor=0.05, cluster_bonus_cap=0.20,
+        cluster_bonus_per_investor=0.05,
+        cluster_bonus_cap=0.20,
     )
     out_zero = await scorer.score(
         provider,
         BacktestInput(
-            ipo_id=uuid.uuid4(), pricing_date=date(2024, 6, 14),
-            stock_code="X", listing_type=ListingType.MAINBOARD_TECH,
-            realized_returns={}, cornerstone_count=0,
+            ipo_id=uuid.uuid4(),
+            pricing_date=date(2024, 6, 14),
+            stock_code="X",
+            listing_type=ListingType.MAINBOARD_TECH,
+            realized_returns={},
+            cornerstone_count=0,
         ),
     )
     out_many = await scorer.score(
         provider,
         BacktestInput(
-            ipo_id=uuid.uuid4(), pricing_date=date(2024, 6, 14),
-            stock_code="Y", listing_type=ListingType.MAINBOARD_TECH,
-            realized_returns={}, cornerstone_count=20,
+            ipo_id=uuid.uuid4(),
+            pricing_date=date(2024, 6, 14),
+            stock_code="Y",
+            listing_type=ListingType.MAINBOARD_TECH,
+            realized_returns={},
+            cornerstone_count=20,
         ),
     )
     assert out_many.decision_score - out_zero.decision_score == pytest.approx(0.20)
@@ -95,18 +110,22 @@ async def test_v8lite_scorer_cornerstone_bonus_capped(fresh_sf) -> None:
 
 @pytest.mark.asyncio
 async def test_v8lite_scorer_unknown_listing_type_uses_default(fresh_sf) -> None:
-    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider  # noqa: PLC0415
+    from hk_ipo_agent.backtest.as_of_data import AsOfDataProvider
 
     provider = AsOfDataProvider(
-        as_of_date=date(2024, 6, 13), session_factory=fresh_sf,
+        as_of_date=date(2024, 6, 13),
+        session_factory=fresh_sf,
     )
     scorer = V8LiteScorer()
     out = await scorer.score(
         provider,
         BacktestInput(
-            ipo_id=uuid.uuid4(), pricing_date=date(2024, 6, 14),
-            stock_code="Z", listing_type=None,
-            realized_returns={}, cornerstone_count=0,
+            ipo_id=uuid.uuid4(),
+            pricing_date=date(2024, 6, 14),
+            stock_code="Z",
+            listing_type=None,
+            realized_returns={},
+            cornerstone_count=0,
         ),
     )
     assert out.listing_type is None
@@ -134,13 +153,13 @@ async def test_run_walk_forward_collects_samples(fresh_sf) -> None:
         for i in range(5)
     ]
     run = await run_walk_forward(
-        inputs, scorer=V8LiteScorer(), session_factory=fresh_sf,
+        inputs,
+        scorer=V8LiteScorer(),
+        session_factory=fresh_sf,
         horizons=("5d", "30d"),
     )
     assert run.n_total == 5
-    assert all(
-        s.as_of_date == s.pricing_date - timedelta(days=1) for s in run.samples
-    )
+    assert all(s.as_of_date == s.pricing_date - timedelta(days=1) for s in run.samples)
     assert "main_board" in run.metrics_by_label
     assert "regime_pass" in run.metrics_by_label
 
@@ -160,7 +179,9 @@ async def test_run_walk_forward_skips_future_pricing(fresh_sf) -> None:
         ),
     ]
     run = await run_walk_forward(
-        inputs, scorer=V8LiteScorer(), session_factory=fresh_sf,
+        inputs,
+        scorer=V8LiteScorer(),
+        session_factory=fresh_sf,
     )
     assert run.n_total == 0
 
@@ -179,7 +200,9 @@ async def test_run_walk_forward_horizons_propagate(fresh_sf) -> None:
         ),
     ]
     run = await run_walk_forward(
-        inputs, scorer=V8LiteScorer(), session_factory=fresh_sf,
+        inputs,
+        scorer=V8LiteScorer(),
+        session_factory=fresh_sf,
         horizons=("5d", "30d"),
     )
     mb = run.metrics_by_label["main_board"]
@@ -194,7 +217,9 @@ async def test_run_walk_forward_horizons_propagate(fresh_sf) -> None:
 
 
 def _make_sample(
-    score: float, regime: float, returns: dict[str, float],
+    score: float,
+    regime: float,
+    returns: dict[str, float],
 ) -> BacktestSample:
     return BacktestSample(
         ipo_id=uuid.uuid4(),

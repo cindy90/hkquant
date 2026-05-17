@@ -157,13 +157,22 @@ class PGAuditStore:
             rows = (await s.execute(stmt)).scalars().all()
         return [
             AuditLog(
-                id=r.id, user_id=r.user_id, user_email=r.user_email, action=r.action,
+                id=r.id,
+                user_id=r.user_id,
+                user_email=r.user_email,
+                action=r.action,
                 resource_type=None,  # caller-side enum decode if needed
-                resource_id=r.resource_id, before_state=r.before_state,
-                after_state=r.after_state, diff=r.diff, ip_address=r.ip_address,
-                user_agent=r.user_agent, request_id=r.request_id,
-                api_endpoint=r.api_endpoint, success=r.success,
-                error_message=r.error_message, occurred_at=r.occurred_at,
+                resource_id=r.resource_id,
+                before_state=r.before_state,
+                after_state=r.after_state,
+                diff=r.diff,
+                ip_address=r.ip_address,
+                user_agent=r.user_agent,
+                request_id=r.request_id,
+                api_endpoint=r.api_endpoint,
+                success=r.success,
+                error_message=r.error_message,
+                occurred_at=r.occurred_at,
             )
             for r in rows
         ]

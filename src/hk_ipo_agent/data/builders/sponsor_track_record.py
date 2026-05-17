@@ -105,9 +105,7 @@ class SponsorTrackBuilder:
             )
             with_postmarket = int(
                 (
-                    await session.execute(
-                        select(func.count()).select_from(IPOPostMarket)
-                    )
+                    await session.execute(select(func.count()).select_from(IPOPostMarket))
                 ).scalar_one()
             )
         return {"ipo_event_count": total, "ipo_postmarket_count": with_postmarket}

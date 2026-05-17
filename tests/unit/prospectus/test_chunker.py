@@ -42,8 +42,7 @@ def test_detect_section_returns_none_for_body_text() -> None:
 
 def test_chunk_document_packs_blocks_into_target_size() -> None:
     blocks = [
-        ParsedBlock(page=1, text="Block " + str(i) * 200, char_offset=i * 1000)
-        for i in range(10)
+        ParsedBlock(page=1, text="Block " + str(i) * 200, char_offset=i * 1000) for i in range(10)
     ]
     doc = _doc_with(blocks)
     chunks = chunk_document(doc, config=ChunkConfig(target_chars=500, min_chars=100))
@@ -93,7 +92,7 @@ def test_empty_document_yields_no_chunks() -> None:
 
 
 def test_tables_become_standalone_chunks() -> None:
-    from hk_ipo_agent.prospectus.schema import ParsedTable  # noqa: PLC0415
+    from hk_ipo_agent.prospectus.schema import ParsedTable
 
     doc = ParsedDocument(
         prospectus_id="P-TEST",

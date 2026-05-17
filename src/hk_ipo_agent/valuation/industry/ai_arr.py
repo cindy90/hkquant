@@ -49,9 +49,7 @@ class AIARRValuation(ValuationModel):
     ]
 
     def _matches_industry(self, extraction: ProspectusExtraction) -> bool:
-        ind = (extraction.industry_code or "") + " " + (
-            extraction.industry_description or ""
-        )
+        ind = (extraction.industry_code or "") + " " + (extraction.industry_description or "")
         for k in AI_INDUSTRY_KEYWORDS:
             # ASCII keywords use word-boundary matching to avoid substrings
             # like "AI" matching "retail"; CJK keywords use substring match

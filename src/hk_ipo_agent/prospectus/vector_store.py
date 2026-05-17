@@ -66,9 +66,7 @@ class ProspectusVectorStore:
         self._client = client or AsyncQdrantClient(
             url=settings.qdrant.url,
             api_key=(
-                settings.qdrant.api_key.get_secret_value()
-                if settings.qdrant.api_key
-                else None
+                settings.qdrant.api_key.get_secret_value() if settings.qdrant.api_key else None
             ),
         )
         # Collection naming: lowercase alphanumeric + underscores only
@@ -170,16 +168,21 @@ class ProspectusVectorStore:
                         k: v
                         for k, v in p.items()
                         if k
-                        not in {"chunk_id", "prospectus_id", "page", "section", "char_offset", "text"}
+                        not in {
+                            "chunk_id",
+                            "prospectus_id",
+                            "page",
+                            "section",
+                            "char_offset",
+                            "text",
+                        }
                     },
                 )
             )
         return hits
 
     async def count(self) -> int:
-        info = await self._client.count(
-            collection_name=self.collection_name, exact=True
-        )
+        info = await self._client.count(collection_name=self.collection_name, exact=True)
         return int(info.count)
 
 

@@ -78,9 +78,7 @@ def _metrics_table(label: str, horizons: dict[str, SliceMetrics]) -> str:
         "|---|---:|---:|---:|---:|",
     ]
     for h, m in sorted(horizons.items()):
-        rows.append(
-            f"| {h} | {m.n} | {m.ic:+.4f} | {m.ls_spread:+.4f} | {m.ls_t_stat:+.3f} |"
-        )
+        rows.append(f"| {h} | {m.n} | {m.ic:+.4f} | {m.ls_spread:+.4f} | {m.ls_t_stat:+.3f} |")
     return f"### {label}\n\n" + "\n".join(rows) + "\n"
 
 
@@ -109,19 +107,19 @@ def _baseline_comparison_section(run: BacktestRun) -> str:
         for h in sorted(deltas.keys()):
             d = deltas[h]
             rows.append(
-                f"| {h} | {d['ic_delta']:+.4f} | "
-                f"{d['ls_delta']:+.4f} | {d['t_delta']:+.3f} |"
+                f"| {h} | {d['ic_delta']:+.4f} | {d['ls_delta']:+.4f} | {d['t_delta']:+.3f} |"
             )
         parts.append(f"### {label}\n\n" + "\n".join(rows) + "\n")
     return "\n".join(parts) + "\n"
 
 
 def _case_study_section(
-    run: BacktestRun, *, horizon: str = "60d", k: int = 3,
+    run: BacktestRun,
+    *,
+    horizon: str = "60d",
+    k: int = 3,
 ) -> str:
-    candidates = [
-        s for s in run.samples if s.realized_returns.get(horizon) is not None
-    ]
+    candidates = [s for s in run.samples if s.realized_returns.get(horizon) is not None]
     if not candidates:
         return f"## Case study (horizon={horizon})\n\n_no samples with this horizon_\n"
     by_score = sorted(candidates, key=lambda s: s.decision_score)
@@ -159,9 +157,7 @@ def _calibration_section(cal: CalibrationResult | None) -> str:
     if cal is None:
         return ""
     parts = ["## Calibration outcome\n"]
-    parts.append(
-        f"- Passed all monotonicity checks: **{cal.passed_all_monotonicity()}**\n"
-    )
+    parts.append(f"- Passed all monotonicity checks: **{cal.passed_all_monotonicity()}**\n")
     if cal.notes:
         parts.append("- Notes:\n")
         for note in cal.notes:
@@ -174,8 +170,7 @@ def _calibration_section(cal: CalibrationResult | None) -> str:
     for lt, slc in cal.per_listing_type.items():
         mono = "✓" if slc.monotonicity_passed else "✗"
         rows.append(
-            f"| {lt.value} | {slc.n_samples} | {slc.objective_value:+.4f} | "
-            f"{mono} | {slc.reason} |"
+            f"| {lt.value} | {slc.n_samples} | {slc.objective_value:+.4f} | {mono} | {slc.reason} |"
         )
     parts.append("\n".join(rows) + "\n")
 
@@ -236,7 +231,9 @@ def write_report(
     date_part = run.started_at.date().isoformat()
     out_path = out_dir / f"{date_part}_{run.run_id}.md"
     content = render_markdown(
-        run, calibration=calibration, case_study_horizon=case_study_horizon,
+        run,
+        calibration=calibration,
+        case_study_horizon=case_study_horizon,
     )
     out_path.write_text(content, encoding="utf-8")
     logger.info(

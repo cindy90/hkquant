@@ -51,7 +51,9 @@ class KBTool:
 
     def themes_heat(self) -> dict[str, Any]:
         """Today's per-theme heat snapshot. See ``themes/heat_today.json``."""
-        return _read_json(_KB_ROOT / "themes" / "heat_today.json", _LEGACY_THEMES / "heat_today.json")
+        return _read_json(
+            _KB_ROOT / "themes" / "heat_today.json", _LEGACY_THEMES / "heat_today.json"
+        )
 
     def theme_definitions(self) -> dict[str, Any]:
         """Theme taxonomy (iv_bkid + core_companies + keywords)."""

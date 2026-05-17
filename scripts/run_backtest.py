@@ -88,15 +88,13 @@ async def _amain(args: argparse.Namespace) -> int:
             current_weights=current_weights,
             horizons=DEFAULT_HORIZONS,
         )
-        print(
-            f"[backtest] calibration done — monotonicity passed: "
-            f"{cal.passed_all_monotonicity()}"
-        )
+        print(f"[backtest] calibration done — monotonicity passed: {cal.passed_all_monotonicity()}")
         for note in cal.notes:
             print(f"  - {note}")
 
         report_path = write_report(
-            run, calibration=cal,
+            run,
+            calibration=cal,
             out_dir=Path(args.report_dir),
         )
         print(f"[backtest] report → {report_path}")

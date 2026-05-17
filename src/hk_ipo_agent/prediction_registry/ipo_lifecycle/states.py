@@ -13,9 +13,7 @@ from ...common.enums import VALID_TRANSITIONS, IPOLifecycleStateType
 from ...common.exceptions import InvalidStateTransition
 
 # Terminal states have no outgoing transitions per the enum table.
-_TERMINAL = frozenset(
-    {s for s, outs in VALID_TRANSITIONS.items() if not outs}
-)
+_TERMINAL = frozenset({s for s, outs in VALID_TRANSITIONS.items() if not outs})
 
 
 def is_terminal(state: IPOLifecycleStateType) -> bool:

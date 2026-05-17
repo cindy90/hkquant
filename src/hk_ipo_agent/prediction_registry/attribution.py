@@ -151,7 +151,11 @@ class AttributionEngine:
         ``score_calibration`` ∈ [-1, +1]; positive = miscalibrated optimistic,
         negative = miscalibrated pessimistic, near 0 = well-calibrated.
         """
-        ret = outcome.return_since_listing if outcome.return_since_listing is not None else outcome.return_since_ipo
+        ret = (
+            outcome.return_since_listing
+            if outcome.return_since_listing is not None
+            else outcome.return_since_ipo
+        )
         analyses: list[AgentErrorAnalysis] = []
         for _role_value, ao in snapshot.agent_outputs.items():
             score = ao.overall_score / 100.0  # normalise to [0, 1]
@@ -166,14 +170,14 @@ class AttributionEngine:
             for finding in high_conf:
                 # Without ground-truth tags we treat negative-toned findings
                 # validated when ret < 0, and vice versa.
-                negative = any(w in finding.statement for w in ("风险", "下", "下行", "miss", "warning"))
+                negative = any(
+                    w in finding.statement for w in ("风险", "下", "下行", "miss", "warning")
+                )
                 if (negative and ret < 0) or (not negative and ret > 0):
                     critical_correct.append(finding.statement[:120])
                 else:
                     critical_misses.append(finding.statement[:120])
-            findings_accuracy = (
-                len(critical_correct) / max(len(high_conf), 1) if high_conf else 0.0
-            )
+            findings_accuracy = len(critical_correct) / max(len(high_conf), 1) if high_conf else 0.0
             analyses.append(
                 AgentErrorAnalysis(
                     agent_role=ao.agent_role,
@@ -226,7 +230,11 @@ class AttributionEngine:
     ) -> DebateQualityAnalysis:
         """Counts Bear vs Bull predictions that the outcome validated."""
         rounds = snapshot.debate_output.rounds
-        ret = outcome.return_since_listing if outcome.return_since_listing is not None else outcome.return_since_ipo
+        ret = (
+            outcome.return_since_listing
+            if outcome.return_since_listing is not None
+            else outcome.return_since_ipo
+        )
         # Heuristic: bear "wins" if return negative; bull "wins" if positive.
         bear_total = sum(1 for r in rounds if r.bear_argument)
         bull_total = sum(1 for r in rounds if r.bull_argument)
@@ -281,7 +289,8 @@ class AttributionEngine:
         except Exception as exc:
             logger.warning(
                 "attribution_diagnosis_failed",
-                snapshot_id=str(snapshot.id), error=str(exc),
+                snapshot_id=str(snapshot.id),
+                error=str(exc),
             )
             # Graceful degrade: return numeric-only summary.
             return _DiagnosisOutput(

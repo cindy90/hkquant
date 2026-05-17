@@ -78,9 +78,7 @@ async def get_memo_docx(snapshot_id: UUID, user: CurrentUserDep) -> Response:
     docx_bytes = export_docx(snap)
     return Response(
         content=docx_bytes,
-        media_type=(
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        ),
+        media_type=("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
     )
 
 

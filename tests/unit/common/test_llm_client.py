@@ -344,7 +344,7 @@ async def test_acomplete_json_strips_code_fences(
     class _Stub(BaseModel):
         x: int
 
-    fenced = "Here is the JSON:\n```json\n{\"x\": 99}\n```"
+    fenced = 'Here is the JSON:\n```json\n{"x": 99}\n```'
     client._client.chat.completions.create = AsyncMock(  # type: ignore[attr-defined]
         return_value=_fake_openai_response(text=fenced)
     )

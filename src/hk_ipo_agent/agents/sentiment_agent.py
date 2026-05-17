@@ -143,7 +143,9 @@ class SentimentAgent(BaseAgent):
             f"- Industry: {ctx.extraction.industry_code} — {ctx.extraction.industry_description}\n\n"
             f"# Computed signals (DO NOT recompute)\n"
             f"- matched_theme: {matched_theme or 'none'}\n"
-            f"- theme_heat: {theme_heat_pct:.3f}" + " (0-1 scale)\n" if theme_heat_pct is not None else "- theme_heat: N/A\n"
+            f"- theme_heat: {theme_heat_pct:.3f}" + " (0-1 scale)\n"
+            if theme_heat_pct is not None
+            else "- theme_heat: N/A\n"
         )
         user_msg += (
             f"- ai_revenue_pct (lookup): {ai_pct}\n"
@@ -156,9 +158,7 @@ class SentimentAgent(BaseAgent):
 
         score_card: SentimentScoreCard | None = None
         try:
-            resp = await self._call_llm(
-                ctx, system=body, user=user_msg, max_tokens=2500
-            )
+            resp = await self._call_llm(ctx, system=body, user=user_msg, max_tokens=2500)
             parsed = self._parse_score_card(resp.text)
             if isinstance(parsed, SentimentScoreCard):
                 score_card = parsed
@@ -182,8 +182,7 @@ class SentimentAgent(BaseAgent):
             findings.append(
                 self._make_finding(
                     statement=(
-                        f"Theme matched: {matched_theme}; heat = "
-                        f"{(theme_heat_pct or 0.0):.2%}"
+                        f"Theme matched: {matched_theme}; heat = {(theme_heat_pct or 0.0):.2%}"
                     ),
                     evidence="keyword match via theme_definitions.json",
                     citations=citations,
@@ -214,9 +213,7 @@ class SentimentAgent(BaseAgent):
             scores=score_card.score_dict(),
             overall_score=max(0.0, min(100.0, score_card.overall())),
             key_findings=findings,
-            uncertainty_flags=(
-                ["no_matched_theme"] if matched_theme is None else []
-            ),
+            uncertainty_flags=(["no_matched_theme"] if matched_theme is None else []),
             data_sources_used=[
                 DataSource(source="themes", detail=matched_theme or "no_match"),
                 DataSource(source="prospectus", detail=ctx.extraction.prospectus_id),

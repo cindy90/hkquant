@@ -40,9 +40,7 @@ async def fresh_sf():
 
 def _truncate_code_mappings() -> None:
     with psycopg.connect(_sync_dsn()) as conn, conn.cursor() as cur:
-        cur.execute(
-            "TRUNCATE TABLE code_mappings, ipo_events RESTART IDENTITY CASCADE"
-        )
+        cur.execute("TRUNCATE TABLE code_mappings, ipo_events RESTART IDENTITY CASCADE")
         conn.commit()
 
 
@@ -125,8 +123,10 @@ async def test_sponsor_strategy_marks_low_with_review(fresh_sf) -> None:
         sponsor_repo=_stub_sponsor_repo([{"hk_stock_code": "9988.HK"}]),
     )
     result = await mapper.resolve(
-        ipo_id=ipo_id, company_name_zh="无名公司",
-        sponsor_id=sponsor_id, expected_listing_date=date(2026, 6, 1),
+        ipo_id=ipo_id,
+        company_name_zh="无名公司",
+        sponsor_id=sponsor_id,
+        expected_listing_date=date(2026, 6, 1),
     )
     assert result.hk_stock_code == "9988.HK"
     assert result.confidence is CodeMappingConfidence.LOW
@@ -146,8 +146,10 @@ async def test_all_strategies_fail_returns_low_with_review(fresh_sf) -> None:
         sponsor_repo=_stub_sponsor_repo([]),  # ambiguous → empty
     )
     result = await mapper.resolve(
-        ipo_id=ipo_id, company_name_zh="完全无名",
-        sponsor_id=uuid.uuid4(), expected_listing_date=date(2026, 6, 1),
+        ipo_id=ipo_id,
+        company_name_zh="完全无名",
+        sponsor_id=uuid.uuid4(),
+        expected_listing_date=date(2026, 6, 1),
     )
     assert result.hk_stock_code is None
     assert result.confidence is CodeMappingConfidence.LOW
@@ -165,13 +167,18 @@ async def test_sponsor_strategy_skipped_when_ambiguous(fresh_sf) -> None:
         session_factory=fresh_sf,
         announcements=_stub_announcements([]),
         ifind=_stub_ifind([]),
-        sponsor_repo=_stub_sponsor_repo([
-            {"hk_stock_code": "1234"}, {"hk_stock_code": "5678"},  # 2 matches → ambiguous
-        ]),
+        sponsor_repo=_stub_sponsor_repo(
+            [
+                {"hk_stock_code": "1234"},
+                {"hk_stock_code": "5678"},  # 2 matches → ambiguous
+            ]
+        ),
     )
     result = await mapper.resolve(
-        ipo_id=ipo_id, company_name_zh="x",
-        sponsor_id=uuid.uuid4(), expected_listing_date=date(2026, 6, 1),
+        ipo_id=ipo_id,
+        company_name_zh="x",
+        sponsor_id=uuid.uuid4(),
+        expected_listing_date=date(2026, 6, 1),
     )
     assert result.hk_stock_code is None
     assert result.confidence is CodeMappingConfidence.LOW
@@ -196,9 +203,14 @@ async def test_save_inserts_then_updates(fresh_sf) -> None:
     first_id = await mapper.save(mapping)
     # Upsert with a different code → same row id.
     updated = CodeMapping(
-        ipo_id=ipo_id, hk_stock_code="2222", a_share_code=None, us_adr_code=None,
-        confidence=CodeMappingConfidence.HIGH, source=CodeMappingSource.MANUAL,
-        requires_review=False, evidence={},
+        ipo_id=ipo_id,
+        hk_stock_code="2222",
+        a_share_code=None,
+        us_adr_code=None,
+        confidence=CodeMappingConfidence.HIGH,
+        source=CodeMappingSource.MANUAL,
+        requires_review=False,
+        evidence={},
     )
     second_id = await mapper.save(updated)
     assert second_id == first_id  # UNIQUE on ipo_id
@@ -230,8 +242,10 @@ async def test_is_code_active_false_for_low_confidence(fresh_sf) -> None:
         sponsor_repo=_stub_sponsor_repo([]),
     )
     mapping = await mapper.resolve(
-        ipo_id=ipo_id, company_name_zh="x",
-        sponsor_id=uuid.uuid4(), expected_listing_date=date(2026, 6, 1),
+        ipo_id=ipo_id,
+        company_name_zh="x",
+        sponsor_id=uuid.uuid4(),
+        expected_listing_date=date(2026, 6, 1),
     )
     await mapper.save(mapping)
     assert await mapper.is_code_active(ipo_id) is False
@@ -249,13 +263,26 @@ async def test_hkex_strategy_high_accuracy_proxy(fresh_sf) -> None:
     """20 fixture pairs: all should resolve to HIGH confidence on first try."""
     _truncate_code_mappings()
     fixtures = [
-        ("晶泰控股", "2228"), ("黑芝麻智能", "2533"), ("地平线机器人", "9660"),
-        ("越疆机器人", "2432"), ("宁德时代", "3750"), ("药明合联", "2268"),
-        ("圆心科技", "2509"), ("第四范式", "6682"), ("商汤科技", "0020"),
-        ("微创医疗", "0853"), ("百济神州", "6160"), ("再鼎医药", "9688"),
-        ("信达生物", "1801"), ("华虹半导体", "1347"), ("中芯国际", "0981"),
-        ("快手", "1024"), ("美团", "3690"), ("京东", "9618"),
-        ("阿里巴巴", "9988"), ("腾讯控股", "0700"),
+        ("晶泰控股", "2228"),
+        ("黑芝麻智能", "2533"),
+        ("地平线机器人", "9660"),
+        ("越疆机器人", "2432"),
+        ("宁德时代", "3750"),
+        ("药明合联", "2268"),
+        ("圆心科技", "2509"),
+        ("第四范式", "6682"),
+        ("商汤科技", "0020"),
+        ("微创医疗", "0853"),
+        ("百济神州", "6160"),
+        ("再鼎医药", "9688"),
+        ("信达生物", "1801"),
+        ("华虹半导体", "1347"),
+        ("中芯国际", "0981"),
+        ("快手", "1024"),
+        ("美团", "3690"),
+        ("京东", "9618"),
+        ("阿里巴巴", "9988"),
+        ("腾讯控股", "0700"),
     ]
     hits = 0
     for name, expected_code in fixtures:

@@ -126,10 +126,10 @@ async def submit_review(
 ) -> dict[str, Any]:
     # Use the workflow so we honour Phase 7.5b semantics (status default,
     # stub attribution etc.). Lazy import avoids module-init cycles.
-    from ...common.llm_client import LLMClient  # noqa: PLC0415
-    from ...prediction_registry.attribution import AttributionEngine  # noqa: PLC0415
-    from ...prediction_registry.registry import get_registry  # noqa: PLC0415
-    from ...prediction_registry.review_workflow import ReviewWorkflow  # noqa: PLC0415
+    from ...common.llm_client import LLMClient
+    from ...prediction_registry.attribution import AttributionEngine
+    from ...prediction_registry.registry import get_registry
+    from ...prediction_registry.review_workflow import ReviewWorkflow
 
     registry = get_registry()
     try:

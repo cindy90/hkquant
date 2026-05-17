@@ -60,58 +60,83 @@ def _truncate_earnings() -> None:
         conn.commit()
 
 
-def _seed_snapshot(predicted_revenue: float = 100.0, predicted_profit: float = 20.0, predicted_gm: float = 0.40):
+def _seed_snapshot(
+    predicted_revenue: float = 100.0, predicted_profit: float = 20.0, predicted_gm: float = 0.40
+):
     """Build a snapshot with one financial_snapshot row in the extraction."""
     d = ValuationDistribution(
-        p10=Decimal("9"), p25=Decimal("9.5"), p50=Decimal("10"),
-        p75=Decimal("10.5"), p90=Decimal("11"),
-        mean=Decimal("10"), std=Decimal("0.5"),
+        p10=Decimal("9"),
+        p25=Decimal("9.5"),
+        p50=Decimal("10"),
+        p75=Decimal("10.5"),
+        p90=Decimal("11"),
+        mean=Decimal("10"),
+        std=Decimal("0.5"),
     )
     ext = ProspectusExtraction(
         prospectus_id=f"P-EC-{uuid.uuid4().hex[:6]}",
-        company_name_zh="测试", listing_type=ListingType.MAINBOARD_TECH,
-        industry_code="TECH", industry_description="AI", business_model="B2B",
-        extraction_version="0.0.1", extracted_at=datetime.now(UTC),
+        company_name_zh="测试",
+        listing_type=ListingType.MAINBOARD_TECH,
+        industry_code="TECH",
+        industry_description="AI",
+        business_model="B2B",
+        extraction_version="0.0.1",
+        extracted_at=datetime.now(UTC),
     )
     snap = build_snapshot(
         ipo_id=uuid.uuid4(),
         extraction=ext,
         agent_outputs={
             "fundamental": AgentOutput(
-                agent_role=AgentRole.FUNDAMENTAL, scores={"x": 70.0},
-                overall_score=70.0, runtime_seconds=0.1,
+                agent_role=AgentRole.FUNDAMENTAL,
+                scores={"x": 70.0},
+                overall_score=70.0,
+                runtime_seconds=0.1,
             ),
         },
         valuation=ValuationEnsembleOutput(
             company_id="P-EC-1",
-            single_models=[SingleModelValuation(model_name="x", applicable=True, valuation_distribution=d)],
-            weights_used={"x": 1.0}, ensemble_distribution=d,
+            single_models=[
+                SingleModelValuation(model_name="x", applicable=True, valuation_distribution=d)
+            ],
+            weights_used={"x": 1.0},
+            ensemble_distribution=d,
             implied_price_range={"low": Decimal("9"), "fair": Decimal("10"), "high": Decimal("11")},
         ),
         debate=DebateOutput(final_consensus="balanced"),
         decision=FinalDecision(
             decision=DecisionType.PARTICIPATE,
-            confidence=0.7, suggested_allocation_pct=0.02,
-            price_range_low=Decimal("9"), price_range_fair=Decimal("10"), price_range_high=Decimal("11"),
-            expected_return_6m=d, expected_return_12m=d,
+            confidence=0.7,
+            suggested_allocation_pct=0.02,
+            price_range_low=Decimal("9"),
+            price_range_fair=Decimal("10"),
+            price_range_high=Decimal("11"),
+            expected_return_6m=d,
+            expected_return_12m=d,
         ),
-        total_cost_usd=Decimal("0.1"), runtime_seconds=5.0,
+        total_cost_usd=Decimal("0.1"),
+        runtime_seconds=5.0,
     )
     # Inject a financial snapshot blob into the input_data_snapshot dict.
-    return snap.model_copy(update={
-        "input_data_snapshot": {
-            **snap.input_data_snapshot,
-            "extraction": {
-                **snap.input_data_snapshot["extraction"],
-                "financial_snapshots": [{
-                    "fiscal_year": 2024, "fiscal_period": "FY",
-                    "revenue_rmb": str(predicted_revenue),
-                    "adjusted_net_profit_rmb": str(predicted_profit),
-                    "gross_margin": str(predicted_gm),
-                }],
+    return snap.model_copy(
+        update={
+            "input_data_snapshot": {
+                **snap.input_data_snapshot,
+                "extraction": {
+                    **snap.input_data_snapshot["extraction"],
+                    "financial_snapshots": [
+                        {
+                            "fiscal_year": 2024,
+                            "fiscal_period": "FY",
+                            "revenue_rmb": str(predicted_revenue),
+                            "adjusted_net_profit_rmb": str(predicted_profit),
+                            "gross_margin": str(predicted_gm),
+                        }
+                    ],
+                },
             },
-        },
-    })
+        }
+    )
 
 
 def _seed_ipo_and_snapshot_in_db(snap) -> None:
@@ -164,9 +189,10 @@ async def test_compare_writes_row_with_deviations(fresh_sf) -> None:
     _seed_ipo_and_snapshot_in_db(snap)
     comparator = EarningsComparator(session_factory=fresh_sf)
     filing = FilingNumbers(
-        report_period="FY2025", filing_date=date(2026, 3, 31),
-        actual_revenue=Decimal("110"),     # +10%
-        actual_net_profit=Decimal("18"),   # -10%
+        report_period="FY2025",
+        filing_date=date(2026, 3, 31),
+        actual_revenue=Decimal("110"),  # +10%
+        actual_net_profit=Decimal("18"),  # -10%
         actual_gross_margin=Decimal("0.38"),  # -2pp
         extra_kpis={"arr_rmb": 50},
     )
@@ -188,9 +214,12 @@ async def test_first_three_runs_require_human_review(fresh_sf) -> None:
         result = await comparator.compare(
             snapshot=snap,
             filing=FilingNumbers(
-                report_period=f"FY202{i}", filing_date=date(2026, 3, 31),
-                actual_revenue=Decimal("100"), actual_net_profit=Decimal("20"),
-                actual_gross_margin=Decimal("0.40"), extra_kpis={},
+                report_period=f"FY202{i}",
+                filing_date=date(2026, 3, 31),
+                actual_revenue=Decimal("100"),
+                actual_net_profit=Decimal("20"),
+                actual_gross_margin=Decimal("0.40"),
+                extra_kpis={},
             ),
         )
         assert result.requires_human_review is True, f"run {i} should require review"
@@ -201,9 +230,12 @@ async def test_first_three_runs_require_human_review(fresh_sf) -> None:
     result = await comparator.compare(
         snapshot=snap,
         filing=FilingNumbers(
-            report_period="FY2099", filing_date=date(2026, 3, 31),
-            actual_revenue=Decimal("100"), actual_net_profit=Decimal("20"),
-            actual_gross_margin=Decimal("0.40"), extra_kpis={},
+            report_period="FY2099",
+            filing_date=date(2026, 3, 31),
+            actual_revenue=Decimal("100"),
+            actual_net_profit=Decimal("20"),
+            actual_gross_margin=Decimal("0.40"),
+            extra_kpis={},
         ),
     )
     assert result.requires_human_review is False
@@ -218,8 +250,9 @@ async def test_assess_significant_miss_when_revenue_down_25pct(fresh_sf) -> None
     result = await comparator.compare(
         snapshot=snap,
         filing=FilingNumbers(
-            report_period="FY2025", filing_date=date(2026, 3, 31),
-            actual_revenue=Decimal("75"),     # -25%
+            report_period="FY2025",
+            filing_date=date(2026, 3, 31),
+            actual_revenue=Decimal("75"),  # -25%
             actual_net_profit=Decimal("12"),  # -40%
             actual_gross_margin=Decimal("0.30"),
             extra_kpis={},
@@ -237,7 +270,8 @@ async def test_assess_beat_when_revenue_up_10pct(fresh_sf) -> None:
     result = await comparator.compare(
         snapshot=snap,
         filing=FilingNumbers(
-            report_period="FY2025", filing_date=date(2026, 3, 31),
+            report_period="FY2025",
+            filing_date=date(2026, 3, 31),
             actual_revenue=Decimal("110"),
             actual_net_profit=Decimal("24"),  # +20%
             actual_gross_margin=Decimal("0.42"),
@@ -255,20 +289,27 @@ async def test_compare_idempotent_on_snapshot_period(fresh_sf) -> None:
     _seed_ipo_and_snapshot_in_db(snap)
     comparator = EarningsComparator(session_factory=fresh_sf)
     filing = FilingNumbers(
-        report_period="FY2025", filing_date=date(2026, 3, 31),
-        actual_revenue=Decimal("100"), actual_net_profit=Decimal("20"),
-        actual_gross_margin=Decimal("0.40"), extra_kpis={},
+        report_period="FY2025",
+        filing_date=date(2026, 3, 31),
+        actual_revenue=Decimal("100"),
+        actual_net_profit=Decimal("20"),
+        actual_gross_margin=Decimal("0.40"),
+        extra_kpis={},
     )
     await comparator.compare(snapshot=snap, filing=filing)
     await comparator.compare(snapshot=snap, filing=filing)
     async with fresh_sf() as s:
         rows = (
-            await s.execute(
-                select(EarningsComparisonRow).where(
-                    EarningsComparisonRow.snapshot_id == snap.id
+            (
+                await s.execute(
+                    select(EarningsComparisonRow).where(
+                        EarningsComparisonRow.snapshot_id == snap.id
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     assert len(rows) == 1
 
 
@@ -278,23 +319,28 @@ async def test_compare_handles_missing_predictions(fresh_sf) -> None:
     _truncate_earnings()
     # Build a snapshot WITHOUT a financial_snapshots entry.
     snap = _seed_snapshot()
-    snap = snap.model_copy(update={
-        "input_data_snapshot": {
-            **snap.input_data_snapshot,
-            "extraction": {
-                **snap.input_data_snapshot["extraction"],
-                "financial_snapshots": [],
+    snap = snap.model_copy(
+        update={
+            "input_data_snapshot": {
+                **snap.input_data_snapshot,
+                "extraction": {
+                    **snap.input_data_snapshot["extraction"],
+                    "financial_snapshots": [],
+                },
             },
-        },
-    })
+        }
+    )
     _seed_ipo_and_snapshot_in_db(snap)
     comparator = EarningsComparator(session_factory=fresh_sf)
     result = await comparator.compare(
         snapshot=snap,
         filing=FilingNumbers(
-            report_period="FY2025", filing_date=date(2026, 3, 31),
-            actual_revenue=Decimal("100"), actual_net_profit=Decimal("20"),
-            actual_gross_margin=Decimal("0.40"), extra_kpis={},
+            report_period="FY2025",
+            filing_date=date(2026, 3, 31),
+            actual_revenue=Decimal("100"),
+            actual_net_profit=Decimal("20"),
+            actual_gross_margin=Decimal("0.40"),
+            extra_kpis={},
         ),
     )
     assert result.revenue_deviation_pct is None

@@ -86,14 +86,18 @@ class CornerstoneProfileBuilder:
             inv_count = await inv_repo.count()
             link_count = await link_repo.count()
 
-            stmt_with_holder = select(func.count()).select_from(
-                CornerstoneInvestor
-            ).where(CornerstoneInvestor.ultimate_holder.is_not(None))
+            stmt_with_holder = (
+                select(func.count())
+                .select_from(CornerstoneInvestor)
+                .where(CornerstoneInvestor.ultimate_holder.is_not(None))
+            )
             with_holder = int((await session.execute(stmt_with_holder)).scalar_one())
 
-            stmt_aliased = select(func.count()).select_from(
-                CornerstoneInvestor
-            ).where(CornerstoneInvestor.aliases.is_not(None))
+            stmt_aliased = (
+                select(func.count())
+                .select_from(CornerstoneInvestor)
+                .where(CornerstoneInvestor.aliases.is_not(None))
+            )
             with_aliases = int((await session.execute(stmt_aliased)).scalar_one())
 
         return {
@@ -107,9 +111,8 @@ class CornerstoneProfileBuilder:
         """Distribution of investors by ``category`` (sovereign / hedge / etc)."""
         factory = async_session_factory()
         async with factory() as session:
-            stmt = (
-                select(CornerstoneInvestor.category, func.count())
-                .group_by(CornerstoneInvestor.category)
+            stmt = select(CornerstoneInvestor.category, func.count()).group_by(
+                CornerstoneInvestor.category
             )
             result = await session.execute(stmt)
             buckets: dict[str, int] = defaultdict(int)

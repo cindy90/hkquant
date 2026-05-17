@@ -109,9 +109,7 @@ def _ctx_from_snapshot(snapshot: PredictionSnapshot) -> dict[str, Any]:
             role: round(out.overall_score, 1) for role, out in snapshot.agent_outputs.items()
         },
         # Valuation
-        "applicable_model_names": [
-            m.model_name for m in ensemble.single_models if m.applicable
-        ],
+        "applicable_model_names": [m.model_name for m in ensemble.single_models if m.applicable],
         "weights_used": ensemble.weights_used,
         "ens_p25": ensemble.ensemble_distribution.p25,
         "ens_p50": ensemble.ensemble_distribution.p50,

@@ -51,9 +51,7 @@ class AuditLogRow(UUIDMixin, Base):
     api_endpoint: Mapped[str | None] = mapped_column(String(200))
     success: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text)
-    occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         Index("idx_audit_user_time", "user_id", "occurred_at"),

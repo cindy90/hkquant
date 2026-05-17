@@ -104,9 +104,7 @@ async def test_cornerstone_agent_writes_multiplier_to_extras(
 
 
 @pytest.mark.asyncio
-async def test_cornerstone_agent_no_cluster_zero_bonus(
-    mock_llm_client, mock_llm_response
-) -> None:
+async def test_cornerstone_agent_no_cluster_zero_bonus(mock_llm_client, mock_llm_response) -> None:
     ctx = _ctx(mock_llm_client, cornerstones=[])
     mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")

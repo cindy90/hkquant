@@ -50,9 +50,7 @@ class HKEXScraper:
     ) -> None:
         cfg = load_data_sources_config().get("hkex", {})
         self.user_agent = user_agent or cfg.get("user_agent", "hk-ipo-agent/0.0 (research)")
-        self.rate_limit_per_sec = float(
-            rate_limit_per_sec or cfg.get("rate_limit_per_sec", 2)
-        )
+        self.rate_limit_per_sec = float(rate_limit_per_sec or cfg.get("rate_limit_per_sec", 2))
         self._interval = 1.0 / self.rate_limit_per_sec
         self._timeout_seconds = timeout_seconds
         self._client: httpx.AsyncClient | None = None
@@ -74,9 +72,7 @@ class HKEXScraper:
 
     # ------------------------------------------------------------------ public
 
-    async def download_prospectus(
-        self, stock_code: str, *, dest_dir: Path
-    ) -> Path:
+    async def download_prospectus(self, stock_code: str, *, dest_dir: Path) -> Path:
         """Download a prospectus PDF for ``stock_code`` to ``dest_dir``.
 
         Phase 2 stub: discovers the listing announcement page, then downloads

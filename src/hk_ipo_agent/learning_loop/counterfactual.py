@@ -62,11 +62,11 @@ class IfBearReport:
     """Outcome of the "if Bear had been followed" replay."""
 
     n_total: int
-    n_bull_won: int          # snapshots where actual decision matched Bull's
-    n_bull_won_bad: int      # of those, how many had negative realized
+    n_bull_won: int  # snapshots where actual decision matched Bull's
+    n_bull_won_bad: int  # of those, how many had negative realized
     bull_won_bad_rate: float
     n_bear_would_have_avoided: int
-    bear_advantage: float    # bear_would_have_avoided / max(bull_won_bad, 1)
+    bear_advantage: float  # bear_would_have_avoided / max(bull_won_bad, 1)
 
 
 @dataclass(frozen=True)
@@ -126,26 +126,21 @@ def if_bear_followed(samples: list[CounterfactualSample]) -> IfBearReport:
     """
     n_total = len(samples)
     bull_won = [
-        s for s in samples
+        s
+        for s in samples
         if s.bull_decision is not None
         and s.actual_decision == s.bull_decision
         and s.bear_decision is not None
         and s.bear_decision != s.bull_decision
     ]
-    bull_won_bad = [
-        s for s in bull_won
-        if s.realized_return is not None and s.realized_return < 0
-    ]
+    bull_won_bad = [s for s in bull_won if s.realized_return is not None and s.realized_return < 0]
     bear_would_have_avoided = [
-        s for s in bull_won_bad
+        s
+        for s in bull_won_bad
         if s.bear_decision in (DecisionType.SKIP, DecisionType.WAIT_FOR_SIGNAL)
     ]
-    bull_won_bad_rate = (
-        len(bull_won_bad) / len(bull_won) if bull_won else 0.0
-    )
-    bear_advantage = (
-        len(bear_would_have_avoided) / max(len(bull_won_bad), 1)
-    )
+    bull_won_bad_rate = len(bull_won_bad) / len(bull_won) if bull_won else 0.0
+    bear_advantage = len(bear_would_have_avoided) / max(len(bull_won_bad), 1)
     return IfBearReport(
         n_total=n_total,
         n_bull_won=len(bull_won),
@@ -179,13 +174,15 @@ def if_single_model_used(
 
     # Ensemble hit rate
     ens_hits = [
-        s for s in samples
+        s
+        for s in samples
         if s.ensemble_fair_price is not None
         and s.realized_price_at_60d is not None
         and _within(s.realized_price_at_60d, s.ensemble_fair_price, hit_tolerance)
     ]
     ens_n = sum(
-        1 for s in samples
+        1
+        for s in samples
         if s.ensemble_fair_price is not None and s.realized_price_at_60d is not None
     )
     ensemble_hit_rate = len(ens_hits) / ens_n if ens_n else 0.0

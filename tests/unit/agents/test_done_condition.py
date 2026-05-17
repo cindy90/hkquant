@@ -114,9 +114,7 @@ def _full_context(llm_client) -> AgentContext:
 
 
 @pytest.mark.asyncio
-async def test_done_condition_seven_agents_fanout(
-    mock_llm_client, mock_llm_response
-) -> None:
+async def test_done_condition_seven_agents_fanout(mock_llm_client, mock_llm_response) -> None:
     """All 7 agents run in parallel and produce valid AgentOutputs."""
     ctx = _full_context(mock_llm_client)
     mock_llm_client._client.chat.completions.create = AsyncMock(
@@ -171,9 +169,7 @@ async def test_done_condition_seven_agents_fanout(
 
 
 @pytest.mark.asyncio
-async def test_done_condition_parallel_runs_no_deadlock(
-    mock_llm_client, mock_llm_response
-) -> None:
+async def test_done_condition_parallel_runs_no_deadlock(mock_llm_client, mock_llm_response) -> None:
     """asyncio.gather across 7 agents completes without exception."""
     ctx = _full_context(mock_llm_client)
     mock_llm_client._client.chat.completions.create = AsyncMock(

@@ -158,8 +158,7 @@ def make_nodes(
             ipo_id=state["ipo_id"],
             agent_outputs=state.get("agent_outputs") or {},
             valuation=state["valuation_output"],
-            debate=state.get("debate_output")
-            or DebateOutput(final_consensus="(no debate)"),
+            debate=state.get("debate_output") or DebateOutput(final_consensus="(no debate)"),
             extras=extras,
             cross_check_notes=state.get("cross_check_notes"),
         )
@@ -181,8 +180,7 @@ def make_nodes(
             extraction=extraction,
             agent_outputs=state.get("agent_outputs") or {},
             valuation=state["valuation_output"],
-            debate=state.get("debate_output")
-            or DebateOutput(final_consensus="(no debate)"),
+            debate=state.get("debate_output") or DebateOutput(final_consensus="(no debate)"),
             decision=state["decision"],
             total_cost_usd=Decimal(str(llm_client.cost_log.total_usd())),
             runtime_seconds=(state.get("runtime_meta") or {}).get("runtime_seconds", 0.0),

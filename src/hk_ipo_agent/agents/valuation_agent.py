@@ -136,9 +136,7 @@ class ValuationAgent(BaseAgent):
             scores=score_card.score_dict(),
             overall_score=max(0.0, min(100.0, score_card.overall())),
             key_findings=findings,
-            uncertainty_flags=(
-                ["ensemble_no_applicable_models"] if not applicable else []
-            ),
+            uncertainty_flags=(["ensemble_no_applicable_models"] if not applicable else []),
             data_sources_used=[
                 DataSource(source="prospectus", detail=ctx.extraction.prospectus_id),
                 DataSource(source="ifind", detail="peer_multiples / macro"),

@@ -43,13 +43,9 @@ class IPOLifecycleStateRow(UUIDMixin, Base):
     current_state: Mapped[str] = mapped_column(String(30), nullable=False)
     # enums.IPOLifecycleStateType: PRE_LISTING/PRICING/LISTED/WITHDRAWN/
     # HEARING_FAILED/PRICING_PULLED/TERMINATED
-    state_entered_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    state_entered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     state_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    last_checked_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    last_checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     is_terminal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
@@ -69,17 +65,13 @@ class IPOStateTransitionRow(UUIDMixin, Base):
     )
     from_state: Mapped[str | None] = mapped_column(String(30))
     to_state: Mapped[str] = mapped_column(String(30), nullable=False)
-    transition_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    transition_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     triggered_by: Mapped[str] = mapped_column(String(50), nullable=False)
     # enums.TransitionTrigger: auto_detector / manual_reviewer / timeout / event_driven
     detection_evidence: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     reviewer: Mapped[str | None] = mapped_column(String(100))
 
-    __table_args__ = (
-        Index("idx_transitions_ipo", "ipo_id", "transition_at"),
-    )
+    __table_args__ = (Index("idx_transitions_ipo", "ipo_id", "transition_at"),)
 
 
 class CodeMappingRow(UUIDMixin, Base):
@@ -107,9 +99,7 @@ class CodeMappingRow(UUIDMixin, Base):
     # enums.CodeMappingSource: hkex_announcement / ifind_match / manual / hybrid
     confidence: Mapped[str | None] = mapped_column(String(20))
     # enums.CodeMappingConfidence: high / medium / low
-    requires_review: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
+    requires_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 __all__ = (

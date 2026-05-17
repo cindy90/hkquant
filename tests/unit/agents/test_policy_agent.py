@@ -92,8 +92,8 @@ async def test_policy_agent_run_writes_regime_score_to_extras(
         return_value=mock_llm_response(
             text=(
                 "Some narrative.\n"
-                "```json\n{\"regime_fit\": 70, \"policy_tailwind\": 60, \"regime_score\": 0, "
-                "\"evidence_pages\": [1], \"notes\": \"ok\"}\n```"
+                '```json\n{"regime_fit": 70, "policy_tailwind": 60, "regime_score": 0, '
+                '"evidence_pages": [1], "notes": "ok"}\n```'
             )
         )
     )
@@ -107,9 +107,7 @@ async def test_policy_agent_run_writes_regime_score_to_extras(
 
 
 @pytest.mark.asyncio
-async def test_policy_agent_negative_regime_finding(
-    mock_llm_client, mock_llm_response
-) -> None:
+async def test_policy_agent_negative_regime_finding(mock_llm_client, mock_llm_response) -> None:
     ctx = _ctx(llm_client=mock_llm_client, regime_override=-0.10)
     mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")
@@ -120,9 +118,7 @@ async def test_policy_agent_negative_regime_finding(
 
 
 @pytest.mark.asyncio
-async def test_policy_agent_runtime_seconds_reported(
-    mock_llm_client, mock_llm_response
-) -> None:
+async def test_policy_agent_runtime_seconds_reported(mock_llm_client, mock_llm_response) -> None:
     ctx = _ctx(llm_client=mock_llm_client, regime_override=0.0)
     mock_llm_client._client.chat.completions.create = AsyncMock(
         return_value=mock_llm_response(text="narrative")

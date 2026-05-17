@@ -55,9 +55,7 @@ from .runner import DEFAULT_HORIZONS, BacktestSample
 logger = get_logger(__name__)
 
 # Where the production weights live (referenced by ensemble.py).
-_WEIGHTS_PATH: Path = (
-    Path(__file__).resolve().parents[3] / "config" / "valuation_weights.yaml"
-)
+_WEIGHTS_PATH: Path = Path(__file__).resolve().parents[3] / "config" / "valuation_weights.yaml"
 
 # Default grid for each model weight — coarse but covers a 0.05 step
 # in the 0.10..0.60 band. With 4 models per listing_type that's 6**4 =
@@ -111,9 +109,7 @@ class CalibrationResult:
     notes: tuple[str, ...] = field(default_factory=tuple)
 
     def passed_all_monotonicity(self) -> bool:
-        return all(
-            s.monotonicity_passed for s in self.per_listing_type.values()
-        )
+        return all(s.monotonicity_passed for s in self.per_listing_type.values())
 
 
 # ===========================================================================
@@ -128,10 +124,7 @@ def load_current_weights(path: Path | None = None) -> dict[str, dict[str, float]
         return {}
     raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     weights_map = raw.get("weights", {}) or {}
-    return {
-        lt: {k: float(v) for k, v in (vals or {}).items()}
-        for lt, vals in weights_map.items()
-    }
+    return {lt: {k: float(v) for k, v in (vals or {}).items()} for lt, vals in weights_map.items()}
 
 
 def dump_weights_yaml(
@@ -256,11 +249,12 @@ def calibrate_one_listing_type(
     if len(slice_samples) < min_slice_n:
         # Insufficient data → keep baseline.
         notes = (
-            f"slice n={len(slice_samples)} < min {min_slice_n}; "
-            "keeping baseline weights untouched",
+            f"slice n={len(slice_samples)} < min {min_slice_n}; keeping baseline weights untouched",
         )
         baseline_metrics = _score_samples_with_weights(
-            slice_samples, baseline_weights, horizons=horizons,
+            slice_samples,
+            baseline_weights,
+            horizons=horizons,
         )
         return SliceCalibration(
             listing_type=listing_type,
@@ -279,10 +273,13 @@ def calibrate_one_listing_type(
 
     best: SliceCalibration | None = None
     for candidate_weights in _enumerate_weight_grid(
-        baseline_weights.keys(), grid=grid,
+        baseline_weights.keys(),
+        grid=grid,
     ):
         report = _score_samples_with_weights(
-            slice_samples, candidate_weights, horizons=horizons,
+            slice_samples,
+            candidate_weights,
+            horizons=horizons,
         )
         # Inflate label to "main_board" for monotonicity vs v8 (v8 baseline
         # uses main_board / regime_pass keys; we lift the local
@@ -292,15 +289,20 @@ def calibrate_one_listing_type(
             n_total=report.n_total,
             horizons={
                 h: SliceMetrics(
-                    horizon=m.horizon, n=m.n,
-                    ic=m.ic, ls_spread=m.ls_spread, ls_t_stat=m.ls_t_stat,
+                    horizon=m.horizon,
+                    n=m.n,
+                    ic=m.ic,
+                    ls_spread=m.ls_spread,
+                    ls_t_stat=m.ls_t_stat,
                 )
                 for h, m in report.horizons.items()
             },
         )
         passed, violations = monotonicity_constraint(
-            check_report, v8_baseline,
-            ic_tolerance=ic_tolerance, t_tolerance=t_tolerance,
+            check_report,
+            v8_baseline,
+            ic_tolerance=ic_tolerance,
+            t_tolerance=t_tolerance,
         )
         if not passed:
             continue
@@ -316,15 +318,16 @@ def calibrate_one_listing_type(
                 monotonicity_notes=tuple(violations),
                 objective_value=objective,
                 reason=(
-                    f"grid_search_best mean_IC={objective:.4f} "
-                    f"over {len(slice_samples)} samples"
+                    f"grid_search_best mean_IC={objective:.4f} over {len(slice_samples)} samples"
                 ),
             )
 
     if best is None:
         # No candidate passed monotonicity → keep baseline.
         baseline_metrics = _score_samples_with_weights(
-            slice_samples, baseline_weights, horizons=horizons,
+            slice_samples,
+            baseline_weights,
+            horizons=horizons,
         )
         return SliceCalibration(
             listing_type=listing_type,
@@ -333,9 +336,7 @@ def calibrate_one_listing_type(
             baseline_weights=dict(baseline_weights),
             chosen_metrics=baseline_metrics,
             monotonicity_passed=False,
-            monotonicity_notes=(
-                "no candidate cleared monotonicity vs v8; baseline retained",
-            ),
+            monotonicity_notes=("no candidate cleared monotonicity vs v8; baseline retained",),
             objective_value=_mean_ic_across_horizons(baseline_metrics),
             reason="no candidate passed monotonicity; baseline retained",
         )
@@ -386,10 +387,14 @@ def calibrate(
             )
             continue
         slice_result = calibrate_one_listing_type(
-            lt, samples, baseline_weights,
+            lt,
+            samples,
+            baseline_weights,
             horizons=horizons,
-            ic_tolerance=ic_tolerance, t_tolerance=t_tolerance,
-            grid=grid, min_slice_n=min_slice_n,
+            ic_tolerance=ic_tolerance,
+            t_tolerance=t_tolerance,
+            grid=grid,
+            min_slice_n=min_slice_n,
         )
         per_lt[lt] = slice_result
         candidate_yaml[lt.value] = dict(slice_result.chosen_weights)

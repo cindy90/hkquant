@@ -36,16 +36,16 @@ def build_custom_openapi(app: FastAPI) -> dict[str, Any]:
     )
 
     # Inject Bearer auth scheme.
-    schema.setdefault("components", {}).setdefault("securitySchemes", {})[
-        "BearerAuth"
-    ] = {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+    schema.setdefault("components", {}).setdefault("securitySchemes", {})["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+    }
 
     schema["security"] = [{"BearerAuth": []}]
 
     # Server URL (best-effort).
-    schema["servers"] = [
-        {"url": f"http://{settings.api.host}:{settings.api.port}"}
-    ]
+    schema["servers"] = [{"url": f"http://{settings.api.host}:{settings.api.port}"}]
 
     app.openapi_schema = schema
     return schema
