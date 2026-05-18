@@ -93,18 +93,32 @@ def mock_llm_response() -> Callable[..., MagicMock]:
 def mock_llm_client(
     monkeypatch: pytest.MonkeyPatch,
     mock_llm_response: Callable[..., MagicMock],
-) -> LLMClient:
+) -> Iterator[LLMClient]:
     """A `LLMClient` with `chat.completions.create` patched to a no-op AsyncMock.
 
     Tests should override `client._client.chat.completions.create` to a custom AsyncMock
     when they need to control the response.
+
+    R9-9: yields (instead of plain return) so a teardown step explicitly
+    resets the cost log on the returned client — pre-fix a leaked
+    in-memory cost from one test could survive into another via the
+    LLMClient's process-wide cost_log singleton if a future refactor
+    moves it module-level. ``monkeypatch.setenv`` already auto-restores
+    env vars at teardown; the yield gives us a place to also reset any
+    client-side mutable state we install during construction.
     """
     monkeypatch.setenv("KIMI_API_KEY", "sk-test-fixture")
     monkeypatch.setenv("KIMI_URL", "https://api.moonshot.ai/v1")
     client = LLMClient(daily_budget_usd=Decimal("100"))
     default_create: Any = AsyncMock(return_value=mock_llm_response())
     client._client.chat.completions.create = default_create  # type: ignore[attr-defined]
-    return client
+    try:
+        yield client
+    finally:
+        # R9-9: reset any in-test mutations to client state. The cost_log
+        # is the load-bearing instance attribute downstream tests read;
+        # zero it out so no leaked spend hangs around.
+        client.cost_log.records.clear()
 
 
 # ---------------------------------------------------------------------------

@@ -153,6 +153,7 @@ markers = [
     "slow: slow tests (default on; skip with -m 'not slow')",
     "integration: integration tests (require docker-compose deps)",
     "e2e: end-to-end tests (require all external services + golden data)",
+    "pg_required: R9-7 — tests that need a live PostgreSQL connection (filtered via `-m 'not pg_required'` for unit-job runs without PG)",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

@@ -364,10 +364,17 @@ def calibrate_one_listing_type(
                 "invariant — the calibration is informational only. Real per-model "
                 "calibration requires FullPipelineScorer."
             )
+    # R9-4: on a placebo run, ALL candidates produced identical IC — the
+    # grid-search "winner" is just whichever candidate the iteration order
+    # surfaced first. Returning that as ``chosen_weights`` makes the
+    # downstream YAML look like calibration moved weights when it didn't.
+    # Force chosen_weights back to baseline so the report is honest.
+    chosen_weights = dict(baseline_weights) if is_placebo else best.chosen_weights
+
     return SliceCalibration(
         listing_type=best.listing_type,
         n_samples=best.n_samples,
-        chosen_weights=best.chosen_weights,
+        chosen_weights=chosen_weights,
         baseline_weights=best.baseline_weights,
         chosen_metrics=best.chosen_metrics,
         monotonicity_passed=best.monotonicity_passed,

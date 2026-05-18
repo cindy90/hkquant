@@ -153,9 +153,12 @@ def _get_review_status(review_id: uuid.UUID) -> tuple[str, str | None, str | Non
 # ===========================================================================
 
 
+@pytest.mark.slow
 @pg_required
 @pytest.mark.asyncio
 async def test_full_propose_accept_apply_happy(sf) -> None:
+    """R9-8: heaviest learning-loop e2e — propose → review → apply →
+    backtest. Marked ``slow`` so default unit runs skip it."""
     snap_id = _seed_snapshot()
 
     # 1. PROPOSE — produce one ProposedAdjustment + persist
