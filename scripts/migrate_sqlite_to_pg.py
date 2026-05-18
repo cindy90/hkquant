@@ -58,6 +58,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from hk_ipo_agent.common.logging import configure_logging, get_logger
 from hk_ipo_agent.common.settings import get_settings
@@ -517,53 +518,57 @@ async def migrate_cornerstone_investments(
     return n
 
 
-async def migrate_companies_and_financials(con: sqlite3.Connection) -> tuple[int, int]:
-    """Companies derive from ipo_master; financial snapshots from ipo_financials."""
-    factory = async_session_factory()
-    async with factory() as session:
-        # 1. Companies
-        cur = con.execute("SELECT * FROM ipo_master")
-        company_rows = [map_company(r) for r in cur.fetchall()]
-        # Build stock_code -> company_id index (for financial_snapshots join)
-        code_to_company_id: dict[str, UUID] = {}
-        for ipo_row, company_row in zip(
-            con.execute("SELECT * FROM ipo_master").fetchall(),
-            company_rows,
-            strict=True,
-        ):
-            if ipo_row["stock_code"]:
-                code_to_company_id[ipo_row["stock_code"]] = company_row["id"]
+async def migrate_companies_and_financials(
+    con: sqlite3.Connection, *, session: AsyncSession
+) -> tuple[int, int]:
+    """Companies derive from ipo_master; financial snapshots from ipo_financials.
 
-        stmt = pg_insert(Company.__table__).values(company_rows)
-        update_cols = {k: stmt.excluded[k] for k in company_rows[0] if k != "id"}
-        await session.execute(stmt.on_conflict_do_update(index_elements=["id"], set_=update_cols))
-        log.info("migrated_companies", count=len(company_rows))
+    R7-7: accepts an injected ``session`` so the entire migration commits
+    atomically. Pre-fix this helper opened its own session and committed
+    independently — a failure here AFTER the IPO/cornerstone commit left
+    a half-migrated DB. The outer ``run()`` owns the single commit point.
+    """
+    # 1. Companies
+    cur = con.execute("SELECT * FROM ipo_master")
+    company_rows = [map_company(r) for r in cur.fetchall()]
+    # Build stock_code -> company_id index (for financial_snapshots join)
+    code_to_company_id: dict[str, UUID] = {}
+    for ipo_row, company_row in zip(
+        con.execute("SELECT * FROM ipo_master").fetchall(),
+        company_rows,
+        strict=True,
+    ):
+        if ipo_row["stock_code"]:
+            code_to_company_id[ipo_row["stock_code"]] = company_row["id"]
 
-        # 2. Financial snapshots
-        cur = con.execute("SELECT * FROM ipo_financials")
-        fin_rows: list[dict[str, Any]] = []
-        skipped_fin = 0
-        for r in cur.fetchall():
-            company_id = code_to_company_id.get(r["stock_code"])
-            if company_id is None:
-                skipped_fin += 1
-                continue
-            fin_rows.append(map_financial_snapshot(r, company_id=company_id))
+    stmt = pg_insert(Company.__table__).values(company_rows)
+    update_cols = {k: stmt.excluded[k] for k in company_rows[0] if k != "id"}
+    await session.execute(stmt.on_conflict_do_update(index_elements=["id"], set_=update_cols))
+    log.info("migrated_companies", count=len(company_rows))
 
-        if fin_rows:
-            stmt2 = pg_insert(FinancialSnapshotRow.__table__).values(fin_rows)
-            update_cols2 = {k: stmt2.excluded[k] for k in fin_rows[0] if k != "id"}
-            await session.execute(
-                stmt2.on_conflict_do_update(index_elements=["id"], set_=update_cols2)
-            )
-        log.info(
-            "migrated_financial_snapshots",
-            count=len(fin_rows),
-            skipped_no_company=skipped_fin,
-        )
+    # 2. Financial snapshots
+    cur = con.execute("SELECT * FROM ipo_financials")
+    fin_rows: list[dict[str, Any]] = []
+    skipped_fin = 0
+    for r in cur.fetchall():
+        company_id = code_to_company_id.get(r["stock_code"])
+        if company_id is None:
+            skipped_fin += 1
+            continue
+        fin_rows.append(map_financial_snapshot(r, company_id=company_id))
 
-        await session.commit()
-        return len(company_rows), len(fin_rows)
+    if fin_rows:
+        stmt2 = pg_insert(FinancialSnapshotRow.__table__).values(fin_rows)
+        update_cols2 = {k: stmt2.excluded[k] for k in fin_rows[0] if k != "id"}
+        await session.execute(stmt2.on_conflict_do_update(index_elements=["id"], set_=update_cols2))
+    log.info(
+        "migrated_financial_snapshots",
+        count=len(fin_rows),
+        skipped_no_company=skipped_fin,
+    )
+
+    # R7-7: NO commit here — outer run() owns the single commit point.
+    return len(company_rows), len(fin_rows)
 
 
 def dump_market_env_cache(con: sqlite3.Connection, out_dir: Path) -> Path:
@@ -627,6 +632,14 @@ async def run_migration(
                 con, link_repo, inv_repo
             )
 
+            # R7-7: companies + financials now share the SAME session as
+            # IPO + cornerstone, so the entire migration commits atomically.
+            # Pre-fix this block ran AFTER the IPO commit on its own session;
+            # a failure there left a half-migrated DB.
+            comp, fin = await migrate_companies_and_financials(con, session=session)
+            counts["companies"] = comp
+            counts["financial_snapshots"] = fin
+
             if dry_run:
                 log.warning("dry_run_rollback")
                 await session.rollback()
@@ -636,12 +649,6 @@ async def run_migration(
             await session.rollback()
             log.exception("migration_failed_rolled_back")
             raise
-
-    # Companies + financials need their own session (separate commit boundary).
-    if not dry_run:
-        comp, fin = await migrate_companies_and_financials(con)
-        counts["companies"] = comp
-        counts["financial_snapshots"] = fin
 
     dump_market_env_cache(con, fixture_dir)
     counts["market_env_cache_json"] = 1

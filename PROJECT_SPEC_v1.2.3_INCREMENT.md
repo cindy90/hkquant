@@ -584,8 +584,8 @@ POST   /api/v1/comments/{comment_id}/trigger-rerun   # 触发局部重分析
 
 ---
 
-*Increment Version: 1.2.3*  
-*Base: PROJECT_SPEC.md v1.2.1（建议在 v1.2.2 增量 B 之后实施）*  
-*Last Updated: 2026-05-17*  
-*主题: 全过程可解释性 —— 每一步推理产物 MD + 推导链 + 讨论协作层。*  
+*Increment Version: 1.2.3*
+*Base: PROJECT_SPEC.md v1.2.1（建议在 v1.2.2 增量 B 之后实施）*
+*Last Updated: 2026-05-17*
+*主题: 全过程可解释性 —— 每一步推理产物 MD + 推导链 + 讨论协作层。*
 *核心: 系统不再只输出一份最终报告，而是输出完整的、逐步可查看、逐步可讨论的推理链；用户对任意步骤的批注可反馈进 learning_loop 驱动迭代。*

@@ -33,6 +33,7 @@ async def list_snapshots(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse:
+    """R6-1: gated behind ``READ_SNAPSHOTS``."""
     _ = user
     snapshots = await get_registry().list_snapshots()
     snapshots = sorted(snapshots, key=lambda s: s.created_at, reverse=True)
@@ -202,8 +203,7 @@ async def recent_outcomes(
     The UI Dashboard polls this endpoint to populate the "Recent Checkpoints"
     widget.
 
-    R6-1: gated behind ``READ_SNAPSHOTS`` (same surface as the per-snapshot
-    /outcomes endpoint above).
+    R6-1: gated behind ``READ_SNAPSHOTS``.
     """
     _ = user
     sf = async_session_factory()

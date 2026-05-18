@@ -18,12 +18,18 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from ...common.logging import get_logger
 from ..database import async_session_factory
 from ..repositories import IPOEventRepository
 
 if TYPE_CHECKING:
-    from .data.sources.ifind_client import IFindClient
+    # R7-1: the original path ``.data.sources.ifind_client`` was broken
+    # (would resolve to ``hk_ipo_agent.data.builders.data.sources.ifind_client``).
+    # The correct relative path is up one level (builders → data), then into
+    # sources — ``..sources.ifind_client``.
+    from ..sources.ifind_client import IFindClient
 
 log = get_logger(__name__)
 
@@ -44,8 +50,19 @@ class HistoricalIPOLoader:
     3. Don't touch rows that look like NACS-migrated (preserve curation)
     """
 
-    def __init__(self, ifind: IFindClient | None = None) -> None:
+    def __init__(
+        self,
+        ifind: IFindClient | None = None,
+        *,
+        session: AsyncSession | None = None,
+    ) -> None:
+        """R7-9: optional ``session`` injection for transaction composition.
+
+        When None (back-compat default), each method opens its own session
+        via the factory.
+        """
         self.ifind = ifind
+        self._session = session
 
     async def load_listed_between(
         self,

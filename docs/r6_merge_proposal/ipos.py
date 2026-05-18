@@ -17,7 +17,9 @@ from ..schemas import IPOListItem, PaginatedResponse, PaginationMeta, snapshot_t
 
 router = APIRouter(prefix="/api/ipos", tags=["ipos"])
 
-# R6-1: every endpoint in this router gates on READ_IPO.
+# R6-1: every endpoint in this router gates on READ_IPO. Pre-R6 they
+# accepted any authenticated bearer; now they require the per-surface
+# permission. ROLE_PERMISSIONS grants READ_IPO to VIEWER+ via _BASE_READ.
 _IPODep = Annotated[CurrentUser, Depends(require_permission(Permission.READ_IPO))]
 
 
@@ -69,7 +71,10 @@ async def list_ipos(
 
 @router.get("/{ipo_id}", response_model=IPOListItem)
 async def get_ipo_detail(ipo_id: UUID, user: _IPODep) -> IPOListItem:
-    """Return a single IPO's summary derived from its latest snapshot."""
+    """Return a single IPO's summary derived from its latest snapshot.
+
+    R6-1: gated behind ``READ_IPO``.
+    """
     _ = user
     snapshots = await get_registry().list_snapshots()
     matching = [s for s in snapshots if s.ipo_id == ipo_id]
@@ -105,7 +110,11 @@ async def list_ipo_snapshots(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse:
-    """List all snapshots belonging to a given IPO, newest first."""
+    """List all snapshots belonging to a given IPO, newest first.
+
+    R6-1: gated behind ``READ_IPO`` (mounted under ``/api/ipos/`` — the
+    resource being navigated is the IPO, not the snapshot collection).
+    """
     _ = user
     all_snaps = await get_registry().list_snapshots()
     matching = sorted(
@@ -126,10 +135,7 @@ async def list_ipo_snapshots(
 
 
 @router.get("/{ipo_id}/lifecycle")
-async def get_ipo_lifecycle(
-    ipo_id: UUID,
-    user: _IPODep,
-) -> dict[str, Any]:
+async def get_ipo_lifecycle(ipo_id: UUID, user: _IPODep) -> dict[str, Any]:
     """Return current lifecycle state + transition history for an IPO.
 
     R6-1: gated behind ``READ_IPO``.

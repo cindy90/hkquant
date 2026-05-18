@@ -137,7 +137,7 @@ async def upload_prospectus(
     if len(content) > _MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"文件大小超过限制 ({_MAX_FILE_SIZE // (1024*1024)} MB)",
+            detail=f"文件大小超过限制 ({_MAX_FILE_SIZE // (1024 * 1024)} MB)",
         )
 
     save_path.write_bytes(content)

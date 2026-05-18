@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import AsyncIterator
+from contextvars import ContextVar
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -36,15 +37,57 @@ def get_engine() -> AsyncEngine:
     )
 
 
-@functools.lru_cache(maxsize=1)
+# R7-10: per-context session factory storage. Pre-R7-10 the factory was
+# ``@functools.lru_cache(maxsize=1)``-wrapped, which globally bound the
+# first call's engine + its event loop into the cached factory. Any
+# subsequent caller from a different event loop (pytest-asyncio
+# per-test loops, concurrent backtest workers) inherited the dead loop's
+# asyncpg pool, manifesting as ``RuntimeError: <Future> attached to a
+# different loop``. The ContextVar keys storage to the current asyncio
+# context so each event loop gets its own factory.
+_SESSION_FACTORY: ContextVar[async_sessionmaker[AsyncSession] | None] = ContextVar(
+    "_SESSION_FACTORY", default=None
+)
+
+
 def async_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Return the singleton async sessionmaker bound to the project engine."""
-    return async_sessionmaker(
+    """Return the per-context async sessionmaker bound to the project engine.
+
+    Singleton-within-context: repeated calls inside the same asyncio
+    context return the same factory; a fresh context (new event loop /
+    test fixture / subprocess) constructs its own.
+    """
+    factory = _SESSION_FACTORY.get()
+    if factory is not None:
+        return factory
+    factory = async_sessionmaker(
         bind=get_engine(),
         class_=AsyncSession,
         expire_on_commit=False,
         autoflush=False,
     )
+    _SESSION_FACTORY.set(factory)
+    return factory
+
+
+def _clear_session_factory_cache() -> None:
+    """R7-10 back-compat shim: tests that used to call
+    ``async_session_factory.cache_clear()`` continue to work — this
+    resets the ContextVar so the next call rebuilds the factory.
+
+    Also clears ``get_engine``'s ``lru_cache`` so the next call
+    constructs a fresh engine. Without this, pytest-asyncio's per-test
+    event loop would inherit the previous test's engine + asyncpg pool,
+    surfacing as ``RuntimeError: <Future> attached to a different loop``.
+    """
+    _SESSION_FACTORY.set(None)
+    get_engine.cache_clear()  # type: ignore[attr-defined]
+
+
+# Expose as ``async_session_factory.cache_clear`` for callers that haven't
+# migrated. They keep working; new code should call ``dispose_engine()``
+# or ``_clear_session_factory_cache()`` directly.
+async_session_factory.cache_clear = _clear_session_factory_cache  # type: ignore[attr-defined]
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
@@ -68,11 +111,17 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 async def dispose_engine() -> None:
-    """Dispose the global engine. Call from FastAPI shutdown / test teardown."""
+    """Dispose the global engine. Call from FastAPI shutdown / test teardown.
+
+    R7-10: also resets the ContextVar-backed session factory so the next
+    call rebuilds from scratch. ``get_engine`` still uses ``lru_cache`` and
+    its ``cache_clear()`` works as before.
+    """
     if get_engine.cache_info().currsize:  # type: ignore[attr-defined]
         await get_engine().dispose()
         get_engine.cache_clear()  # type: ignore[attr-defined]
-        async_session_factory.cache_clear()  # type: ignore[attr-defined]
+    # R7-10: clear the per-context factory storage (no-op if never set).
+    _SESSION_FACTORY.set(None)
 
 
 __all__ = (

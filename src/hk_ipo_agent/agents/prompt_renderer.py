@@ -123,9 +123,7 @@ def render_prompt(
                 "placeholder from the template."
             ) from exc
         except Exception as exc:
-            raise PromptRenderError(
-                f"Prompt {prompt_path!r} Jinja2 render failed: {exc}"
-            ) from exc
+            raise PromptRenderError(f"Prompt {prompt_path!r} Jinja2 render failed: {exc}") from exc
 
     if score_card_class is not None:
         body = body.rstrip() + "\n\n" + schema_instruction(score_card_class).lstrip()
