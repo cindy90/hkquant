@@ -14,8 +14,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from ...common.settings import get_settings
 
-# Paths that don't trigger LLM calls — skip the check.
-_CHEAP_PATHS = (
+# R6-5: paths that don't trigger LLM calls — skip the cost-guard check.
+# Pre-R6-5 these were matched with ``path.startswith(p)`` which produced
+# false positives like ``/api/dashboard-llm-tool`` getting through because
+# its prefix happens to start with ``/api/dashboard``. We now require a
+# true segment boundary: the path EQUALS an entry OR the entry is a
+# prefix followed by ``/``.
+_CHEAP_PATHS: tuple[str, ...] = (
     "/health",
     "/ready",
     "/openapi.json",
@@ -24,7 +29,20 @@ _CHEAP_PATHS = (
     "/api/audit",
     "/api/snapshots",
     "/api/ipos",
+    "/api/alerts",
+    "/api/prospectus",
 )
+
+
+def _is_cheap_path(path: str) -> bool:
+    """R6-5 — segment-boundary path match.
+
+    True iff ``path`` equals one of ``_CHEAP_PATHS`` exactly, OR is a
+    sub-route (i.e. the prefix is followed by ``/``). This eliminates
+    the prefix-spoofing class of bypass without forcing operators to
+    enumerate every concrete sub-path.
+    """
+    return any(path == p or path.startswith(p + "/") for p in _CHEAP_PATHS)
 
 
 class CostGuardMiddleware(BaseHTTPMiddleware):
@@ -36,7 +54,7 @@ class CostGuardMiddleware(BaseHTTPMiddleware):
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         path = request.url.path
-        if any(path.startswith(p) for p in _CHEAP_PATHS):
+        if _is_cheap_path(path):
             return await call_next(request)
 
         # The shared LLMClient lives in app.state if installed by main.py.
@@ -55,4 +73,4 @@ class CostGuardMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-__all__ = ("CostGuardMiddleware",)
+__all__ = ("CostGuardMiddleware", "_is_cheap_path")

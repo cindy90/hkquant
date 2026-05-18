@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 
 from ...common.enums import ChatMessageRole
-from ..auth.dependencies import get_user_by_id
+from ..auth.dependencies import resolve_user_async
 from ..auth.jwt import AuthError, decode_access_token
 from ..auth.rbac import roles_from_strings
 from .chat_handler import reply
@@ -40,7 +40,11 @@ async def chat_socket(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    user_rec = get_user_by_id(user_id)
+    # R6-4: PG-first user lookup with in-memory dev fallback. Production
+    # users (provisioned in ``user_accounts`` via lifespan) used to be
+    # locked out of WS because chat_endpoint only checked the in-memory
+    # seed; now we resolve via PG with graceful fallback.
+    user_rec = await resolve_user_async(user_id)
     if user_rec is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
