@@ -48,9 +48,10 @@ dependencies = [
     # HTTP client
     "httpx>=0.27",
 
-    # Auth (JWT/OIDC)
+    # Auth (JWT/OIDC) + R6-2 Argon2id password hashing (OWASP-recommended).
     "pyjwt[crypto]>=2.9",
     "python-jose[cryptography]>=3.3",
+    "argon2-cffi>=23.1",
 
     # Cache / queue
     "redis>=5.0",

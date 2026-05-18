@@ -8,12 +8,14 @@ Signed URLs / S3 / R2 deferred to Phase 9 (ADR 0011).
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 
+from ...common.enums import Permission
 from ...common.settings import get_settings
-from ..auth import CurrentUserDep
+from ..auth.dependencies import CurrentUser, require_permission
 
 router = APIRouter(prefix="/api/prospectus", tags=["prospectus"])
 
@@ -25,8 +27,14 @@ def _prospectus_path(prospectus_id: str) -> Path:
 
 
 @router.get("/{prospectus_id}.pdf")
-async def get_prospectus_pdf(prospectus_id: str, user: CurrentUserDep) -> FileResponse:
-    """Stream a local prospectus PDF. 404 if not present."""
+async def get_prospectus_pdf(
+    prospectus_id: str,
+    user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_PROSPECTUS))],
+) -> FileResponse:
+    """Stream a local prospectus PDF. 404 if not present.
+
+    R6-1: gated behind READ_PROSPECTUS.
+    """
     _ = user
     # Reject path-traversal attempts.
     if "/" in prospectus_id or "\\" in prospectus_id or ".." in prospectus_id:

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from typing import Annotated
 
-from ...common.enums import ListingType
+from fastapi import APIRouter, Depends, Query
+
+from ...common.enums import ListingType, Permission
 from ...prediction_registry.registry import get_registry
-from ..auth import CurrentUserDep
+from ..auth.dependencies import CurrentUser, require_permission
 from ..schemas import IPOListItem, PaginatedResponse, PaginationMeta
 
 router = APIRouter(prefix="/api/ipos", tags=["ipos"])
@@ -14,11 +16,14 @@ router = APIRouter(prefix="/api/ipos", tags=["ipos"])
 
 @router.get("/", response_model=PaginatedResponse)
 async def list_ipos(
-    user: CurrentUserDep,
+    user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_IPO))],
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse:
-    """List IPOs derived from existing snapshots (latest per IPO)."""
+    """List IPOs derived from existing snapshots (latest per IPO).
+
+    R6-1: gated behind ``READ_IPO``.
+    """
     _ = user
     snapshots = await get_registry().list_snapshots()
     latest_by_ipo: dict[str, IPOListItem] = {}

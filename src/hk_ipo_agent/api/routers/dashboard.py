@@ -3,20 +3,28 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from ...common.enums import Permission
 from ...prediction_registry.registry import get_registry
-from ..auth import CurrentUserDep
 from ..auth.audit_middleware import get_audit_store
+from ..auth.dependencies import CurrentUser, require_permission
 from ..schemas import DashboardSummary
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("/summary", response_model=DashboardSummary)
-async def get_summary(user: CurrentUserDep) -> DashboardSummary:
-    """Aggregate counts for the UI workbench landing page."""
+async def get_summary(
+    user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_DASHBOARD))],
+) -> DashboardSummary:
+    """Aggregate counts for the UI workbench landing page.
+
+    R6-1: gated behind ``READ_DASHBOARD`` so future per-tenant role splits
+    can revoke dashboard access without revoking auth itself.
+    """
     _ = user
     reg = get_registry()
     snapshots = await reg.list_snapshots()

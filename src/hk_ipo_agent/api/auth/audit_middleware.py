@@ -25,11 +25,51 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from ...common.enums import AuditResourceType
 from ...common.schemas import AuditLog
 from ...data.database import async_session_factory
 from ...data.models import AuditLogRow
 
 _WRITE_METHODS = {"POST", "PUT", "DELETE", "PATCH"}
+
+
+# R6-8: prefix → AuditResourceType lookup for resource_type inference. The
+# matched second URL segment becomes the resource_id (uuid / alphanumeric).
+_RESOURCE_PREFIXES: tuple[tuple[str, AuditResourceType], ...] = (
+    ("/api/snapshots", AuditResourceType.SNAPSHOT),
+    ("/api/reviews", AuditResourceType.REVIEW),
+    ("/api/proposals", AuditResourceType.PROPOSAL),
+    ("/api/alerts", AuditResourceType.ALERT),
+    ("/api/settings", AuditResourceType.CONFIG),
+    ("/api/chat", AuditResourceType.CHAT_SESSION),
+    ("/api/auth", AuditResourceType.USER),
+)
+
+
+def _infer_resource_from_path(
+    path: str,
+) -> tuple[AuditResourceType | None, str | None]:
+    """R6-8 — derive (resource_type, resource_id) from request.url.path.
+
+    Returns ``(None, None)`` when the path doesn't match any registered
+    prefix or when it has no second segment beyond the prefix. The match
+    requires a segment boundary (i.e. the prefix must equal the path or
+    be followed by ``/``) so ``/api/snapshots-fake/x`` doesn't accidentally
+    bind to SNAPSHOT — same R6-5-style guard.
+    """
+    if not path or not path.startswith("/api/"):
+        return (None, None)
+    for prefix, rtype in _RESOURCE_PREFIXES:
+        if path == prefix or path == prefix + "/" or path.startswith(prefix + "/"):
+            remainder = path[len(prefix) :].lstrip("/")
+            if not remainder:
+                return (rtype, None)
+            # Second segment is the resource id; trailing sub-paths (e.g.
+            # /memo.md, /accept) are stripped because they describe an
+            # action against the resource, not part of its identity.
+            resource_id = remainder.split("/", 1)[0]
+            return (rtype, resource_id or None)
+    return (None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -226,13 +266,17 @@ class AuditMiddleware(BaseHTTPMiddleware):
             user_id = getattr(current, "id", None)
             user_email = getattr(current, "email", None)
 
+        # R6-8: infer resource_type + resource_id from the path so audit
+        # query filtering by resource_type works (pre-fix both were None,
+        # making /api/audit?resource_type=alert always empty).
+        resource_type, resource_id = _infer_resource_from_path(request.url.path)
         record = AuditLog(
             id=uuid4(),
             user_id=user_id,
             user_email=user_email,
             action=f"{request.method} {request.url.path}",
-            resource_type=None,
-            resource_id=None,
+            resource_type=resource_type,
+            resource_id=resource_id,
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
             request_id=response.headers.get("X-Request-Id"),
@@ -250,6 +294,7 @@ __all__ = (
     "AuditStore",
     "AuditStoreProtocol",
     "PGAuditStore",
+    "_infer_resource_from_path",
     "get_audit_store",
     "reset_audit_store_for_test",
     "set_audit_store",

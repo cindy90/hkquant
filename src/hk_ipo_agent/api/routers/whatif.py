@@ -20,7 +20,11 @@ from ...data.database import async_session_factory
 from ...data.models import WhatIfCalculationRow
 from ...prediction_registry.registry import get_registry
 from ...synthesizer import run_whatif
-from ..auth.dependencies import CurrentUser, require_permission
+from ..auth.dependencies import (
+    CurrentUser,
+    require_permission,
+    upsert_user_account_for_jwt,
+)
 from ..schemas import WhatIfRequest, WhatIfResponse
 
 logger = get_logger(__name__)
@@ -41,15 +45,17 @@ async def whatif_run(
             detail=f"snapshot {payload.snapshot_id} not found",
         ) from exc
     response = await run_whatif(snapshot, payload.modified_assumptions)
-    # user_id is intentionally NOT persisted in whatif_calculations — the
-    # user_accounts FK can't be satisfied for the JWT-issued admin / test
-    # tokens that don't have a user_accounts row. Audit middleware
-    # already records user context separately; whatif_calculations.user_id
-    # is only useful when SSO is wired (Phase 9) and lifespan provisions
-    # users in PG up-front.
-    _ = user
+    # R6-7: ensure the JWT subject exists in ``user_accounts`` so the FK on
+    # whatif_calculations.user_id is satisfied; then persist with user_id
+    # set so Phase 10 attribution can link whatif activity to a person.
+    # Both calls are best-effort (errors are caught + warning-logged) so
+    # the user still gets their response if PG is offline.
+    await upsert_user_account_for_jwt(user)
     await _persist_calculation(
-        snapshot_id=payload.snapshot_id, user_id=None, payload=payload, response=response
+        snapshot_id=payload.snapshot_id,
+        user_id=user.id,
+        payload=payload,
+        response=response,
     )
     return response
 

@@ -265,7 +265,15 @@ class Permission(StrEnum):
     READ_REVIEWS = "reviews.read"
     READ_PROPOSALS = "proposals.read"
     READ_AUDIT = "audit.read"
+    READ_AUDIT_FULL = "audit.read_full"  # R6-3: full payload (incl. potentially sensitive data)
     READ_SETTINGS = "settings.read"
+    # R6-1: per-surface read permissions for the 5 read-side routers.
+    # All four are part of _BASE_READ so every authenticated role (VIEWER+
+    # / AUDITOR) gets them — matches the spec "internal users can read".
+    READ_DASHBOARD = "dashboard.read"
+    READ_IPO = "ipo.read"
+    READ_ALERT = "alert.read"
+    READ_PROSPECTUS = "prospectus.read"
     # ---- write ----
     SUBMIT_REVIEW = "reviews.submit"
     PROPOSE_ADJUSTMENT = "proposals.propose"
@@ -288,6 +296,13 @@ _BASE_READ: tuple[Permission, ...] = (
     Permission.READ_REVIEWS,
     Permission.READ_PROPOSALS,
     Permission.READ_SETTINGS,
+    # R6-1: 4 per-surface read perms now part of the baseline that VIEWER
+    # and every role above it inherits. AUDITOR also picks them up below
+    # so audit investigations can cross-reference the surfaces being audited.
+    Permission.READ_DASHBOARD,
+    Permission.READ_IPO,
+    Permission.READ_ALERT,
+    Permission.READ_PROSPECTUS,
 )
 
 _REVIEWER_WRITE: tuple[Permission, ...] = (
@@ -315,9 +330,20 @@ ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
     UserRole.SENIOR_REVIEWER: frozenset((*_BASE_READ, *_REVIEWER_WRITE, *_SENIOR_EXTRA)),
     UserRole.OPERATOR: frozenset((*_BASE_READ, *_REVIEWER_WRITE, *_OPERATOR_EXTRA)),
     UserRole.ADMIN: frozenset(
-        (*_BASE_READ, *_REVIEWER_WRITE, *_SENIOR_EXTRA, *_OPERATOR_EXTRA, Permission.MANAGE_USERS)
+        (
+            *_BASE_READ,
+            *_REVIEWER_WRITE,
+            *_SENIOR_EXTRA,
+            *_OPERATOR_EXTRA,
+            Permission.MANAGE_USERS,
+            # R6-3: admins need full audit access for incident response.
+            Permission.READ_AUDIT,
+            Permission.READ_AUDIT_FULL,
+        )
     ),
-    UserRole.AUDITOR: frozenset((*_BASE_READ, Permission.READ_AUDIT)),
+    # R6-3: AUDITOR gets BOTH READ_AUDIT (metadata listing) and
+    # READ_AUDIT_FULL (sensitive payload). Their job is to audit.
+    UserRole.AUDITOR: frozenset((*_BASE_READ, Permission.READ_AUDIT, Permission.READ_AUDIT_FULL)),
 }
 
 

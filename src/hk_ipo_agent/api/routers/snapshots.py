@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 
+from ...common.enums import Permission
 from ...prediction_registry.registry import get_registry
 from ...reporting import build_memo_markdown, export_docx, export_pdf
-from ..auth import CurrentUserDep
+from ..auth.dependencies import CurrentUser, require_permission
 from ..schemas import (
     PaginatedResponse,
     PaginationMeta,
@@ -19,10 +21,13 @@ from ..schemas import (
 
 router = APIRouter(prefix="/api/snapshots", tags=["snapshots"])
 
+# R6-1: every snapshot read endpoint gates on READ_SNAPSHOTS.
+_SnapDep = Annotated[CurrentUser, Depends(require_permission(Permission.READ_SNAPSHOTS))]
+
 
 @router.get("/", response_model=PaginatedResponse)
 async def list_snapshots(
-    user: CurrentUserDep,
+    user: _SnapDep,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse:
@@ -42,7 +47,7 @@ async def list_snapshots(
 
 
 @router.get("/{snapshot_id}", response_model=SnapshotSummary)
-async def get_snapshot(snapshot_id: UUID, user: CurrentUserDep) -> SnapshotSummary:
+async def get_snapshot(snapshot_id: UUID, user: _SnapDep) -> SnapshotSummary:
     _ = user
     try:
         snap = await get_registry().get_snapshot(snapshot_id)
@@ -55,7 +60,7 @@ async def get_snapshot(snapshot_id: UUID, user: CurrentUserDep) -> SnapshotSumma
 
 
 @router.get("/{snapshot_id}/memo.md")
-async def get_memo_markdown(snapshot_id: UUID, user: CurrentUserDep) -> Response:
+async def get_memo_markdown(snapshot_id: UUID, user: _SnapDep) -> Response:
     _ = user
     snap = await get_registry().get_snapshot(snapshot_id)
     md = build_memo_markdown(snap)
@@ -63,7 +68,7 @@ async def get_memo_markdown(snapshot_id: UUID, user: CurrentUserDep) -> Response
 
 
 @router.get("/{snapshot_id}/memo.pdf")
-async def get_memo_pdf(snapshot_id: UUID, user: CurrentUserDep) -> Response:
+async def get_memo_pdf(snapshot_id: UUID, user: _SnapDep) -> Response:
     _ = user
     snap = await get_registry().get_snapshot(snapshot_id)
     pdf_bytes = export_pdf(snap)
@@ -72,7 +77,7 @@ async def get_memo_pdf(snapshot_id: UUID, user: CurrentUserDep) -> Response:
 
 
 @router.get("/{snapshot_id}/memo.docx")
-async def get_memo_docx(snapshot_id: UUID, user: CurrentUserDep) -> Response:
+async def get_memo_docx(snapshot_id: UUID, user: _SnapDep) -> Response:
     _ = user
     snap = await get_registry().get_snapshot(snapshot_id)
     docx_bytes = export_docx(snap)

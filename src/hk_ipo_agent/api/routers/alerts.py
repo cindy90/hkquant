@@ -16,7 +16,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from ...common.enums import AlertLevel, Permission
 from ...common.schemas import Alert
-from ..auth import CurrentUserDep
 from ..auth.dependencies import CurrentUser, require_permission
 from ..schemas import AlertAck, PaginatedResponse, PaginationMeta
 
@@ -79,10 +78,11 @@ def reset_alert_store_for_test() -> None:
 
 @router.get("/", response_model=PaginatedResponse)
 async def list_alerts(
-    user: CurrentUserDep,
+    user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_ALERT))],
     limit: int = 50,
     offset: int = 0,
 ) -> PaginatedResponse:
+    """R6-1: gated behind READ_ALERT."""
     _ = user
     items, total = await get_alert_store().list(limit=limit, offset=offset)
     return PaginatedResponse(
