@@ -80,10 +80,14 @@ def test_settings_prod_requires_hitl_enabled(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_settings_prod_with_hitl_enabled_passes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Production env + HITL on + non-default JWT secret → no raise."""
+    """Production env + HITL on + non-default JWT secret + airflow → no raise.
+
+    R8-5: also requires SCHEDULER__BACKEND=airflow in prod.
+    """
     monkeypatch.setenv("HK_IPO__ENVIRONMENT", "prod")
     monkeypatch.setenv("HK_IPO__ORCHESTRATOR__ENABLE_HITL", "true")
     monkeypatch.setenv("HK_IPO__AUTH__JWT_SECRET", "prod-secret-min-32-chars-long-enough-1")
+    monkeypatch.setenv("HK_IPO__SCHEDULER__BACKEND", "airflow")
     s = Settings()
     assert s.environment.lower() in {"prod", "production"}
     assert s.orchestrator.enable_hitl is True
@@ -117,10 +121,14 @@ def test_settings_prod_requires_jwt_secret_override(monkeypatch: pytest.MonkeyPa
 
 
 def test_settings_prod_accepts_non_default_jwt_secret(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Production + custom JWT secret + HITL on → no raise."""
+    """Production + custom JWT secret + HITL on + airflow → no raise.
+
+    R8-5: also requires SCHEDULER__BACKEND=airflow in prod.
+    """
     monkeypatch.setenv("HK_IPO__ENVIRONMENT", "prod")
     monkeypatch.setenv("HK_IPO__ORCHESTRATOR__ENABLE_HITL", "true")
     monkeypatch.setenv("HK_IPO__AUTH__JWT_SECRET", "a-real-prod-secret-not-the-default-one-12345")
+    monkeypatch.setenv("HK_IPO__SCHEDULER__BACKEND", "airflow")
     s = Settings()
     assert s.auth.jwt_secret.get_secret_value() != "change-me-min-32-chars-long-secret-here"
 

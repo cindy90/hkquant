@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import functools
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import Field, SecretStr, model_validator
@@ -137,7 +137,19 @@ class AuthSettings(BaseSettings):
 
 
 class SchedulerSettings(BaseSettings):
-    backend: str = "apscheduler"  # apscheduler (dev) | airflow (prod)
+    """Scheduler backend per CLAUDE.md §自动化与状态机约束.
+
+    R8-5: ``backend`` is Literal-typed so typos (``apsheduler`` /
+    ``airfllow``) are rejected at Settings construction time instead
+    of silently falling through. Pre-R8-5 the free-form string allowed
+    unknown values to land in a generic fallback branch.
+
+    Production enforcement happens at the top-level ``Settings``
+    model_validator: env="prod"/"production" + backend != "airflow"
+    → ConfigurationError.
+    """
+
+    backend: Literal["airflow", "apscheduler"] = "apscheduler"
     timezone: str = "Asia/Hong_Kong"
 
 
@@ -232,6 +244,18 @@ class Settings(BaseSettings):
                 "JWT secret must be overridden in production — the default "
                 "placeholder is publicly known. Set HK_IPO__AUTH__JWT_SECRET "
                 "to a unique high-entropy value (≥ 32 chars). See PLAN R2-7."
+            )
+
+        # R8-5: production environment MUST use Airflow per CLAUDE.md
+        # §自动化与状态机约束 ("生产环境必须用 Airflow。APScheduler 仅用于
+        # dev/test"). Pre-R8-5 the backend was a free-form string so a
+        # typo'd value silently fell through to apscheduler.
+        if self.scheduler.backend != "airflow":
+            raise ConfigurationError(
+                f"Scheduler backend must be 'airflow' in production "
+                f"(got {self.scheduler.backend!r}). APScheduler is dev/test only. "
+                f"Set HK_IPO__SCHEDULER__BACKEND=airflow. "
+                f"See CLAUDE.md §自动化与状态机约束 + PLAN R8-5."
             )
 
         return self

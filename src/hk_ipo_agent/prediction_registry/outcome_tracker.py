@@ -122,7 +122,13 @@ class OutcomeTracker:
         if await self._exists(snapshot_id, checkpoint_day):
             return TrackResult(outcome_id=None, skipped=True, reason="already_recorded")
 
-        target_date = listing_date + timedelta(days=max(checkpoint_day, 0))
+        # R8-7: spec CHECKPOINT_DAYS are trading-day indices (skip weekends),
+        # not calendar days. ``BenchmarkPriceService.get_trading_day_offset``
+        # advances past weekends; the calendar-day -1 terminal sentinel is
+        # passed through as max(...,0).
+        target_date = BenchmarkPriceService.get_trading_day_offset(
+            listing_date, max(checkpoint_day, 0)
+        )
 
         # 1. Stock raw return
         try:

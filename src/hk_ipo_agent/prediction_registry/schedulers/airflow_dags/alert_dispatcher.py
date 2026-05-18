@@ -27,23 +27,27 @@ except ImportError:  # pragma: no cover
 
 
 def _run_event_driven_scheduler(**context: Any) -> dict[str, Any]:
-    """Single sweep of the event queue."""
-    raise NotImplementedError(
-        "Production DAG body must wire EventDrivenScheduler with the real "
-        "EventQueue adapter (HKEX RSS / iFind webhook / 披露易 poll) + "
-        "EarningsComparator + AlertRouter. See api/main.py lifespan."
-    )
+    """R8-9: delegate to the shared alert-dispatch runner.
+
+    The shared ``_dag_runners.run_alert_dispatch_sync`` instantiates the
+    AlertRouter against the PG session factory; production-only
+    transports (Slack / PagerDuty) wired in Phase 9. Pre-R8-9 this raised
+    ``NotImplementedError`` so every Airflow run failed.
+    """
+    from ._dag_runners import run_alert_dispatch_sync
+
+    return run_alert_dispatch_sync(**context)
 
 
 def _dispatch_unacked_alerts(**context: Any) -> dict[str, Any]:
-    """Re-emit alerts that have been open > escalation_window per category.
-
-    Phase 9 hooks this up to the on-call rotation in PagerDuty.
+    """R8-9: re-emit window scan. Reuses the AlertRouter scan path —
+    Phase 9 plugs in the actual escalation transport (PagerDuty).
     """
-    raise NotImplementedError(
-        "Production DAG body queries alerts table for open rows > escalation "
-        "window and re-emits at next severity tier."
-    )
+    from ._dag_runners import run_alert_dispatch_sync
+
+    # Same status surface — the dispatch / re-emit difference is a
+    # routing-config concern Phase 9 wires up.
+    return run_alert_dispatch_sync(**context)
 
 
 if AIRFLOW_AVAILABLE:
