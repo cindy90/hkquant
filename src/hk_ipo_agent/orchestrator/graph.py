@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..common.llm_client import LLMClient
+from ..prediction_registry.registry import PredictionRegistryProtocol
 from ..valuation.base import MarketData
 from .checkpoint import get_checkpointer
 from .edges import route_after_hitl, route_after_snapshot
@@ -36,10 +37,18 @@ def build_main_graph(
     ifind_tool: Any = None,
     kb_tool: Any = None,
     use_checkpointer: bool = True,
+    registry: PredictionRegistryProtocol | None = None,
 ) -> Any:
     """Build + compile the main LangGraph state machine.
 
     Returns the compiled graph; caller invokes ``await graph.ainvoke(state)``.
+
+    Args:
+        registry: R5-4 — explicit prediction registry to bind into the
+            ``create_snapshot`` node closure. When None, the node falls
+            back to ``get_registry()``. Pipeline callers should always
+            inject so concurrent runs don't clobber each other's
+            registry via the process-wide global.
     """
     from langgraph.graph import END, START, StateGraph
 
@@ -49,6 +58,7 @@ def build_main_graph(
         prospectus_tool=prospectus_tool,
         ifind_tool=ifind_tool,
         kb_tool=kb_tool,
+        registry=registry,
     )
 
     g: Any = StateGraph(AnalysisState)

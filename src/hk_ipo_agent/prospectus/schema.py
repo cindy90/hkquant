@@ -100,8 +100,9 @@ class ParsedDocument:
 class Chunk:
     """A chunk emitted by the chunker. The unit of embedding and retrieval.
 
-    ``chunk_id`` is deterministic (sha256 of prospectus_id + char_offset +
-    length) so re-runs yield identical IDs (matters for Qdrant point upsert).
+    ``chunk_id`` is a deterministic UUID5 string (R5-3: ``uuid5`` of
+    prospectus_id + char_offset + length) so re-runs yield identical IDs
+    and Qdrant point upserts stay idempotent.
     """
 
     chunk_id: str

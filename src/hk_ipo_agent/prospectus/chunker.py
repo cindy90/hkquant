@@ -16,15 +16,21 @@ yields identical chunk IDs, which matters for idempotent Qdrant upserts.
 
 from __future__ import annotations
 
-import hashlib
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from uuid import UUID, uuid5
 
 from .schema import Chunk
 
 if TYPE_CHECKING:
     from .schema import ParsedBlock, ParsedDocument
+
+
+# R5-3: deterministic namespace for chunk_id generation. Distinct from the
+# prospectus-document namespace in ``pipelines/pdf_to_snapshot.py`` so the
+# two ID spaces can never overlap.
+_NAMESPACE_CHUNK = UUID("6ba7b811-9dad-11d1-80b4-00c04fd430ca")
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +109,16 @@ class ChunkConfig:
 
 
 def _make_chunk_id(prospectus_id: str, char_offset: int, length: int) -> str:
-    raw = f"{prospectus_id}|{char_offset}|{length}".encode()
-    return hashlib.sha256(raw).hexdigest()[:32]
+    """R5-3: deterministic UUID5 string, accepted by Qdrant as a point id verbatim.
+
+    Pre-R5-3 returned ``sha256(...).hexdigest()[:32]`` — a 32-char hex string
+    that wasn't a valid UUID. ``vector_store`` then coerced it via
+    ``int(chunk_id[:16], 16)`` (dropping 192 bits) so the Qdrant point id and
+    the ``Citation.chunk_id`` referred to "the same chunk" by two different
+    keys. Post-R5-3 the chunk_id IS a UUID5 string and vector_store passes
+    it through unchanged — single canonical identifier end-to-end.
+    """
+    return str(uuid5(_NAMESPACE_CHUNK, f"{prospectus_id}|{char_offset}|{length}"))
 
 
 def _tag_blocks_with_sections(blocks: list[ParsedBlock]) -> None:

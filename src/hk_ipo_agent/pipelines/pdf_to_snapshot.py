@@ -35,12 +35,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..agents.workflow_extras import WorkflowExtras
 from ..common.enums import ListingType
 from ..common.llm_client import LLMClient
-from ..common.settings import clear_config_caches
 from ..orchestrator.graph import build_main_graph
 from ..prediction_registry.registry import (
     InMemoryPredictionRegistry,
     PGPredictionRegistry,
-    set_registry,
+    PredictionRegistryProtocol,
 )
 from ..prospectus.chunker import ChunkConfig, chunk_document
 from ..prospectus.extractor import ExtractionConfig, ExtractionResult, ProspectusExtractor
@@ -345,7 +344,13 @@ async def run_pdf_to_snapshot(  # noqa: PLR0915  # 75 statements; orchestrates 5
     if not config.pdf_path.exists():
         raise FileNotFoundError(f"PDF not found: {config.pdf_path}")
 
-    clear_config_caches()
+    # R5-5: ``clear_config_caches()`` used to live here, mutating the
+    # process-wide functools.lru_cache state on every pipeline invocation.
+    # That's a CLI concern — long-lived shells re-running the script after
+    # editing config/*.yaml want a fresh read. The library MUST stay pure
+    # so concurrent pipeline runs don't race each other's config state.
+    # The CLI front-door (scripts/analyze_pdf.py) calls clear_config_caches
+    # once at startup; tests call it explicitly in their fixtures.
     timings: dict[str, float] = {}
     t_total = time.time()
 
@@ -442,10 +447,14 @@ async def run_pdf_to_snapshot(  # noqa: PLR0915  # 75 statements; orchestrates 5
     # --- Step 4: graph ----------------------------------------------------
     log("[4/5] LangGraph (7 agents + debate + synthesizer + snapshot) ...")
     t0 = time.time()
-    if config.persist_to_pg:
-        set_registry(PGPredictionRegistry())
-    else:
-        set_registry(InMemoryPredictionRegistry())
+    # R5-4: registry is injected directly into the graph via
+    # ``build_main_graph(registry=...)``. Pre-R5-4 we mutated the
+    # process-wide global via ``set_registry(...)``, which clobbered
+    # concurrent pipeline invocations (two API runs sharing the same
+    # process would see whichever pipeline finished last).
+    pipeline_registry: PredictionRegistryProtocol = (
+        PGPredictionRegistry() if config.persist_to_pg else InMemoryPredictionRegistry()
+    )
     initial_state = {
         "ipo_id": config.ipo_id,
         "prospectus_id": config.prospectus_id,
@@ -459,6 +468,7 @@ async def run_pdf_to_snapshot(  # noqa: PLR0915  # 75 statements; orchestrates 5
         llm_client=llm_client,
         market_data=market_data,
         use_checkpointer=use_checkpointer,
+        registry=pipeline_registry,
     )
     final_state = await graph.ainvoke(initial_state)
     timings["graph"] = time.time() - t0

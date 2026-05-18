@@ -38,7 +38,10 @@ from ..common.schemas import (
     ValuationEnsembleOutput,
 )
 from ..critic import cross_check, run_debate
-from ..prediction_registry.registry import get_registry
+from ..prediction_registry.registry import (
+    PredictionRegistryProtocol,
+    get_registry,
+)
 from ..prediction_registry.snapshot import build_snapshot
 from ..synthesizer import synthesize
 from ..valuation.base import MarketData
@@ -56,10 +59,19 @@ def make_nodes(
     prospectus_tool: Any = None,
     ifind_tool: Any = None,
     kb_tool: Any = None,
+    registry: PredictionRegistryProtocol | None = None,
 ) -> dict[str, Any]:
     """Build the 14 node callables bound to a given LLM + tool set.
 
     Returns a dict ``{node_name: async fn(state) -> partial_state}``.
+
+    Args:
+        registry: R5-4 — explicit registry to write snapshots into. When
+            None, ``create_snapshot_node`` falls back to ``get_registry()``
+            for backwards compatibility (API routers + standalone tests
+            still rely on the global). The pipeline layer always injects
+            explicitly so concurrent runs can't clobber each other's
+            registry via the global ``set_registry()``.
     """
 
     def _ctx_for(state: AnalysisState) -> AgentContext:
@@ -185,10 +197,11 @@ def make_nodes(
             total_cost_usd=Decimal(str(llm_client.cost_log.total_usd())),
             runtime_seconds=(state.get("runtime_meta") or {}).get("runtime_seconds", 0.0),
         )
-        registry = get_registry()
+        # R5-4: prefer explicit injection; fall back to global for back-compat.
+        active_registry = registry if registry is not None else get_registry()
         logger = get_logger(__name__)
         try:
-            await registry.create_snapshot(snapshot)
+            await active_registry.create_snapshot(snapshot)
         except Exception as exc:
             logger.error(
                 "snapshot_creation_failed",

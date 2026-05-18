@@ -51,6 +51,7 @@ load_dotenv(_ROOT / ".env", override=False)
 
 from hk_ipo_agent.common.enums import ListingType  # noqa: E402
 from hk_ipo_agent.common.llm_client import LLMClient  # noqa: E402
+from hk_ipo_agent.common.settings import clear_config_caches  # noqa: E402
 from hk_ipo_agent.pipelines import (  # noqa: E402
     PipelineConfig,
     run_pdf_to_snapshot,
@@ -188,6 +189,12 @@ def _print_plan(config: PipelineConfig, market_data: MarketData) -> None:
 
 
 async def _main_async(args: argparse.Namespace) -> int:
+    # R5-5: clear config caches ONCE at CLI entry so subsequent
+    # ``get_settings()`` / ``load_*_config`` calls re-read YAML + env. The
+    # library (run_pdf_to_snapshot) intentionally never touches these
+    # caches to keep concurrent invocations isolated.
+    clear_config_caches()
+
     config = _build_config(args)
     market_data = MarketData(
         as_of_date=date.today(),
