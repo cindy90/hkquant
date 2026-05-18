@@ -33,10 +33,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from jinja2 import Environment, StrictUndefined
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from jinja2.exceptions import UndefinedError
 
-from .base import load_prompt
+from . import base as _base_module
+from .base import _FRONTMATTER_RE, _parse_frontmatter_raw
 from .scoring import BaseScoreCard, schema_instruction
 
 # Detect Jinja2 placeholder presence so we can short-circuit for legacy
@@ -45,14 +46,17 @@ from .scoring import BaseScoreCard, schema_instruction
 _JINJA_DETECT_RE = re.compile(r"\{\{|\{%")
 
 
-# A single Environment instance is fine — StrictUndefined makes it safe
-# to reuse across agents; no state is held between renders.
-_ENV = Environment(  # autoescape OFF for non-HTML prompt text
-    undefined=StrictUndefined,
-    keep_trailing_newline=True,
-    trim_blocks=False,
-    lstrip_blocks=False,
-)
+# StrictUndefined makes it safe to reuse across agents; no state is held
+# between renders. FileSystemLoader is built fresh per call so tests can
+# monkeypatch ``base._PROMPTS_ROOT`` to point at a tmp_path fixture.
+def _build_env() -> Environment:
+    return Environment(  # autoescape OFF for non-HTML prompt text
+        loader=FileSystemLoader(str(_base_module._PROMPTS_ROOT)),
+        undefined=StrictUndefined,
+        keep_trailing_newline=True,
+        trim_blocks=False,
+        lstrip_blocks=False,
+    )
 
 
 class PromptRenderError(RuntimeError):
@@ -91,14 +95,26 @@ def render_prompt(
         body, fm = render_prompt("agents/sentiment.md", score_card_class=SentimentScoreCard)
         body, fm = render_prompt("agents/new_jinja_aware.md", ipo_id="0001.HK")
     """
-    body, frontmatter = load_prompt(prompt_path)
+    # Read raw file + parse frontmatter directly (don't go through
+    # load_prompt — that env strips `{{ var }}` placeholders, which
+    # would defeat render_prompt's purpose). This gives us full control
+    # over the StrictUndefined render path below.
+    full = (_base_module._PROMPTS_ROOT / prompt_path).read_text(encoding="utf-8")
+    m = _FRONTMATTER_RE.match(full)
+    if m:
+        body = full[m.end() :]
+        frontmatter = _parse_frontmatter_raw(m.group(1))
+    else:
+        body = full
+        frontmatter = {}
 
     # Jinja2 render only when actually needed; this avoids parsing every
     # existing legacy prompt that uses `{0}` placeholders or Chinese
     # punctuation Jinja could misinterpret.
     if _JINJA_DETECT_RE.search(body):
+        env = _build_env()
         try:
-            template = _ENV.from_string(body)
+            template = env.from_string(body)
             body = template.render(**vars)
         except UndefinedError as exc:
             raise PromptRenderError(
@@ -107,7 +123,9 @@ def render_prompt(
                 "placeholder from the template."
             ) from exc
         except Exception as exc:
-            raise PromptRenderError(f"Prompt {prompt_path!r} Jinja2 render failed: {exc}") from exc
+            raise PromptRenderError(
+                f"Prompt {prompt_path!r} Jinja2 render failed: {exc}"
+            ) from exc
 
     if score_card_class is not None:
         body = body.rstrip() + "\n\n" + schema_instruction(score_card_class).lstrip()

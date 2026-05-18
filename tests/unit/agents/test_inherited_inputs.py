@@ -161,16 +161,22 @@ def test_verify_inherited_inputs_reports_all_missing_at_once() -> None:
 
 
 def test_verify_inherited_inputs_real_policy_prompt() -> None:
-    """R4-7 — running the verify against the real policy prompt's
-    frontmatter requires regime_score + regulatory_regime to be present.
-    With both populated, no raise."""
+    """R4-7 + ADR 0019 — policy.md splits its dependencies:
+    - ``requires_extras: [regime_score]`` (hard-asserted by
+      ``_assert_required_extras`` at LLM call time)
+    - ``inherited_inputs: [regulatory_regime]`` (documentation-style,
+      verified by ``_verify_inherited_inputs``)
+
+    With ``regulatory_regime`` populated on extras.misc, no raise."""
     from hk_ipo_agent.agents.base import load_prompt
 
     _body, fm = load_prompt("agents/policy.md")
-    # Sanity: real frontmatter has both keys.
+    # Sanity: ADR 0019 split — regime_score moved to requires_extras,
+    # only regulatory_regime stays in inherited_inputs.
     inputs = fm.get("inherited_inputs") or []
-    assert "regime_score" in inputs
     assert "regulatory_regime" in inputs
+    requires = fm.get("requires_extras") or []
+    assert "regime_score" in requires
 
     extras = WorkflowExtras(regime_score=0.05)
     extras.set("regulatory_regime", "post-2025-08-04")
@@ -178,9 +184,10 @@ def test_verify_inherited_inputs_real_policy_prompt() -> None:
 
 
 def test_verify_inherited_inputs_real_policy_prompt_raises_on_missing() -> None:
-    """R4-7 — same prompt but neither extras nor kb_tool populated → raise."""
+    """R4-7 + ADR 0019 — neither extras nor kb_tool populated → raise
+    on the inherited_inputs key (regulatory_regime)."""
     from hk_ipo_agent.agents.base import load_prompt
 
     _body, fm = load_prompt("agents/policy.md")
-    with pytest.raises(MissingInheritedInputError, match="regime_score"):
+    with pytest.raises(MissingInheritedInputError, match="regulatory_regime"):
         BaseAgent._verify_inherited_inputs(fm, _ctx(WorkflowExtras()))

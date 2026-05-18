@@ -122,7 +122,12 @@ class SentimentAgent(BaseAgent):
                     theme_heat_pct = float(raw_heat) / 100.0
 
         ctx.extras.theme_matched = matched_theme
-        ctx.extras.theme_heat = theme_heat_pct
+        # Don't overwrite ctx.extras.theme_heat to None — sentiment_agent
+        # produces this signal, but ADR 0019 `_assert_required_extras` then
+        # fails on the same key. Preserve any caller-supplied value when our
+        # kb_tool path has nothing to report (fallback branch).
+        if theme_heat_pct is not None:
+            ctx.extras.theme_heat = theme_heat_pct
 
         # 3. AI gilding detection.
         ai_pct = lookup_ai_revenue(ctx.extraction.stock_code, ai_revenue)

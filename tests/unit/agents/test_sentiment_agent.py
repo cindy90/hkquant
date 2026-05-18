@@ -98,7 +98,11 @@ def _ctx(llm_client, *, industry="AI", company="测试", stock_code="09999.HK") 
         extraction=ext,
         market_data=md,
         llm_client=llm_client,
-        extras=WorkflowExtras(),
+        # ADR 0019: sentiment.md requires_extras = [theme_heat]. Provide a
+        # value so _assert_required_extras doesn't short-circuit the LLM call;
+        # tests in this module still exercise the kb_tool-derived theme_heat_pct
+        # fallback (a different signal).
+        extras=WorkflowExtras(theme_heat=0.0),
     )
 
 

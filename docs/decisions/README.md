@@ -28,6 +28,7 @@
 | [0016](0016-phase9-stragglers-cleanup-and-e2e-cli-parametrization.md) | Phase 9a 补归档 + 参数化 e2e CLI 入口 | **Accepted** | **Phase 9 (post-tag), Phase 10 prep** | 6 个 NACS 同源遗漏脚本归档/删除 + 删 workflows/ stub + 登记 `scripts/analyze_pdf.py` 参数化任务（堵住"一次性脚本积累"成因） |
 | [0017](0017-llm-provider-kimi-moonshot.md) | LLM Provider: Anthropic Claude → KIMI/Moonshot | **Accepted** | **R4 (post-v1.0)** | 记录 commit `2582dab` 的 provider 切换决策（cost / latency / OpenAI SDK 兼容）；ADR 0002 标 Superseded；保留 Anthropic API key env slot 作 future fallback；YAML-driven 单点切换 |
 | [0018](0018-ifind-incremental-loader-deferral.md) | iFind Incremental Loader Deferral | **Accepted** | **R3 (post-v1.0)** | 把 `HistoricalIPOLoader._upsert_from_ifind` + `ComparablePoolBuilder._ingest` 标 DEFERRED；ADR 0005 §Progress 对应条目 ✅ → ⚠️；stub 改 raise NotImplementedError 阻止 silent zero return |
+| [0019](0019-prompt-frontmatter-schema.md) | Prompt frontmatter schema 规范化 + 运行时硬断言 | **Accepted** | **Phase 5 (post-P1), Phase 6+** | `PromptFrontmatter` Pydantic schema + `requires_extras` 硬断言（缺 NACS 信号即 raise `MissingInheritedInput`）+ `prompts/system/agent_common.md` Jinja2 include + CI prompt-version-bump check + handwritten-JSON-vs-Pydantic 一致性测试 |
 
 ---
 
@@ -42,7 +43,7 @@
 | Phase 2 数据层 | **★ 0005 §1 + §4** | **是** — `scripts/migrate_sqlite_to_pg.py` ETL + `tests/unit/data/test_no_lookahead.py` |
 | Phase 3 招股书处理 | 0003 / 0004 | 否 |
 | Phase 4 估值模型层 | **★ 0005 §2** / **★ 0008** | **是** — ensemble.py regime<0 → SKIP 硬门；DCF/Comps 公式参考 DCF agent (ADR 0008) |
-| Phase 5 Agent 层 | **★ 0005 §2 + §5** / **★ 0009** | **是** — 3 个 agent 必须接入 NACS 信号（Regime / Cluster Bonus / Theme Heat）；BaseAgent / ScoreCard / WorkflowExtras 参考港股研究agent (ADR 0009) |
+| Phase 5 Agent 层 | **★ 0005 §2 + §5** / **★ 0009** / **★ 0019** (post-P1 hardening) | **是** — 3 个 agent 必须接入 NACS 信号（Regime / Cluster Bonus / Theme Heat）；BaseAgent / ScoreCard / WorkflowExtras 参考港股研究agent (ADR 0009)；ADR 0019 落 frontmatter schema + `requires_extras` 硬断言 + 公共片段 + CI version-bump |
 | Phase 6 编排 + Critic + Synthesizer | 0001 / 0002 / **★ 0010** | **是** — 辩论 Jaccard 早停 + Devil 元层质疑 + Phase 6 in-memory snapshot (Phase 7.5 替换 PG) + HITL bypass 默认 + `operator.or_` reducer |
 | Phase 7 报告 + API + UI 集成层 | **0008** / **★ 0011** | **是** — ADR 0011 定 MVP 范围；reviews/proposals/drift/backtest 延后；SSO 延 Phase 9；in-memory audit/chat/whatif 沿用 Phase 6 snapshot 模式 |
 | Phase 7.5 预测档案 + 生命周期 | **★ 0012** | **是** — ADR 0012 切 7.5a/b/c/d 4 子阶段；7.5a 同时收掉 ADR 0011 遗留的 Phase 7 in-memory PG 化；7.5b 实装 reviews/proposals/drift |

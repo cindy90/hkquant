@@ -108,6 +108,39 @@ class CitationRequiredError(ProspectusError):
 
 
 # ============================================================================
+# Agent layer (Phase 5)
+# ============================================================================
+
+
+class AgentError(HkIpoAgentException):
+    """Generic agent layer failure."""
+
+    default_message = "Agent error"
+
+
+class MissingInheritedInput(AgentError):
+    """Agent prompt frontmatter declared ``requires_extras: [<key>]`` but
+    ``ctx.extras.<key>`` is ``None`` / missing at LLM call time.
+
+    Per ADR 0019 (prompt frontmatter schema) + ADR 0005 §2 (NACS three-piece
+    signals). Each agent that depends on cross-agent state (Regime Gate,
+    Cluster Bonus, Theme Heat) declares the required ``WorkflowExtras``
+    fields up front; ``BaseAgent`` raises this before the LLM call so we
+    fail loud instead of silently emitting NACS-degraded output.
+    """
+
+    default_message = "Required `ctx.extras` field is missing"
+
+
+class PromptFrontmatterError(AgentError):
+    """Prompt ``.md`` frontmatter fails the ``PromptFrontmatter`` Pydantic
+    schema (missing required field, invalid value, unknown ``requires_extras``
+    key). Per ADR 0019."""
+
+    default_message = "Prompt frontmatter failed schema validation"
+
+
+# ============================================================================
 # LLM
 # ============================================================================
 

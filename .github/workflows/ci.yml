@@ -231,3 +231,63 @@ jobs:
 
       - name: pytest integration
         run: uv run pytest tests/integration -v -ra -m integration
+
+  # ---------------------------------------------------------------------------
+  # prompt-version-bump — ADR 0019: any change to prompts/**/*.md must also
+  # bump the `version:` frontmatter field. CLAUDE.md "修改提示词必须 bump version".
+  # Skipped on push (only enforced on PRs where we have a clean base ref).
+  # ---------------------------------------------------------------------------
+  prompt-version-bump:
+    name: Prompt version-bump check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so we can diff against base
+
+      - name: Detect modified prompts + assert version bump
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.event.pull_request.head.sha }}"
+          echo "Diff base=$base_sha head=$head_sha"
+
+          # List prompt files changed in this PR (added, modified, copied)
+          mapfile -t changed < <(
+            git diff --name-only --diff-filter=ACM "$base_sha" "$head_sha" \
+              | grep -E '^prompts/.*\.md$' || true
+          )
+
+          if [ ${#changed[@]} -eq 0 ]; then
+            echo "No prompt changes in this PR — skipping version-bump check."
+            exit 0
+          fi
+
+          failures=()
+          for f in "${changed[@]}"; do
+            echo "::group::Check $f"
+            # The file must have a `-version:` and `+version:` line pair in
+            # the diff (i.e. version field actually changed value).
+            if git diff "$base_sha" "$head_sha" -- "$f" \
+                | grep -E '^\-version:' >/dev/null \
+              && git diff "$base_sha" "$head_sha" -- "$f" \
+                | grep -E '^\+version:' >/dev/null; then
+              echo "  OK: version bumped"
+            else
+              echo "  FAIL: prompt modified but version: field unchanged"
+              failures+=("$f")
+            fi
+            echo "::endgroup::"
+          done
+
+          if [ ${#failures[@]} -gt 0 ]; then
+            echo "::error::ADR 0019 violation — these prompts changed but version was not bumped:"
+            for f in "${failures[@]}"; do
+              echo "::error file=$f::version: field must be bumped (see CLAUDE.md 提示词约束)"
+            done
+            exit 1
+          fi
+
+          echo "All ${#changed[@]} prompt changes have a corresponding version bump."
