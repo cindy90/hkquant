@@ -16,10 +16,11 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...common.logging import get_logger
 from ..database import async_session_factory
-from ..models import IPOEvent, IPOPostMarket
+from ..models import IPOEvent, IPOPostMarket, Sponsor
 
 log = get_logger(__name__)
 
@@ -36,7 +37,13 @@ class SponsorTrackRecord:
 
 
 class SponsorTrackBuilder:
-    """Compute rolling sponsor track records from ``ipo_events`` + postmarket."""
+    """Compute rolling sponsor track records from ``ipo_events`` + postmarket.
+
+    R7-9: accepts an optional ``session`` kwarg for transaction composition.
+    """
+
+    def __init__(self, *, session: AsyncSession | None = None) -> None:
+        self._session = session
 
     async def compute(
         self,
@@ -47,15 +54,41 @@ class SponsorTrackBuilder:
     ) -> SponsorTrackRecord:
         """24m rolling win rate / avg returns for a sponsor.
 
-        NACS legacy ``sponsor_primary`` stores comma-separated names; matching
-        is done by ``LIKE %sponsor_name%`` on the joint string. This is a
-        Phase 2 approximation — Phase 7.5 will normalize sponsor names into
-        the ``sponsors`` ORM table for clean equality joins.
+        R7-3: pre-fix the ``sponsor_name`` argument was accepted but never
+        applied to the SQL — every call returned aggregate stats over ALL
+        IPOs in the window regardless of sponsor. Now the query joins the
+        ``sponsors`` table with ``Sponsor.name ILIKE %sponsor_name%`` and
+        filters ``IPOEvent.sponsor_ids`` to contain the matched sponsor id
+        (PG ARRAY contains via ``.contains([sponsor.id])``).
+
+        ``Sponsor.name`` ILIKE pattern (case-insensitive substring) matches
+        the legacy NACS sponsor naming style where the same firm appears
+        as e.g. "China International Capital Corporation Limited" /
+        "中金公司" / "CICC". The caller is expected to normalize before
+        calling for higher precision.
         """
         start = as_of_date - timedelta(days=lookback_days)
         factory = async_session_factory()
         async with factory() as session:
-            # IPOs in window with sponsor name match
+            # R7-3 step 1: resolve the sponsor_name to sponsor row id(s).
+            sponsor_ids_stmt = select(Sponsor.id).where(Sponsor.name.ilike(f"%{sponsor_name}%"))
+            sponsor_ids = list((await session.execute(sponsor_ids_stmt)).scalars().all())
+
+            if not sponsor_ids:
+                # No sponsor matched — short-circuit to empty stats so the
+                # caller distinguishes "no data" from "0 cases for sponsor X".
+                return SponsorTrackRecord(
+                    sponsor_name=sponsor_name,
+                    cases_count=0,
+                    avg_day1_return=None,
+                    avg_day126_return=None,
+                    win_rate_day126=None,
+                    as_of_date=as_of_date,
+                    lookback_days=lookback_days,
+                )
+
+            # R7-3 step 2: IPOs in window whose sponsor_ids array
+            # intersects the resolved sponsor id set (PG ARRAY @> operator).
             stmt = (
                 select(
                     IPOPostMarket.day1_return,
@@ -66,6 +99,9 @@ class SponsorTrackBuilder:
                     IPOEvent.listing_date.is_not(None),
                     IPOEvent.listing_date >= start,
                     IPOEvent.listing_date <= as_of_date,
+                    # ARRAY contains: at least one of the matched sponsor ids
+                    # is present in the IPO's sponsor_ids array.
+                    IPOEvent.sponsor_ids.contains(sponsor_ids),
                 )
             )
             rows = (await session.execute(stmt)).all()

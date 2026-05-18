@@ -24,6 +24,31 @@ class CornerstoneInvestorRepository(BaseRepository[CornerstoneInvestor]):
             return zh
         return await self.find_one(name_en=name)
 
+    async def find_by_any_alias(self, name: str) -> list[CornerstoneInvestor]:
+        """R7-4 — resolve an investor via the JSONB ``aliases.items[*].text`` column.
+
+        Pre-R7-4 the only name path was ``find_by_canonical_name`` which
+        matched name_zh / name_en exact equality, ignoring the 1,051
+        ``cornerstone_aliases`` rows migrated into the JSONB column. An
+        investor known as "高瓴" in one prospectus and "Hillhouse Capital"
+        in another yielded two separate lookup misses despite being the
+        same entity.
+
+        Strategy: ``aliases['items'] @> [{"text": name}]`` uses PG JSONB
+        containment to test "does the items array contain an element with
+        ``text == name``". A GIN index on ``aliases`` (added in migration
+        ``r7_4_aliases_gin``) keeps this O(log n) instead of full scan.
+
+        Returns a LIST (not Optional) because alias collisions exist —
+        e.g. the alias "Anchor Investor" maps to multiple distinct
+        entities; the caller decides how to disambiguate.
+        """
+        stmt = select(CornerstoneInvestor).where(
+            CornerstoneInvestor.aliases["items"].contains([{"text": name}])
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def list_by_ultimate_holder(self, holder: str) -> list[CornerstoneInvestor]:
         return await self.list(ultimate_holder=holder)
 

@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from pydantic import SecretStr
 from tenacity import (
     AsyncRetrying,
     retry_if_exception_type,
@@ -199,7 +200,7 @@ class IFindClient:
         self,
         *,
         username: str | None = None,
-        password: str | None = None,
+        password: str | SecretStr | None = None,
         qps_limit: int | None = None,
         timeout_seconds: int | None = None,
         max_retries: int | None = None,
@@ -207,9 +208,20 @@ class IFindClient:
         settings = get_settings()
         sources_cfg = load_data_sources_config().get("ifind", {})
         self.username = username or settings.ifind.username
-        self.password = (
-            password if password is not None else settings.ifind.password.get_secret_value()
-        )
+
+        # R7-5: store password as ``SecretStr`` internally (private attribute).
+        # Pre-fix the cleartext lived on ``self.password`` for the lifetime of
+        # the client; pickle dumps / __repr__ / locals-in-stacktrace all leaked
+        # it. Now the only place cleartext exists is inside
+        # ``self._password.get_secret_value()`` calls at the SDK boundary.
+        if isinstance(password, SecretStr):
+            self._password: SecretStr = password
+        elif password is not None:
+            self._password = SecretStr(password)
+        else:
+            # settings.ifind.password is already SecretStr; pass through.
+            self._password = settings.ifind.password
+
         self.qps_limit = qps_limit or int(sources_cfg.get("qps_limit", settings.ifind.qps_limit))
         self.timeout_seconds = timeout_seconds or int(sources_cfg.get("timeout_seconds", 30))
         self.max_retries = max_retries or int(sources_cfg.get("retry_max", 3))
@@ -225,7 +237,11 @@ class IFindClient:
             return
         self._sdk = _load_ifindpy()
         # iFinDPy.THS_iFinDLogin is blocking; offload to thread.
-        result = await asyncio.to_thread(self._sdk.THS_iFinDLogin, self.username, self.password)
+        # R7-5: extract cleartext only at the SDK call boundary; the SecretStr
+        # never leaves this stack frame.
+        result = await asyncio.to_thread(
+            self._sdk.THS_iFinDLogin, self.username, self._password.get_secret_value()
+        )
         if result != 0:
             raise DataSourceUnavailableError(
                 f"iFind login failed with code {result}",
@@ -522,7 +538,16 @@ class IFindClient:
         request: IFindRequest,
         runner: Callable[[Any], Any],
     ) -> Any:
-        """Apply rate-limit + retry + timeout around one SDK call."""
+        """Apply rate-limit + retry + timeout around one SDK call.
+
+        R7-6: exceptions are routed through ``_classify_exception_for_retry``
+        so network-jitter (ConnectionError / TimeoutError) becomes a
+        retryable ``DataSourceUnavailableError`` while logic errors stay
+        as a non-retryable ``DataSourceError``. Pre-fix every non-timeout
+        exception was lumped into the non-retryable bucket — a single
+        ``ConnectionResetError`` would surface as a hard failure on attempt 1
+        instead of recovering on attempt 2.
+        """
         if not self._connected:
             await self.connect()
         assert self._sdk is not None
@@ -542,18 +567,53 @@ class IFindClient:
                         asyncio.to_thread(runner, self._sdk),
                         timeout=self.timeout_seconds,
                     )
-                except TimeoutError as exc:
-                    raise DataSourceUnavailableError(
-                        f"iFind {request.method} timed out after {self.timeout_seconds}s",
-                        method=request.method,
-                    ) from exc
                 except Exception as exc:
                     log.exception("ifind_call_failed", method=request.method)
-                    raise DataSourceError(
-                        f"iFind {request.method} failed: {exc}",
-                        method=request.method,
+                    raise _classify_exception_for_retry(
+                        exc, method=request.method, timeout_seconds=self.timeout_seconds
                     ) from exc
         raise DataSourceError("iFind retry loop exited without result")  # pragma: no cover
+
+
+# R7-6: exceptions that indicate a transient network problem and should be
+# retried with exponential backoff. Logic errors (ValueError / KeyError /
+# generic RuntimeError) fall through to the non-retryable DataSourceError
+# bucket because no amount of retrying fixes a malformed query.
+_NETWORK_JITTER_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    ConnectionError,  # covers ConnectionResetError / Aborted / Refused
+    TimeoutError,
+)
+
+
+def _classify_exception_for_retry(
+    exc: BaseException, *, method: str, timeout_seconds: int | None = None
+) -> DataSourceError:
+    """R7-6: classify a raw exception into retryable vs non-retryable.
+
+    Returns the WRAPPED exception (``DataSourceUnavailableError`` or
+    ``DataSourceError``). Caller is responsible for chaining via
+    ``raise ... from exc``.
+
+    The split is binary:
+      * Network jitter (``ConnectionError`` / ``TimeoutError`` and subclasses)
+        → ``DataSourceUnavailableError`` (retryable). The tenacity retry
+        predicate matches this exact class so the retry loop kicks in.
+      * Everything else → ``DataSourceError`` (non-retryable). Includes
+        ``ValueError`` / ``TypeError`` / ``KeyError`` (caller bugs),
+        ``RuntimeError`` (SDK protocol violations), and any exception we
+        haven't seen yet — better to fail fast than to retry a hopeless
+        call and burn the QPS budget.
+    """
+    if isinstance(exc, TimeoutError) and timeout_seconds is not None:
+        msg = f"iFind {method} timed out after {timeout_seconds}s"
+    elif isinstance(exc, _NETWORK_JITTER_EXCEPTIONS):
+        msg = f"iFind {method} network jitter: {exc}"
+    else:
+        msg = f"iFind {method} failed: {exc}"
+
+    if isinstance(exc, _NETWORK_JITTER_EXCEPTIONS):
+        return DataSourceUnavailableError(msg, method=method)
+    return DataSourceError(msg, method=method)
 
 
 __all__ = ("IFindClient", "IFindRequest")

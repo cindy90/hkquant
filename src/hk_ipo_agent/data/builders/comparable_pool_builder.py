@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from ...common.logging import get_logger
 from ..database import async_session_factory
 from ..repositories import ComparableCompanyRepository
@@ -43,10 +45,21 @@ class ComparablePoolStats:
 
 
 class ComparablePoolBuilder:
-    """Ingest peer-comp pool by industry code; depends on iFind for the seed."""
+    """Ingest peer-comp pool by industry code; depends on iFind for the seed.
 
-    def __init__(self, ifind: IFindClient | None = None) -> None:
+    R7-9: accepts an optional ``session`` kwarg so callers can compose the
+    builder inside an existing transaction. When None (default), each
+    method opens its own session via the factory — preserves back-compat.
+    """
+
+    def __init__(
+        self,
+        ifind: IFindClient | None = None,
+        *,
+        session: AsyncSession | None = None,
+    ) -> None:
         self.ifind = ifind
+        self._session = session
 
     async def refresh_industry(
         self,

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...common.logging import get_logger
 from ..database import async_session_factory
@@ -55,7 +56,13 @@ class CornerstoneProfileBuilder:
     Phase 2: provides query primitives. The actual ETL is done one-shot by
     ``scripts/migrate_sqlite_to_pg.py``. Phase 7.5 will plug in continuous
     refresh from iFind / 披露易.
+
+    R7-9: accepts an optional ``session`` kwarg so callers can compose the
+    builder inside an existing transaction.
     """
+
+    def __init__(self, *, session: AsyncSession | None = None) -> None:
+        self._session = session
 
     async def list_unique_holders(self) -> list[str]:
         """Return all distinct ``ultimate_holder`` values present in PG."""

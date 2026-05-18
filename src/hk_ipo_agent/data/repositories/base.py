@@ -26,6 +26,36 @@ from ..models.base import Base
 T = TypeVar("T", bound=Base)
 
 
+# R7-8: columns excluded from the UPDATE set on conflict by default.
+# ``id`` is the PK (overwriting it makes no semantic sense even if conflict
+# targets a different UNIQUE constraint). ``created_at`` records the first
+# time we saw the row — overwriting destroys that signal.
+_UPSERT_DEFAULT_EXCLUDED: frozenset[str] = frozenset({"id", "created_at"})
+
+
+def _build_update_cols(
+    stmt: Any,
+    sample: dict[str, Any],
+    *,
+    conflict_cols: list[str],
+    update_columns: list[str] | None,
+) -> dict[str, Any]:
+    """R7-8 — assemble the ``ON CONFLICT DO UPDATE SET`` mapping.
+
+    If ``update_columns`` is provided, ONLY those columns get the
+    ``excluded.*`` reference. Otherwise every column from the input row
+    is included EXCEPT the conflict targets AND the default exclusion set
+    (``id`` / ``created_at``).
+    """
+    if update_columns is not None:
+        return {k: stmt.excluded[k] for k in update_columns if k in sample}
+    return {
+        k: stmt.excluded[k]
+        for k in sample
+        if k not in conflict_cols and k not in _UPSERT_DEFAULT_EXCLUDED
+    }
+
+
 class BaseRepository(Generic[T]):
     """Async CRUD primitives over one ORM model."""
 
@@ -119,15 +149,33 @@ class BaseRepository(Generic[T]):
         result = await self.session.execute(stmt)
         return (result.rowcount or 0) > 0
 
-    async def upsert(self, values: dict[str, Any], *, conflict_cols: list[str]) -> None:
+    async def upsert(
+        self,
+        values: dict[str, Any],
+        *,
+        conflict_cols: list[str],
+        update_columns: list[str] | None = None,
+    ) -> None:
         """Idempotent INSERT ... ON CONFLICT DO UPDATE.
 
         Args:
             values: column → value mapping for the row.
             conflict_cols: columns that form the unique conflict target.
+            update_columns: R7-8 override — if provided, ONLY these columns
+                are written on conflict; the default exclusion (``id``,
+                ``created_at``) is bypassed. Use when the caller has stronger
+                guarantees about which columns may legitimately change.
+
+        R7-8: by default ``id`` and ``created_at`` are excluded from the
+        UPDATE column set. Pre-R7-8 the default included every input column
+        not in ``conflict_cols``, which clobbered the original insert
+        timestamp on every re-upsert — breaking the TimestampMixin contract
+        that ``created_at`` records "first time we saw this row".
         """
         stmt = pg_insert(self.model.__table__).values(**values)
-        update_cols = {k: stmt.excluded[k] for k in values if k not in conflict_cols}
+        update_cols = _build_update_cols(
+            stmt, values, conflict_cols=conflict_cols, update_columns=update_columns
+        )
         if update_cols:
             stmt = stmt.on_conflict_do_update(
                 index_elements=conflict_cols,
@@ -143,8 +191,14 @@ class BaseRepository(Generic[T]):
         *,
         conflict_cols: list[str],
         batch_size: int = 500,
+        update_columns: list[str] | None = None,
     ) -> int:
-        """Bulk idempotent UPSERT. Returns total row count."""
+        """Bulk idempotent UPSERT. Returns total row count.
+
+        R7-8: same default exclusion semantics as ``upsert`` —
+        ``id`` and ``created_at`` are not overwritten unless
+        ``update_columns`` explicitly lists them.
+        """
         if not rows:
             return 0
         total = 0
@@ -152,7 +206,9 @@ class BaseRepository(Generic[T]):
             batch = rows[i : i + batch_size]
             stmt = pg_insert(self.model.__table__).values(batch)
             sample = batch[0]
-            update_cols = {k: stmt.excluded[k] for k in sample if k not in conflict_cols}
+            update_cols = _build_update_cols(
+                stmt, sample, conflict_cols=conflict_cols, update_columns=update_columns
+            )
             if update_cols:
                 stmt = stmt.on_conflict_do_update(
                     index_elements=conflict_cols,
