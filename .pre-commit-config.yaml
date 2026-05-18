@@ -48,29 +48,26 @@ repos:
         args: ["--fix"]
       - id: ruff-format
 
-  # ---------------- mypy: strict on new package ----------------
-  # R10-11: pre-commit stage now ACTIVE (was `[manual]` per the original
-  # opt-in policy). 6 files with pre-existing mypy errors are excluded
-  # so new commits get typing checks while the legacy issues sit on
-  # the R11 backlog. The advisory CI typecheck job still covers everything.
+  # ---------------- mypy: opt-in (manual) ----------------
+  # R10-11 attempted to flip this to default `[pre-commit]` so new commits
+  # would get typing checks, but `pre-commit run --all-files` in CI then
+  # surfaced 113 pre-existing mypy errors across 44 files. The 6-file
+  # exclude list was a drop in the bucket; the realistic fix is a full
+  # typing pass under R11. Until then mypy stays at `[manual]` and the
+  # advisory CI typecheck job remains the all-files gate.
+  #
+  # To run mypy locally:
+  #   uv run pre-commit run mypy --all-files --hook-stage manual
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.13.0
     hooks:
       - id: mypy
+        stages: [manual]
         files: ^src/hk_ipo_agent/
-        exclude: |
-          (?x)^(
-            src/hk_ipo_agent/api/routers/snapshots\.py|
-            src/hk_ipo_agent/pipelines/pdf_to_snapshot\.py|
-            src/hk_ipo_agent/prediction_registry/schedulers/airflow_dags/.*\.py
-          )$
         additional_dependencies:
           - pydantic>=2.7
           - types-pyyaml
           - types-python-dateutil
-        # stages defaults to [pre-commit] per default_stages above — fires on every commit
-        # against the touched files. Run manually for the FULL package:
-        #   uv run pre-commit run mypy --all-files
 
   # ---------------- Secrets scan ----------------
   # exclude rationale: known fixture/migration areas where detect-secrets
