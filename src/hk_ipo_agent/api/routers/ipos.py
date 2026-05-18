@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 
 from ...common.enums import ListingType, Permission
@@ -13,14 +13,17 @@ from ...data.database import async_session_factory
 from ...data.models import IPOLifecycleStateRow, IPOStateTransitionRow
 from ...prediction_registry.registry import get_registry
 from ..auth.dependencies import CurrentUser, require_permission
-from ..schemas import IPOListItem, PaginatedResponse, PaginationMeta
+from ..schemas import IPOListItem, PaginatedResponse, PaginationMeta, snapshot_to_summary
 
 router = APIRouter(prefix="/api/ipos", tags=["ipos"])
+
+# R6-1: every endpoint in this router gates on READ_IPO.
+_IPODep = Annotated[CurrentUser, Depends(require_permission(Permission.READ_IPO))]
 
 
 @router.get("/", response_model=PaginatedResponse)
 async def list_ipos(
-    user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_IPO))],
+    user: _IPODep,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse:
@@ -64,10 +67,68 @@ async def list_ipos(
     )
 
 
+@router.get("/{ipo_id}", response_model=IPOListItem)
+async def get_ipo_detail(ipo_id: UUID, user: _IPODep) -> IPOListItem:
+    """Return a single IPO's summary derived from its latest snapshot."""
+    _ = user
+    snapshots = await get_registry().list_snapshots()
+    matching = [s for s in snapshots if s.ipo_id == ipo_id]
+    if not matching:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"IPO {ipo_id} not found",
+        )
+    matching.sort(key=lambda s: s.created_at, reverse=True)
+    snap = matching[0]
+    ext = snap.input_data_snapshot.get("extraction", {})
+    listing_type_str = ext.get("listing_type") or ListingType.MAINBOARD_TECH.value
+    try:
+        listing_type = ListingType(listing_type_str)
+    except ValueError:
+        listing_type = ListingType.MAINBOARD_TECH
+    return IPOListItem(
+        ipo_id=str(snap.ipo_id),
+        company_name_zh=ext.get("company_name_zh", ""),
+        company_name_en=ext.get("company_name_en"),
+        stock_code=ext.get("stock_code"),
+        listing_type=listing_type,
+        industry_code=ext.get("industry_code", ""),
+        decision=snap.decision.decision,
+        overall_score=snap.decision.scorecard.get("overall"),
+    )
+
+
+@router.get("/{ipo_id}/snapshots", response_model=PaginatedResponse)
+async def list_ipo_snapshots(
+    ipo_id: UUID,
+    user: _IPODep,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> PaginatedResponse:
+    """List all snapshots belonging to a given IPO, newest first."""
+    _ = user
+    all_snaps = await get_registry().list_snapshots()
+    matching = sorted(
+        [s for s in all_snaps if s.ipo_id == ipo_id],
+        key=lambda s: s.created_at,
+        reverse=True,
+    )
+    page = matching[offset : offset + limit]
+    return PaginatedResponse(
+        data=[snapshot_to_summary(s).model_dump(mode="json") for s in page],
+        meta=PaginationMeta(
+            total=len(matching),
+            limit=limit,
+            offset=offset,
+            has_next=offset + limit < len(matching),
+        ),
+    )
+
+
 @router.get("/{ipo_id}/lifecycle")
 async def get_ipo_lifecycle(
     ipo_id: UUID,
-    user: Annotated[CurrentUser, Depends(require_permission(Permission.READ_IPO))],
+    user: _IPODep,
 ) -> dict[str, Any]:
     """Return current lifecycle state + transition history for an IPO.
 

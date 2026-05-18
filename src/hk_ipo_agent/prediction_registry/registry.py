@@ -182,7 +182,8 @@ class PGPredictionRegistry:
                 await session.rollback()
                 raise SnapshotIntegrityError(
                     f"snapshot id {snapshot.id} or (ipo_id, as_of_date, version) "
-                    f"already exists — registry is append-only"
+                    f"already exists — registry is append-only. "
+                    f"DB detail: {exc.orig}"
                 ) from exc
         return snapshot.id
 

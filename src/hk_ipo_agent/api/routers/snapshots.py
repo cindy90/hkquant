@@ -18,7 +18,6 @@ from ..auth.dependencies import CurrentUser, require_permission
 from ..schemas import (
     PaginatedResponse,
     PaginationMeta,
-    SnapshotSummary,
     snapshot_to_summary,
 )
 
@@ -49,11 +48,51 @@ async def list_snapshots(
     )
 
 
-@router.get("/{snapshot_id}", response_model=SnapshotSummary)
-async def get_snapshot(snapshot_id: UUID, user: _SnapDep) -> SnapshotSummary:
+@router.get("/{snapshot_id}")
+async def get_snapshot(snapshot_id: UUID, user: _SnapDep) -> dict[str, Any]:
+    """Return full snapshot data (agent_outputs, valuation, debate, decision, etc.).
+
+    The analysis page needs the complete payload — not just the summary fields.
+    A thin transform adapts the internal schema to the UI's expected shape
+    (e.g. nested ``price_range`` object, ``ScoreCard`` with ``weighted_total``).
+
+    R6-1: gated behind ``READ_SNAPSHOTS``.
+    """
     _ = user
     snap = await _get_snapshot_or_404(snapshot_id)
-    return snapshot_to_summary(snap)
+    data = snap.model_dump(mode="json")
+    _adapt_snapshot_for_ui(data)
+    return data
+
+
+def _adapt_snapshot_for_ui(data: dict[str, Any]) -> None:
+    """In-place transform to align internal schema with frontend FullSnapshot type.
+
+    Frontend expects:
+    - ``decision.price_range.{low, fair, high}`` (nested) instead of flat fields
+    - ``decision.scorecard.{agent_scores, weighted_total, regime_gate_passed}``
+    """
+    decision = data.get("decision")
+    if not decision:
+        return
+
+    # --- price_range: flat → nested -----------------------------------------
+    if "price_range_low" in decision:
+        decision["price_range"] = {
+            "low": decision.pop("price_range_low"),
+            "fair": decision.pop("price_range_fair"),
+            "high": decision.pop("price_range_high"),
+        }
+
+    # --- scorecard: raw dict → ScoreCard object ------------------------------
+    raw = decision.get("scorecard", {})
+    if not isinstance(raw, dict) or "weighted_total" not in raw:
+        overall = raw.pop("overall", 0) if isinstance(raw, dict) else 0
+        decision["scorecard"] = {
+            "agent_scores": raw if isinstance(raw, dict) else {},
+            "weighted_total": overall,
+            "regime_gate_passed": True,  # default; real value from pipeline
+        }
 
 
 async def _get_snapshot_or_404(snapshot_id: UUID) -> Any:
