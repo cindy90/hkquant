@@ -1,0 +1,15 @@
+# R10-3: Default peer multiples used by ``scripts/analyze_pdf.py`` when
+# the caller doesn't supply a real industry peer set.
+#
+# These values produce a non-pathological valuation distribution for a
+# generic HK tech / 18C IPO. They were inherited from the legacy
+# ``run_e2e_test.py`` script (used during 翼菲智能 case studies). Tune
+# per-IPO by passing ``--peers <path-to-yaml>`` to the CLI.
+#
+# Shape: matches ``hk_ipo_agent.valuation.base.PeerMultiples`` fields.
+
+pe_ttm:        [50.0,  65.0,  80.0, 120.0, 150.0]
+ps_ttm:        [ 8.0,  12.0,  15.0,  20.0,  30.0]
+pb_latest:     [ 3.0,   5.0,   7.0,  10.0,  15.0]
+ev_ebitda:     [25.0,  35.0,  45.0,  60.0,  80.0]
+sample_size:   5

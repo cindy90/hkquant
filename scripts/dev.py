@@ -117,6 +117,51 @@ def serve() -> int:
     )
 
 
+# ---------------------------------------------------------------------------
+# R10-2: pipeline-facing subcommands. Each delegates to its dedicated
+# script with positional / keyword passthrough so operators have one
+# entry point (``python scripts/dev.py <cmd>``) for the full workflow:
+#   analyze        — pdf → snapshot pipeline (run a new IPO)
+#   backtest       — walk-forward backtest over historical IPOs
+#   learning-cycle — drift detect → propose → write to review queue
+#   review         — review / accept / reject pending proposals
+#   migrate-data   — one-shot NACS SQLite → PostgreSQL ETL
+# ---------------------------------------------------------------------------
+
+
+def analyze(*args: str) -> int:
+    """``dev.py analyze <args>`` → scripts/analyze_pdf.py — PDF → snapshot."""
+    return _uv("run", "python", "scripts/analyze_pdf.py", *args)
+
+
+def backtest(*args: str) -> int:
+    """``dev.py backtest <args>`` → scripts/run_backtest.py — walk-forward."""
+    return _uv("run", "python", "scripts/run_backtest.py", *args)
+
+
+def learning_cycle(*args: str) -> int:
+    """``dev.py learning-cycle <args>`` → scripts/run_learning_cycle.py.
+
+    Runs drift_detector → adjustment_proposer → writes proposals to the
+    review queue. NEVER auto-applies — operator must review via
+    ``dev.py review`` per CLAUDE.md learning-loop constraint.
+    """
+    return _uv("run", "python", "scripts/run_learning_cycle.py", *args)
+
+
+def review(*args: str) -> int:
+    """``dev.py review <args>`` → scripts/review_proposals.py — list / accept / reject."""
+    return _uv("run", "python", "scripts/review_proposals.py", *args)
+
+
+def migrate_data(*args: str) -> int:
+    """``dev.py migrate-data <args>`` → scripts/migrate_sqlite_to_pg.py.
+
+    One-shot NACS SQLite → PostgreSQL ETL (ADR 0005 §1). Idempotent.
+    """
+    return _uv("run", "python", "scripts/migrate_sqlite_to_pg.py", *args)
+
+
 TARGETS: dict[str, object] = {
     "install": install,
     "install-all": install_all,
@@ -131,6 +176,12 @@ TARGETS: dict[str, object] = {
     "migrate": migrate,
     "migrate-new": migrate_new,
     "serve": serve,
+    # R10-2: pipeline subcommands
+    "analyze": analyze,
+    "backtest": backtest,
+    "learning-cycle": learning_cycle,
+    "review": review,
+    "migrate-data": migrate_data,
 }
 
 

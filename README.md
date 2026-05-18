@@ -15,24 +15,45 @@
 
 ## Status
 
-**当前阶段**：Phase 0 — 项目骨架。本仓库从 NACS v8（量化评分模型）原地重构为 spec v1.2.1 定义的多 Agent LLM 系统。
+**当前 release**：`v1.0.9`（post-v1.0 hardening — Phases R0–R9 完成）。原始 v1.0（10 Phase）于 2026-05-17 发布；自那以来共完成 9 个 hardening phase（约 90 个 Critical/Major 问题修复）。
+
+### Phase 1 — 原始 v1.0（已完成）
 
 | Phase | 内容 | 状态 |
 |---|---|---|
-| 0 | 项目骨架 + 工具链 | **进行中** |
-| 1 | 核心基础设施（schemas / LLM client / ORM） | 待启动 |
-| 2 | 数据层（iFind / HKEX / 知识库 + SQLite→PG 迁移） | 待启动 |
-| 3 | 招股书处理（LlamaParse + Qdrant） | 待启动 |
-| 4 | 估值模型层 | 待启动 |
-| 5 | 7 个专家 Agent | 待启动 |
-| 6 | 编排 + Critic + Synthesizer | 待启动 |
-| 7 | 报告 + API + UI 集成层（v1.2.1） | 待启动 |
-| 7.5 | 预测档案 + 生命周期追踪 + 学习闭环 | 待启动 |
-| 8 | 回测与校准 | 待启动 |
-| 9 | 端到端验证 | 待启动 |
-| 10 | 持续学习闭环 | 待启动 |
+| 0 | 项目骨架 + 工具链 | ✅ `v0.0` |
+| 1 | 核心基础设施（schemas / LLM client / ORM） | ✅ `v0.1` |
+| 2 | 数据层（iFind / HKEX / 知识库 + SQLite→PG 迁移） | ✅ `v0.2` |
+| 3 | 招股书处理（LlamaParse + Qdrant） | ✅ `v0.3` |
+| 4 | 估值模型层 | ✅ `v0.4` |
+| 5 | 7 个专家 Agent | ✅ `v0.5` |
+| 6 | 编排 + Critic + Synthesizer | ✅ `v0.6` |
+| 7 | 报告 + API + UI 集成层（v1.2.1） | ✅ `v0.7` |
+| 7.5 | 预测档案 + 生命周期追踪 + 学习闭环 | ✅ `v0.7.5` |
+| 8 | 回测与校准 | ✅ `v0.8` |
+| 9 | 端到端验证（5 case studies） | ✅ `v0.9` |
+| 10 | 持续学习闭环（drift + propose + apply） | ✅ `v1.0` |
 
-NACS v8 legacy 代码暂留原位（`src/nacs_model.py` 等），将在 Phase 2 数据 ETL 完成后归档。
+### Phase 2 — Post-v1.0 hardening（基于 8 个 review agent 报告，共 ~90 Critical/Major fix）
+
+| Phase | 内容 | 状态 | tag |
+|---|---|---|---|
+| R0 | 工程基线 3 Blocker | ✅ | `v1.0.1-r0` |
+| R1 | 数值正确性硬 bug（DCF 终值 / LlamaParse page / citation 兜底 / debate 早停） | ✅ | `v1.0.1` |
+| R2 | 生产安全 + 不可变（HITL prod gate / snapshot immutable / state correction / audit user_id） | ✅ | `v1.0.2` |
+| R3 | 流程伪完成治理（iFind stub / learning_cycle 4 extractors / calibration placebo / version_manager lock） | ✅ | `v1.0.3` |
+| R4 | 模型路由 + Jinja2 + ADR（resolve_agent_model / Jinja2 prompt_renderer / inherited_inputs 校验） | ✅ | `v1.0.4` |
+| R5 | async 一致性 + 类型 + ID（pdf_to_snapshot 异步 IO / UUID chunk_id / registry DI / Decimal JSON string） | ✅ | `v1.0.5` |
+| R6 | RBAC + Auth 加固 + 脱敏（7 router require_permission / Argon2id / audit redaction / PG WS users） | ✅ | `v1.0.6` |
+| R7 | 数据层修复（builders session DI / ContextVar engine / GIN aliases / IFindClient SecretStr） | ✅ | `v1.0.7` |
+| R8 | 调度器 + 警报 + fixture fail-fast（regime raise / T+360 manual gate / fallback None / PGAlertStore / Airflow runners） | ✅ | `v1.0.8` |
+| R9 | 测试缺口（+62 单测：pipelines / middleware / DCF pen-paper / state machine no-rewind / LlamaParse / slow marker） | ✅ | `v1.0.9` |
+| R10 | scripts + docs + README | 🔄 进行中 | `v1.0.10` 预期 |
+| R11 | 结构性收尾 | ⏸ | `v1.1.0` 预期 |
+
+NACS v8 legacy 代码已归档到 [`legacy/`](legacy/)（Phase 9a + R7-7 完成）。新工具链不再扫描 legacy/。
+
+详细修复路线图见 [docs/PLAN_post_v1.0.md](docs/PLAN_post_v1.0.md)。
 
 ---
 

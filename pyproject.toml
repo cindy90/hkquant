@@ -167,40 +167,15 @@ line-length = 100
 target-version = "py311"
 src = ["src", "tests", "scripts"]
 extend-exclude = [
-    # ----- Legacy NACS package code (kept until Phase 2 ETL migration verified) -----
-    "src/nacs_model.py",
-    "src/config.py",
-    "src/nacs_rationale.py",
-    "src/log.py",
-    "src/data",
-    "src/data_sources",
-    "src/reports",
-    # ----- Legacy NACS top-level scripts (all archived to legacy/ — covered by the "legacy" entry below; kept comment for orientation only) -----
-    # ----- Legacy NACS tests -----
-    "tests/test_config.py",
-    "tests/test_dao.py",
-    "tests/test_etl.py",
-    "tests/test_nacs_model.py",
-    "tests/test_no_lookahead.py",
-    "tests/test_parallel.py",
-    "tests/test_resolve.py",
-    "tests/test_smoke.py",
-    # ----- Legacy NACS scripts under scripts/ (kept for reference) -----
-    "scripts/archive_outputs.py",
-    "scripts/build_ipo_returns_cache.py",
-    "scripts/build_market_env_cache.py",
-    "scripts/build_market_env_cache_partial.py",
-    "scripts/explore_*.py",
-    "scripts/fetch_*.py",
-    "scripts/fix_*.py",
-    "scripts/generate_sentiment_report.py",
-    "scripts/probe_*.py",
-    "scripts/run_realtime_env_ablation.py",
-    "scripts/verify_*.py",
-    # ----- Legacy directories untouched in Phase 0 -----
+    # R10-10: NACS legacy code is now fully archived under legacy/ so the
+    # per-path entries that lived here (src/nacs_model.py / src/config.py /
+    # src/data / src/data_sources / src/reports / 8 stale tests/test_*.py /
+    # 11 scripts/* one-off patterns) are covered by the catchall "legacy"
+    # below + the directories no longer exist at their original paths.
+    # ----- Legacy holding pen + namespaced legacy configs -----
+    "legacy",
     "themes",
     "configs",            # legacy NACS configs (new project uses config/ singular)
-    "legacy",
     # ----- Auto-generated / vendored -----
     "outputs",
     "reports",
@@ -212,7 +187,7 @@ extend-exclude = [
     ".venv",
     "build",
     "dist",
-    # ----- Spec docs -----
+    # ----- Spec docs (kept at repo root for historical reference) -----
     "PROJECT_SPEC.md",
     "PROJECT_SPEC_UI.md",
     "new_project_spec",
@@ -268,5 +243,8 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["langchain.*", "langgraph.*", "qdrant_client.*", "llama_parse.*", "ifindpy.*", "openai.*"]
+# R10-10: ``langchain.*`` removed — the project uses LangGraph (ADR 0001),
+# not LangChain Agents (ADR 0001 §Decision explicitly bans them per the
+# "no LangChain Agents" hard constraint).
+module = ["langgraph.*", "qdrant_client.*", "llama_parse.*", "ifindpy.*", "openai.*"]
 ignore_missing_imports = true
