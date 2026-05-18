@@ -93,6 +93,13 @@ def client() -> Iterator[TestClient]:
         # own event loop's engine.
         async_session_factory.cache_clear()  # type: ignore[attr-defined]
         set_registry(InMemoryPredictionRegistry())
+        # Lifespan also wires PG-backed EventBus + PGAuditStore bound to
+        # the lifespan event loop. Unit tests run on a separate
+        # pytest-asyncio loop and don't need PG persistence, so reset to
+        # the default in-memory implementations — same rationale as the
+        # registry swap above.
+        reset_audit_store_for_test()
+        reset_event_bus_for_test()
         yield c
 
 

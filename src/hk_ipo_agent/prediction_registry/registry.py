@@ -31,10 +31,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol, runtime_checkable
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from pydantic import ValidationError
+from sqlalchemy import not_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ..common.logging import get_logger
 from ..common.schemas import PredictionReview, PredictionSnapshot
 from ..data.database import async_session_factory
 from ..data.models import PredictionReviewRow, PredictionSnapshotRow
@@ -156,6 +158,9 @@ class InMemoryPredictionRegistry:
 # ---------------------------------------------------------------------------
 
 
+log = get_logger(__name__)
+
+
 class PGPredictionRegistry:
     """PostgreSQL-backed registry honouring snapshot immutability via DB triggers.
 
@@ -197,14 +202,39 @@ class PGPredictionRegistry:
         return snap
 
     async def list_snapshots(self, limit: int = 100) -> list[PredictionSnapshot]:
+        # Backtest rows (Phase 8 `persist_run_to_pg`) intentionally write a
+        # ``decision='BACKTEST_ONLY'`` + reduced ``valuation_output`` that does
+        # not satisfy the production ``PredictionSnapshot`` Pydantic schema.
+        # The backtest router reads those rows directly off the ORM; production
+        # readers (dashboard / ipos / snapshots) MUST filter them out, else
+        # ``_from_row`` raises a ValidationError → 422. The marker is
+        # ``config_snapshot ? 'backtest_run_id'`` (same key the backtest router
+        # uses for its own queries).
         stmt = (
             select(PredictionSnapshotRow)
+            .where(not_(PredictionSnapshotRow.config_snapshot.has_key("backtest_run_id")))
             .order_by(PredictionSnapshotRow.created_at.desc())
             .limit(limit)
         )
         async with self._sf() as session:
             rows = (await session.execute(stmt)).scalars().all()
-        return [self._from_row(r) for r in rows]
+        # R7-13: harden against schema-invalid rows. Snapshots are immutable
+        # at the DB level (snapshot_no_update / snapshot_no_delete triggers),
+        # so a malformed fixture written before a schema tightening can't be
+        # repaired — only quarantined. Skip + log instead of letting a single
+        # bad row 422 the entire /api/ipos listing.
+        out: list[PredictionSnapshot] = []
+        for r in rows:
+            try:
+                out.append(self._from_row(r))
+            except ValidationError as exc:
+                log.warning(
+                    "snapshot_skip_invalid",
+                    snapshot_id=str(r.id),
+                    ipo_id=str(r.ipo_id),
+                    error=str(exc)[:200],
+                )
+        return out
 
     async def list_active_predictions(
         self,
@@ -217,11 +247,25 @@ class PGPredictionRegistry:
             select(PredictionSnapshotRow)
             .where(PredictionSnapshotRow.created_at >= cutoff)
             .where(PredictionSnapshotRow.created_at <= anchor)
+            .where(not_(PredictionSnapshotRow.config_snapshot.has_key("backtest_run_id")))
             .order_by(PredictionSnapshotRow.created_at.desc())
         )
         async with self._sf() as session:
             rows = (await session.execute(stmt)).scalars().all()
-        return [self._from_row(r) for r in rows]
+        # R7-13: same hardening as list_snapshots — skip schema-invalid
+        # rows so drift/learning_loop callers don't crash on a single bad
+        # historical fixture.
+        out: list[PredictionSnapshot] = []
+        for r in rows:
+            try:
+                out.append(self._from_row(r))
+            except ValidationError as exc:
+                log.warning(
+                    "active_prediction_skip_invalid",
+                    snapshot_id=str(r.id),
+                    error=str(exc)[:200],
+                )
+        return out
 
     async def attach_review(self, snapshot_id: UUID, review: PredictionReview) -> UUID:
         async with self._sf() as session:

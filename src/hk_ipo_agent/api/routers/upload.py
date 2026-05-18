@@ -25,8 +25,11 @@ from fastapi import (
 from pydantic import BaseModel, ConfigDict
 
 from ...common.enums import ListingType, Permission, RealtimeEventType
+from ...common.logging import get_logger
 from ..auth.dependencies import CurrentUser, require_permission
 from ..streaming.event_bus import get_event_bus
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
@@ -222,6 +225,20 @@ async def _run_pipeline_background(
         )
 
     except Exception as exc:
+        # Surface stack trace to logs — pre-fix this was silently swallowed
+        # because event_bus persistence wasn't wired (lifespan didn't call
+        # set_event_bus), so SCHEDULER_FAILED events vanished if no SSE
+        # client was actively subscribed. With main.py lifespan now wiring
+        # PG-backed EventBus + this logger.exception, every failed upload
+        # leaves both a row in ``realtime_events`` AND a full traceback
+        # in the API stdout / structured log.
+        logger.exception(
+            "upload_pipeline_failed",
+            ipo_id=ipo_id,
+            run_id=run_id,
+            prospectus_id=prospectus_id,
+            error=str(exc)[:500],
+        )
         await bus.publish(
             RealtimeEventType.SCHEDULER_FAILED,
             payload={
