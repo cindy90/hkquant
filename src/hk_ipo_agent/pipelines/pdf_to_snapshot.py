@@ -420,10 +420,11 @@ async def run_pdf_to_snapshot(  # noqa: PLR0915  # 75 statements; orchestrates 5
                 qdrant_count = await _persist_chunks_to_qdrant(config, chunks)
                 timings["qdrant_upsert"] = time.time() - t0
                 log(f"      [persist] {qdrant_count} vectors upserted")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
+                # Graceful degradation: Qdrant is optional; CLAUDE.md
+                # "数据源失败有序降级" — pipeline continues without vectors.
                 timings["qdrant_upsert"] = time.time() - t0
                 log(f"      [persist] Qdrant unavailable, skipping vector store: {exc}")
-                # Pipeline continues without vector persistence
 
         # --- Step 3: extract ----------------------------------------------
         log("[3/5] LLM extraction ...")
