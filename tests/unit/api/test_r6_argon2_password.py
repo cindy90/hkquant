@@ -48,7 +48,7 @@ def test_create_user_stores_argon2id_hash() -> None:
     dep.reset_users_for_test()
     rec = dep.create_user(
         email="argon-test@hk.local",
-        password="hunter2",
+        password="hunter2",  # pragma: allowlist secret
         roles=[UserRole.VIEWER],
     )
     assert rec.password_sha256.startswith("$argon2id$"), (
@@ -65,7 +65,7 @@ def test_verify_user_accepts_argon2_password() -> None:
     dep.reset_users_for_test()
     dep.create_user(
         email="argon-verify@hk.local",
-        password="hunter2",
+        password="hunter2",  # pragma: allowlist secret
         roles=[UserRole.VIEWER],
     )
     assert dep.verify_user("argon-verify@hk.local", "hunter2") is not None
@@ -84,7 +84,7 @@ def test_verify_user_accepts_legacy_sha256_and_rehashes_to_argon2() -> None:
     dep.reset_users_for_test()
     rec = dep.create_user(
         email="legacy@hk.local",
-        password="legacy",
+        password="legacy",  # pragma: allowlist secret
         roles=[UserRole.VIEWER],
     )
     # Manually downgrade the storage to a legacy SHA-256 hash to simulate
@@ -108,7 +108,7 @@ def test_verify_user_rejects_bad_password_under_both_formats() -> None:
     dep.reset_users_for_test()
     rec = dep.create_user(
         email="reject@hk.local",
-        password="right-password",
+        password="right-password",  # pragma: allowlist secret
         roles=[UserRole.VIEWER],
     )
 

@@ -56,9 +56,9 @@ def _make_sensitive_record() -> AuditLog:
         action="PATCH /api/snapshots/X",
         resource_type=None,
         resource_id=str(uuid4()),
-        before_state={"secret": "old_value"},
-        after_state={"secret": "new_value"},
-        diff={"secret": ["old_value", "new_value"]},
+        before_state={"field": "old_value"},
+        after_state={"field": "new_value"},
+        diff={"field": ["old_value", "new_value"]},
         ip_address="10.0.0.42",
         user_agent="curl/8.5",
         request_id=str(uuid4()),
@@ -129,8 +129,8 @@ async def test_audit_logs_redacted_for_caller_without_full(client: TestClient) -
     assert body["data"]
     row = body["data"][0]
     # AUDITOR has READ_AUDIT_FULL → sensitive fields are present.
-    assert row["before_state"] == {"secret": "old_value"}
-    assert row["after_state"] == {"secret": "new_value"}
+    assert row["before_state"] == {"field": "old_value"}
+    assert row["after_state"] == {"field": "new_value"}
     assert row["ip_address"] == "10.0.0.42"
 
 
