@@ -69,9 +69,30 @@ def _reset_state(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    """Yield a fresh TestClient with the full app mounted."""
+    """Yield a fresh TestClient with the full app mounted.
+
+    R7-10 follow-up: TestClient runs the lifespan synchronously in its own
+    ``asgi-lifespan`` loop, which builds an ``async_session_factory()`` /
+    engine bound to THAT loop. The actual test then runs in
+    pytest-asyncio's per-test loop — different loop → asyncpg pool
+    "Future attached to a different loop" error. Fix: after TestClient
+    enters (lifespan done), reset both the registry (back to in-memory
+    for unit tests that don't touch real PG) and the engine cache so the
+    test's own event loop builds a fresh engine.
+    """
+    from hk_ipo_agent.data.database import async_session_factory
+    from hk_ipo_agent.prediction_registry.registry import (
+        InMemoryPredictionRegistry,
+        set_registry,
+    )
+
     app = create_app()
     with TestClient(app) as c:
+        # AFTER lifespan: dispose lifespan's engine/factory + swap to
+        # in-memory registry so subsequent async test code runs on its
+        # own event loop's engine.
+        async_session_factory.cache_clear()  # type: ignore[attr-defined]
+        set_registry(InMemoryPredictionRegistry())
         yield c
 
 
