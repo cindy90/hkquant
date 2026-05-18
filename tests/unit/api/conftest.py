@@ -45,9 +45,18 @@ from hk_ipo_agent.prediction_registry.snapshot import build_snapshot
 
 @pytest.fixture(autouse=True)
 def _reset_state(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Wipe in-memory stores between tests."""
+    """Wipe in-memory stores between tests.
+
+    R7-10: also clear the session-factory ContextVar + engine cache so the
+    new pytest-asyncio event loop doesn't inherit the previous test's
+    asyncpg pool (which is bound to the dead loop and raises
+    ``RuntimeError: Future attached to a different loop``).
+    """
+    from hk_ipo_agent.data.database import async_session_factory
+
     monkeypatch.setenv("KIMI_API_KEY", "sk-test")
     get_settings.cache_clear()
+    async_session_factory.cache_clear()  # type: ignore[attr-defined]
     reset_registry()
     reset_users_for_test()
     reset_audit_store_for_test()

@@ -694,8 +694,8 @@ synthesizer_weights:
 
 ---
 
-*Increment Version: 1.2.2*  
-*Base: PROJECT_SPEC.md v1.2.1*  
-*Last Updated: 2026-05-17*  
-*来源: 借鉴 virattt/ai-hedge-fund（投资哲学 Lens 层）和 virattt/dexter（Agent 可观测性与安全）*  
+*Increment Version: 1.2.2*
+*Base: PROJECT_SPEC.md v1.2.1*
+*Last Updated: 2026-05-17*
+*来源: 借鉴 virattt/ai-hedge-fund（投资哲学 Lens 层）和 virattt/dexter（Agent 可观测性与安全）*
 *改动性质: 对已搭建代码库的增量补丁，非完整重写。增量 A = 投资哲学 Lens 层；增量 B = Agent 执行追踪 + 循环检测 + 步数上限。*
