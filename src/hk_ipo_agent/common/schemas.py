@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from .enums import (
     AdjustmentStatus,
@@ -40,7 +40,13 @@ from .enums import (
 
 
 class StrictModel(BaseModel):
-    """Project-wide base model. Strict validation; forbid unknown fields by default."""
+    """Project-wide base model. Strict validation; forbid unknown fields by default.
+
+    R5-6: ``Decimal`` fields serialize to JSON as ``str`` (e.g. "12.34"),
+    not number, so JS clients consuming the API don't lose precision on
+    the 17th significant digit. CLAUDE.md §UI 集成约束 §13 mandates
+    money/decimal-as-string for the wire format.
+    """
 
     model_config = ConfigDict(
         extra="forbid",
@@ -48,6 +54,13 @@ class StrictModel(BaseModel):
         str_strip_whitespace=True,
         use_enum_values=False,
     )
+
+    @field_serializer("*", when_used="json", check_fields=False)
+    def _serialize_decimal_as_string(self, v: Any) -> Any:
+        """R5-6 — emit Decimal as string in JSON output to preserve precision."""
+        if isinstance(v, Decimal):
+            return str(v)
+        return v
 
 
 class FrozenModel(StrictModel):
