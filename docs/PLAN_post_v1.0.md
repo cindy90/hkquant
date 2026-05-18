@@ -395,4 +395,4 @@ R0 ──> R1 ──> R2 ──> R3 ──┐
 
 - 完整审查发现：见 2026-05-17 对话归档（8 个 review agent 报告）
 - CLAUDE.md 「严格约束」+ 「UI 集成约束」+ 「预测生命周期约束」+ 「自动化与状态机约束」是本计划全部任务的合规基线
-- 关联 ADR：0001-0016（v1.0 前的全部决策）；本计划将新增 ADR 0017（KIMI/Moonshot 切换）+ 可能 0018（iFind 补漏延期）
+- 关联 ADR：0001-0016（v1.0 前的全部决策）；本计划新增 ADR 0017（KIMI/Moonshot 切换，R4-6）+ ADR 0018（iFind 补漏延期，R3-1）+ ADR 0019（prompt frontmatter schema + `requires_extras` 硬断言，post-R4 增量加固，commit `33ddc5a`；与 R4-7 `_verify_inherited_inputs` 互补：前者断言 `requires_extras`，后者断言 `inherited_inputs`）
