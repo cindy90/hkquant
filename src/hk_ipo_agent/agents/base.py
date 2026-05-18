@@ -121,16 +121,12 @@ class PromptFrontmatter(BaseModel):
         # Accept "1.2", "1.2.3", "1.0" — at minimum one dot, all numeric parts.
         parts = v.split(".")
         if len(parts) < 2 or not all(p.isdigit() for p in parts):
-            raise ValueError(
-                f"version must be semver-lite (e.g. '1.2', '1.2.3'), got {v!r}"
-            )
+            raise ValueError(f"version must be semver-lite (e.g. '1.2', '1.2.3'), got {v!r}")
         return v
 
     @field_validator("requires_extras")
     @classmethod
-    def _requires_extras_must_match_workflow_extras(
-        cls, v: list[str]
-    ) -> list[str]:
+    def _requires_extras_must_match_workflow_extras(cls, v: list[str]) -> list[str]:
         unknown = [k for k in v if k not in _WORKFLOW_EXTRAS_FIELDS]
         if unknown:
             raise ValueError(
@@ -173,9 +169,7 @@ def _parse_frontmatter_raw(text: str) -> dict[str, Any]:
     return frontmatter
 
 
-def load_prompt(
-    prompt_path: str, *, validate: bool = False
-) -> tuple[str, dict[str, Any]]:
+def load_prompt(prompt_path: str, *, validate: bool = False) -> tuple[str, dict[str, Any]]:
     """Load a prompt file. Returns ``(rendered_body, frontmatter_dict)``.
 
     ``prompt_path`` is relative to ``prompts/`` (e.g. ``"agents/policy.md"``).
@@ -319,11 +313,7 @@ class BaseAgent(ABC):
         Called by ``_call_llm`` / ``_call_llm_typed`` before every LLM round.
         """
         required: list[str] = self._frontmatter().get("requires_extras", []) or []
-        missing = [
-            key
-            for key in required
-            if getattr(ctx.extras, key, None) is None
-        ]
+        missing = [key for key in required if getattr(ctx.extras, key, None) is None]
         if missing:
             raise MissingInheritedInput(
                 f"agent {self.role.value} requires ctx.extras keys "

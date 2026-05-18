@@ -74,8 +74,14 @@ def _clear_session_factory_cache() -> None:
     """R7-10 back-compat shim: tests that used to call
     ``async_session_factory.cache_clear()`` continue to work — this
     resets the ContextVar so the next call rebuilds the factory.
+
+    Also clears ``get_engine``'s ``lru_cache`` so the next call
+    constructs a fresh engine. Without this, pytest-asyncio's per-test
+    event loop would inherit the previous test's engine + asyncpg pool,
+    surfacing as ``RuntimeError: <Future> attached to a different loop``.
     """
     _SESSION_FACTORY.set(None)
+    get_engine.cache_clear()  # type: ignore[attr-defined]
 
 
 # Expose as ``async_session_factory.cache_clear`` for callers that haven't

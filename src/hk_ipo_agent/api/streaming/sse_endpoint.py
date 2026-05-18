@@ -22,7 +22,9 @@ router = APIRouter(prefix="/api/stream", tags=["streaming"])
 
 @router.get("/events")
 async def get_events_stream(
-    token: str | None = Query(None, description="JWT token (for EventSource which cannot set headers)"),
+    token: str | None = Query(
+        None, description="JWT token (for EventSource which cannot set headers)"
+    ),
     authorization: Annotated[str | None, Header()] = None,
 ) -> StreamingResponse:
     """Open a server-sent-events stream of system events.

@@ -138,9 +138,7 @@ async def get_ipo_lifecycle(
     sf = async_session_factory()
     async with sf() as session:
         # Current state
-        state_stmt = select(IPOLifecycleStateRow).where(
-            IPOLifecycleStateRow.ipo_id == ipo_id
-        )
+        state_stmt = select(IPOLifecycleStateRow).where(IPOLifecycleStateRow.ipo_id == ipo_id)
         state_row = (await session.execute(state_stmt)).scalar_one_or_none()
 
         # Transitions (chronological)

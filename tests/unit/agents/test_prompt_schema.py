@@ -46,10 +46,7 @@ _SCORE_CARD_CLASS: dict[str, type[BaseScoreCard]] = {
 
 def _agent_prompt_paths() -> list[str]:
     """Return relative-to-prompts/ paths of every agents/*.md card."""
-    return [
-        f"agents/{p.name}"
-        for p in sorted(_PROMPTS_AGENTS.glob("*.md"))
-    ]
+    return [f"agents/{p.name}" for p in sorted(_PROMPTS_AGENTS.glob("*.md"))]
 
 
 _FENCED_JSON_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
@@ -102,16 +99,12 @@ def test_score_card_handwritten_json_matches_pydantic(prompt_path: str) -> None:
     score_card_name = fm.get("score_card")
     assert score_card_name, f"{prompt_path}: missing `score_card:` frontmatter"
     card_cls = _SCORE_CARD_CLASS.get(score_card_name)
-    assert card_cls is not None, (
-        f"{prompt_path}: unknown score_card {score_card_name!r}"
-    )
+    assert card_cls is not None, f"{prompt_path}: unknown score_card {score_card_name!r}"
 
     # Find the first JSON block (the schema example; later Few-shot example
     # blocks are sometimes present but the FIRST one is the schema canonical).
     example = _first_json_block(body)
-    assert example is not None, (
-        f"{prompt_path}: no fenced ```json``` block found in body"
-    )
+    assert example is not None, f"{prompt_path}: no fenced ```json``` block found in body"
 
     expected_keys = set(card_cls.model_fields.keys())
     actual_keys = set(example.keys())

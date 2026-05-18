@@ -135,9 +135,7 @@ async def get_memo_docx(snapshot_id: UUID, user: _SnapDep) -> Response:
 
 
 @router.get("/{snapshot_id}/outcomes")
-async def get_snapshot_outcomes(
-    snapshot_id: UUID, user: _SnapDep
-) -> dict[str, Any]:
+async def get_snapshot_outcomes(snapshot_id: UUID, user: _SnapDep) -> dict[str, Any]:
     """Return all T+N outcomes for a snapshot, ordered by checkpoint_day.
 
     R6-1: gated behind ``READ_SNAPSHOTS``.
@@ -162,14 +160,24 @@ def _outcome_row_to_dict(r: PredictionOutcomeRow) -> dict[str, Any]:
         "snapshot_id": str(r.snapshot_id),
         "checkpoint_day": r.checkpoint_day,
         "return_since_ipo": str(r.return_since_ipo) if r.return_since_ipo is not None else None,
-        "return_since_listing": str(r.return_since_listing) if r.return_since_listing is not None else None,
+        "return_since_listing": str(r.return_since_listing)
+        if r.return_since_listing is not None
+        else None,
         "max_drawdown": str(r.max_drawdown) if r.max_drawdown is not None else None,
-        "relative_return_hsi": str(r.relative_return_hsi) if r.relative_return_hsi is not None else None,
-        "relative_return_hstech": str(r.relative_return_hstech) if r.relative_return_hstech is not None else None,
-        "relative_return_industry": str(r.relative_return_industry) if r.relative_return_industry is not None else None,
+        "relative_return_hsi": str(r.relative_return_hsi)
+        if r.relative_return_hsi is not None
+        else None,
+        "relative_return_hstech": str(r.relative_return_hstech)
+        if r.relative_return_hstech is not None
+        else None,
+        "relative_return_industry": str(r.relative_return_industry)
+        if r.relative_return_industry is not None
+        else None,
         "earnings_released": r.earnings_released,
         "earnings_beat_extraction": r.earnings_beat_extraction,
-        "cornerstone_held_pct": str(r.cornerstone_held_pct) if r.cornerstone_held_pct is not None else None,
+        "cornerstone_held_pct": str(r.cornerstone_held_pct)
+        if r.cornerstone_held_pct is not None
+        else None,
         "cornerstone_reduced": r.cornerstone_reduced,
         "price_in_predicted_range": r.price_in_predicted_range,
         "decision_correct": r.decision_correct,
