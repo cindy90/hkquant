@@ -17,6 +17,7 @@ from typing import Any
 
 from ..agents.base import load_prompt
 from ..common.llm_client import LLMClient
+from ..common.settings import resolve_agent_model
 
 
 async def run_devils_advocate(
@@ -26,9 +27,14 @@ async def run_devils_advocate(
     bear_argument: str,
     ipo_id: str,
     round_number: int,
-    model: str = "moonshot-v1-128k",
+    model: str | None = None,
 ) -> tuple[str, float, Any]:
-    """Run one Devil turn. Returns ``(challenge, cost_delta, raw_resp)``."""
+    """Run one Devil turn. Returns ``(challenge, cost_delta, raw_resp)``.
+
+    R4-1: defaults to ``resolve_agent_model("debate.devils_advocate")``.
+    """
+    if model is None:
+        model = resolve_agent_model("debate.devils_advocate")
     body, _frontmatter = load_prompt("debate/devils_advocate.md")
     user_msg = (
         f"# Round {round_number}\n"

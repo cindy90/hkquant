@@ -1,7 +1,7 @@
 ---
 role: section_router
-version: 0.1
-last_updated: 2026-05-16
+version: 1.0
+last_updated: 2026-05-18
 input_schema: ChunkPayload
 output_schema: SectionRoute
 ---

@@ -1,7 +1,7 @@
 ---
 role: ch18c_qualifier
-version: 0.1
-last_updated: 2026-05-16
+version: 1.0
+last_updated: 2026-05-18
 input_schema: list[ChunkPayload]
 output_schema: Ch18CResponse
 ---

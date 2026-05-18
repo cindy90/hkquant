@@ -131,3 +131,56 @@ def test_settings_production_alias_also_triggers_guards(monkeypatch: pytest.Monk
     # default enable_hitl = False → expect HITL guard to fire first
     with pytest.raises(ConfigurationError, match="HITL must be enabled"):
         Settings()
+
+
+# ---------------------------------------------------------------------------
+# R4-1 + R4-3 — single entry point for "what model + temp does this role use?"
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_agent_model_reads_yaml_for_known_role() -> None:
+    """R4-1 — known role in llm_models.yaml returns the configured model."""
+    from hk_ipo_agent.common.settings import resolve_agent_model
+
+    assert resolve_agent_model("agents.fundamental") == "moonshot-v1-128k"
+    assert resolve_agent_model("agents.synthesizer") == "moonshot-v1-128k"
+    assert resolve_agent_model("extraction.prospectus") == "moonshot-v1-128k"
+
+
+def test_resolve_agent_model_default_for_unknown_role() -> None:
+    """R4-1 — unknown roles return the caller-supplied default."""
+    from hk_ipo_agent.common.settings import resolve_agent_model
+
+    assert resolve_agent_model("agents.does_not_exist", default="fallback") == "fallback"
+    assert resolve_agent_model("totally.bogus.path", default="x") == "x"
+
+
+def test_resolve_agent_model_handles_malformed_yaml_path() -> None:
+    """R4-1 — non-dict cursor along the path returns default cleanly."""
+    from hk_ipo_agent.common.settings import resolve_agent_model
+
+    # agents.fundamental is a dict; .nonsense is not a key inside it.
+    assert resolve_agent_model("agents.fundamental.nonsense", default="d") == "d"
+
+
+def test_resolve_agent_model_config_returns_full_triple() -> None:
+    """R4-3 — full config triple (model / max_tokens / temperature)."""
+    from hk_ipo_agent.common.settings import resolve_agent_model_config
+
+    cfg = resolve_agent_model_config("agents.sentiment")
+    assert cfg["model"] == "moonshot-v1-128k"
+    assert cfg["max_tokens"] == 4096
+    assert cfg["temperature"] == pytest.approx(0.4)  # per llm_models.yaml
+
+
+def test_resolve_agent_model_config_falls_back_on_unknown() -> None:
+    """R4-3 — unknown role returns supplied defaults."""
+    from hk_ipo_agent.common.settings import resolve_agent_model_config
+
+    cfg = resolve_agent_model_config(
+        "agents.bogus",
+        default_model="m",
+        default_max_tokens=128,
+        default_temperature=0.5,
+    )
+    assert cfg == {"model": "m", "max_tokens": 128, "temperature": 0.5}

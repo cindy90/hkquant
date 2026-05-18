@@ -26,13 +26,15 @@ from ..common.enums import EventSeverity, PostIPOEventType
 from ..common.llm_client import LLMClient
 from ..common.logging import get_logger
 from ..common.schemas import PostIPOEvent
+from ..common.settings import resolve_agent_model
 from .benchmarks import _close_series
 
 logger = get_logger(__name__)
 
 PRICE_ANOMALY_SINGLE_DAY_THRESHOLD = 0.05  # |daily| > 5%
 PRICE_ANOMALY_5D_THRESHOLD = 0.10  # |5-day rolling| > 10%
-EVENT_CLASSIFIER_MODEL = "moonshot-v1-128k"
+# R4-1 — YAML-driven (key: registry.event_classifier).
+EVENT_CLASSIFIER_MODEL = resolve_agent_model("registry.event_classifier")
 
 
 class _AnnouncementSource(Protocol):

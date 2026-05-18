@@ -11,6 +11,7 @@ from typing import Any
 from ..agents.base import load_prompt
 from ..common.llm_client import LLMClient
 from ..common.schemas import AgentOutput, ValuationEnsembleOutput
+from ..common.settings import resolve_agent_model
 from .bull import _agent_briefs
 
 
@@ -22,9 +23,14 @@ async def run_bear(
     prior_bull: str | None,
     ipo_id: str,
     round_number: int,
-    model: str = "moonshot-v1-128k",
+    model: str | None = None,
 ) -> tuple[str, float, Any]:
-    """Run one Bear turn. Returns ``(argument, cost_delta, raw_resp)``."""
+    """Run one Bear turn. Returns ``(argument, cost_delta, raw_resp)``.
+
+    R4-1: defaults to ``resolve_agent_model("debate.bear")``.
+    """
+    if model is None:
+        model = resolve_agent_model("debate.bear")
     body, _frontmatter = load_prompt("debate/bear.md")
     bull_block = (
         f"\n\n# Previous Bull argument (to challenge)\n{prior_bull}\n" if prior_bull else ""

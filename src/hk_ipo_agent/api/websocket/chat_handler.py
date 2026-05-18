@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from ...common.llm_client import LLMClient
 from ...common.schemas import ChatMessage
+from ...common.settings import resolve_agent_model
 
 _SYSTEM_PROMPT = (
     "你是港股 IPO 基石轮分析助手。回答必须基于上文的 snapshot / agent_outputs 数据，"
@@ -21,9 +22,15 @@ async def reply(
     *,
     history: list[ChatMessage],
     user_message: str,
-    model: str = "moonshot-v1-128k",
+    model: str | None = None,
 ) -> str:
-    """Generate the assistant reply text given prior message history."""
+    """Generate the assistant reply text given prior message history.
+
+    R4-1: ``model`` defaults to ``resolve_agent_model("agents.chat")``
+    (falls back to the YAML resolver's default if no chat entry exists).
+    """
+    if model is None:
+        model = resolve_agent_model("agents.chat")
     msgs = []
     for m in history:
         if m.role.value in {"user", "assistant"}:

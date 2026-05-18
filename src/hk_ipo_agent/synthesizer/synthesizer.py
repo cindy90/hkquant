@@ -30,6 +30,7 @@ from ..common.schemas import (
     ValuationDistribution,
     ValuationEnsembleOutput,
 )
+from ..common.settings import resolve_agent_model
 from .decision_engine import DecisionGate, decide
 from .price_range import derive_price_range
 from .scoring import build_scorecard
@@ -81,9 +82,16 @@ async def synthesize(
     debate: DebateOutput,
     extras: WorkflowExtras,
     cross_check_notes: list[str] | None = None,
-    model: str = "moonshot-v1-128k",
+    model: str | None = None,
 ) -> tuple[FinalDecision, Decimal]:
-    """Run the synthesizer; return ``(FinalDecision, total_cost_usd)``."""
+    """Run the synthesizer; return ``(FinalDecision, total_cost_usd)``.
+
+    R4-1: ``model`` defaults to ``resolve_agent_model("agents.synthesizer")``
+    so a future provider migration (e.g. routing Synthesizer to Opus 4.7
+    while keeping workers on KIMI) is a one-line YAML change.
+    """
+    if model is None:
+        model = resolve_agent_model("agents.synthesizer")
     started = time.monotonic()
     cost_before = llm.cost_log.total_usd()
 

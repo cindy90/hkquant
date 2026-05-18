@@ -33,7 +33,7 @@ from ..common.schemas import (
     RiskFactor,
     ShareholderEntry,
 )
-from ..common.settings import load_llm_models_config
+from ..common.settings import resolve_agent_model
 from .schema import ProspectusExtraction
 
 log = get_logger(__name__)
@@ -127,8 +127,10 @@ class ProspectusExtractor:
         self.llm = llm
         self.prospectus_id = prospectus_id
         self.config = config
-        self._llm_routing = _resolve_model("extraction.prospectus", default="moonshot-v1-128k")
-        self._llm_opus = _resolve_model("agents.synthesizer", default="moonshot-v1-128k")
+        # R4-1: use common.settings.resolve_agent_model as the single
+        # entry point so future provider migrations are YAML-only.
+        self._llm_routing = resolve_agent_model("extraction.prospectus")
+        self._llm_opus = resolve_agent_model("agents.synthesizer")
 
     async def extract(
         self,
@@ -373,18 +375,7 @@ class ProspectusExtractor:
                 ) from opus_err
 
 
-def _resolve_model(key: str, *, default: str) -> str:
-    """Walk a dotted key into llm_models.yaml; default on miss."""
-    cfg = load_llm_models_config()
-    parts = key.split(".")
-    cursor: Any = cfg
-    for p in parts:
-        if not isinstance(cursor, dict) or p not in cursor:
-            return default
-        cursor = cursor[p]
-    if isinstance(cursor, dict) and "model" in cursor:
-        return str(cursor["model"])
-    return default
-
+# R4-1: extractor used to have its own _resolve_model helper; superseded by
+# common.settings.resolve_agent_model so the project has a single entry point.
 
 __all__ = ("ExtractionConfig", "ExtractionResult", "ProspectusExtractor")
