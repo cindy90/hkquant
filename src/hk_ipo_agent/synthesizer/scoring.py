@@ -4,11 +4,23 @@ Per PROJECT_SPEC.md §3.8 / §7. Builds the final ``scorecard: dict[str, float]`
 field of ``FinalDecision`` by extracting each agent's overall_score and
 mixing in NACS modifiers (regime / cluster / theme).
 
-Weight semantics (Phase 6 initial values; Phase 8 calibrates):
-- 7 agent overalls average → 60% of final score
-- Regime gate boost / penalty: ±20 if regime_score > 0 / < 0
-- Cluster bonus: +5 × log(multiplier / 1.0)
-- AI gilding penalty: -10 if flag set
+Aggregation (ADR 0020 — corrected after the 越疆 2432.HK regression):
+- ``base`` = arithmetic mean of the 7 agent overall_scores (0..100).
+- NACS adjusters add to ``base`` (do NOT multiply / discount it):
+    * regime_adj  ∈ [-20, +20]   (regime_score × 100, clamped)
+    * cluster_adj ∈ [ 0,  +5]    (log-scaled cornerstone cluster bonus)
+    * theme_adj   ∈ {-5, 0, +5}  (theme heat tier)
+    * gilding_adj ∈ {-10, 0}     (AI-gilding penalty)
+- ``overall = clamp(base + Σadj, 0, 100)``.
+
+Why this changed (ADR 0020): the previous implementation was
+``overall = base*0.6 + Σadj`` which the docstring described as "agent
+average → 60% of final" but in practice compressed every IPO by 40%
+without ever filling the remaining 40% (adj sum capped at +25). 越疆
+2432.HK with base=44.29 / adj=0 scored overall=26.57 → SKIP, despite
+post-listing +30% performance proving the underlying agent signal was
+adequate. With the fixed formula it scores 44.29 → WAIT_FOR_SIGNAL,
+matching the decision-engine threshold semantics in PROJECT_SPEC.md §7.
 
 This is a heuristic; the Synthesizer LLM still produces the final
 decision text and the rule engine in ``decision_engine.py`` enforces
@@ -61,7 +73,10 @@ def build_scorecard(
             theme_adj = -5.0
     scorecard["theme_adj"] = round(theme_adj, 2)
 
-    overall = base * 0.6 + regime_adj + cluster_adj + gilding_adj + theme_adj
+    # ADR 0020: overall = base + Σadj. Previously base was multiplied by
+    # 0.6, which structurally pushed every IPO toward SKIP regardless of
+    # agent signal quality. See module docstring + ADR 0020 §Decision.
+    overall = base + regime_adj + cluster_adj + gilding_adj + theme_adj
     scorecard["base_avg"] = round(base, 2)
     scorecard["overall"] = round(max(0.0, min(100.0, overall)), 2)
     return scorecard
