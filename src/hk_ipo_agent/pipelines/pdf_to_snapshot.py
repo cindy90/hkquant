@@ -15,6 +15,7 @@ born. ADR 0016 closes that recurrence at its source.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import time
@@ -97,7 +98,11 @@ class PipelineResult:
     chunks: list[Any]
     extraction_result: Any
     final_state: dict[str, Any]
-    snapshot_id: str | None
+    # R5-2: AnalysisState.snapshot_id is UUID; PipelineResult mirrors it
+    # so downstream callers (CLI / e2e tests / API endpoints) get a
+    # consistent type. Pre-fix this was ``str | None``, leading to
+    # ad-hoc str() conversions sprinkled around the report writers.
+    snapshot_id: UUID | None
     total_cost_usd: Decimal
     total_elapsed_s: float
     report_path: Path | None = None
@@ -464,23 +469,30 @@ async def run_pdf_to_snapshot(  # noqa: PLR0915  # 75 statements; orchestrates 5
     )
 
     # --- Step 5: report ---------------------------------------------------
+    # R5-1: each write helper synchronously calls path.write_text, which
+    # blocks the event loop. Wrap in asyncio.to_thread so the disk IO
+    # runs in the default executor; the helpers themselves stay pure-sync
+    # functions (no rewrite needed).
     report_path: Path | None = None
     if config.write_report:
         log("[5/5] Writing reports (summary + detailed + JSON) ...")
         t0 = time.time()
-        report_path = _write_report(
+        report_path = await asyncio.to_thread(
+            _write_report,
             config=config,
             final_state=final_state,
             llm_client=llm_client,
             total_elapsed_s=time.time() - t_total,
         )
-        detailed_path = _write_detailed_report(
+        detailed_path = await asyncio.to_thread(
+            _write_detailed_report,
             config=config,
             final_state=final_state,
             llm_client=llm_client,
             total_elapsed_s=time.time() - t_total,
         )
-        json_path = _dump_full_state_json(
+        json_path = await asyncio.to_thread(
+            _dump_full_state_json,
             config=config,
             final_state=final_state,
             llm_client=llm_client,
@@ -492,12 +504,20 @@ async def run_pdf_to_snapshot(  # noqa: PLR0915  # 75 statements; orchestrates 5
         log(f"      json:     {json_path}")
 
     total_elapsed = time.time() - t_total
+    # R5-2: coerce to UUID | None — AnalysisState may store UUID natively
+    # but legacy paths sometimes pass str. Pin the public-API type here.
+    raw_snapshot_id = final_state.get("snapshot_id")
+    snapshot_id_uuid: UUID | None = None
+    if raw_snapshot_id is not None:
+        snapshot_id_uuid = (
+            raw_snapshot_id if isinstance(raw_snapshot_id, UUID) else UUID(str(raw_snapshot_id))
+        )
     return PipelineResult(
         parsed_doc=parsed_doc,
         chunks=chunks,
         extraction_result=extraction_result,
         final_state=final_state,
-        snapshot_id=final_state.get("snapshot_id"),
+        snapshot_id=snapshot_id_uuid,
         total_cost_usd=llm_client.cost_log.total_usd(),
         total_elapsed_s=total_elapsed,
         report_path=report_path,

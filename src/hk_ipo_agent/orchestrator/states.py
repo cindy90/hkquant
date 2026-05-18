@@ -17,7 +17,7 @@ Reducer choice cheat sheet (see ADR 0010):
 from __future__ import annotations
 
 import operator
-from dataclasses import asdict
+from dataclasses import fields as dc_fields
 from datetime import date
 from typing import Annotated, Any, TypedDict
 from uuid import UUID
@@ -33,21 +33,36 @@ from ..common.schemas import (
 
 
 def _merge_extras(left: WorkflowExtras, right: WorkflowExtras) -> WorkflowExtras:
-    """Reducer for ``WorkflowExtras``: per-field "last non-None wins"."""
-    merged_dict = asdict(left)
-    for key, val in asdict(right).items():
+    """Reducer for ``WorkflowExtras``: per-field "last non-None wins".
+
+    R5-7: pre-fix this used ``asdict(left)`` + ``asdict(right)`` which
+    deep-recursively copies every nested dataclass / list / dict on each
+    reducer invocation. For a WorkflowExtras carrying e.g. 1314
+    cornerstone_profiles, the reducer becomes O(n) per merge. The new
+    implementation iterates ``dc_fields(left)`` and uses ``getattr`` /
+    ``setattr`` directly — O(num_fields), independent of payload size.
+    """
+    # Cheap field-by-field copy. We mutate the freshly-constructed
+    # ``out`` instance because WorkflowExtras is mutable by design
+    # (it's the cross-agent state carrier).
+    out = WorkflowExtras()
+    for f in dc_fields(left):
+        setattr(out, f.name, getattr(left, f.name))
+
+    for f in dc_fields(right):
+        key = f.name
+        val = getattr(right, key)
         if key == "misc":
-            merged_dict["misc"] = {**(merged_dict.get("misc") or {}), **(val or {})}
+            # Merge dicts: right wins on collisions.
+            out.misc = {**(out.misc or {}), **(val or {})}
             continue
-        # Non-None on right overrides.
+        # Non-None / non-empty on right overrides.
         if val is None:
             continue
         if isinstance(val, (list, dict)) and not val:
             continue
-        merged_dict[key] = val
-    # Reconstruct as dataclass.
-    misc = merged_dict.pop("misc", {})
-    return WorkflowExtras(**merged_dict, misc=misc)
+        setattr(out, key, val)
+    return out
 
 
 class AnalysisState(TypedDict, total=False):
