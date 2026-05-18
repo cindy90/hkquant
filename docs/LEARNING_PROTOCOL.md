@@ -111,25 +111,11 @@ uv run python scripts/review_proposals.py list
 uv run python scripts/review_proposals.py accept <review_id> --reviewer alice \
     --notes "Reduced 18C-COMM dcf weight from 0.35 to 0.30"
 
-# 4. Operator applies (will run sanity backtest + auto-rollback on regression):
-uv run python -c "
-import asyncio
-from uuid import UUID
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
-from hk_ipo_agent.common.settings import get_settings
-from hk_ipo_agent.learning_loop.adjustment_applier import AdjustmentApplier
-async def main():
-    engine = create_async_engine(get_settings().database.url, poolclass=NullPool)
-    sf = async_sessionmaker(bind=engine, expire_on_commit=False)
-    try:
-        applier = AdjustmentApplier(session_factory=sf)
-        result = await applier.apply_review(UUID('<review-id>'))
-        print(result)
-    finally:
-        await engine.dispose()
-asyncio.run(main())
-"
+# 4. Operator applies (R3-8 CLI: runs sanity backtest + auto-rollback on regression).
+#    Pre-R10-8 this section was a hand-rolled ``python -c`` block that
+#    duplicated AdjustmentApplier wiring; now ``review_proposals.py apply``
+#    is the single canonical entrypoint.
+uv run python scripts/review_proposals.py apply <review_id> --operator alice
 
 # 5. (After window) Re-backtest to confirm the change held:
 uv run python scripts/run_backtest.py --min-date <accepted_date>

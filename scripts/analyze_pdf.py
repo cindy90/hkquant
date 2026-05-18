@@ -58,16 +58,30 @@ from hk_ipo_agent.pipelines import (  # noqa: E402
 )
 from hk_ipo_agent.valuation.base import MarketData, PeerMultiples  # noqa: E402
 
-# Default sane peer multiples for a tech/18C IPO when the caller doesn't
-# supply a peer set. These are the same values run_e2e_test.py used for
-# 翼菲智能 and produce a non-pathological valuation distribution.
-_DEFAULT_PEERS = PeerMultiples(
-    pe_ttm=[50.0, 65.0, 80.0, 120.0, 150.0],
-    ps_ttm=[8.0, 12.0, 15.0, 20.0, 30.0],
-    pb_latest=[3.0, 5.0, 7.0, 10.0, 15.0],
-    ev_ebitda=[25.0, 35.0, 45.0, 60.0, 80.0],
-    sample_size=5,
-)
+
+# R10-3: default peer multiples now load from ``config/default_peers.yaml``
+# (was inline pre-R10-3). Externalising lets operators tune the default
+# without editing source — useful when the corpus shifts industry
+# (e.g. tech 18C → property). Falls back to the legacy in-source
+# defaults if the YAML is missing so fresh checkouts still work.
+def _load_default_peers() -> PeerMultiples:
+    import yaml
+
+    config_path = _ROOT / "config" / "default_peers.yaml"
+    if not config_path.exists():
+        # Legacy fallback — preserves pre-R10-3 behaviour.
+        return PeerMultiples(
+            pe_ttm=[50.0, 65.0, 80.0, 120.0, 150.0],
+            ps_ttm=[8.0, 12.0, 15.0, 20.0, 30.0],
+            pb_latest=[3.0, 5.0, 7.0, 10.0, 15.0],
+            ev_ebitda=[25.0, 35.0, 45.0, 60.0, 80.0],
+            sample_size=5,
+        )
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    return PeerMultiples(**data)
+
+
+_DEFAULT_PEERS = _load_default_peers()
 
 
 def _derive_prospectus_id(stock_code: str, company_name_zh: str) -> str:
