@@ -36,53 +36,133 @@ NACS v8 legacy 代码暂留原位（`src/nacs_model.py` 等），将在 Phase 2 
 
 ---
 
-## Quickstart (Phase 0)
+## Quickstart — 完整前后端启动（dev）
 
-### 1. 安装 uv 与 Docker
+> 前端是独立仓库：`../hk-ipo-cornerstone-ui/`（Next.js 16，pnpm 管理）。完整体验必须同时启动后端 + 前端。
+
+### 0. 一次性环境准备
 
 ```bash
 # uv (https://docs.astral.sh/uv/)
-curl -LsSf https://astral.sh/uv/install.sh | sh   # macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh        # macOS / Linux
 # Windows: irm https://astral.sh/uv/install.ps1 | iex
 
-# Docker Desktop（postgres / qdrant / redis 容器）
+# Node.js ≥ 20 + pnpm（前端用）
+npm install -g pnpm
+
+# Docker Desktop（postgres / qdrant / redis 容器，Windows/macOS 需手动启动 Docker Desktop 应用）
 ```
 
-### 2. 安装依赖
+### 1. 安装依赖（后端 + 前端各一次）
 
 ```bash
-make install         # = uv sync --all-extras
+# 后端（仓库根目录）
+make install                                            # = uv sync
+
+# 前端
+cd ../hk-ipo-cornerstone-ui && pnpm install && cd -
 ```
 
-### 3. 起本地基础设施
+### 2. 配置环境变量
 
 ```bash
-cp .env.example .env
-make db-up           # postgres + qdrant + redis
+cp .env.example .env                                    # 后端 — 填入 LLM / iFind / DB 密钥
+cp ../hk-ipo-cornerstone-ui/.env.example \
+   ../hk-ipo-cornerstone-ui/.env.local                  # 前端 — 默认指向 http://localhost:8000
 ```
 
-### 4. 验证骨架
+### 3. 启动基础设施（postgres / qdrant / redis）
+
+**重要**：仓库目录名含中文，docker compose 自动派生 project name 会失败，必须显式 `-p hkipo`。
+`make db-up` 已硬编码 `-p hkipo`，直接用即可：
 
 ```bash
-make lint            # ruff check src/hk_ipo_agent + tests + scripts
-make typecheck       # mypy strict on src/hk_ipo_agent
-make test            # pytest tests/unit
-make migrate         # alembic upgrade head
+make db-up                                              # docker compose -p hkipo up -d
+docker ps --filter "name=hkipo"                         # 三个容器都应 healthy
 ```
 
-**Windows 用户**：GNU make 不随 Windows 默认安装。可通过 `choco install make` 安装，
-或使用本仓库提供的等价 Python 包装：
+直接调 docker compose 时也务必带项目名：
+
+```bash
+docker compose -p hkipo up -d postgres qdrant redis
+docker compose -p hkipo down                            # 收尾
+```
+
+### 4. 数据库迁移
+
+```bash
+make migrate                                            # alembic upgrade head
+```
+
+Windows / 中文路径用户用 Python 包装（自动注入 `PYTHONUTF8=1`，解决 alembic.ini 解析）：
+
+```bash
+uv run python scripts/dev.py migrate
+```
+
+### 5. 启动后端（终端 A）
+
+```bash
+make serve                                              # uvicorn @ :8000，热重载
+# 或
+uv run python scripts/dev.py serve
+```
+
+健康验证：
+
+```bash
+curl http://localhost:8000/health                       # {"status":"ok",...}
+curl -o /dev/null -w "%{http_code}\n" http://localhost:8000/openapi.json
+# Swagger UI:  http://localhost:8000/docs
+# ReDoc:       http://localhost:8000/redoc
+```
+
+### 6. 同步前端 API types + 启动前端（终端 B）
+
+**关键步骤**：前端的 TanStack Query 客户端依赖从 OpenAPI 自动生成的 TS 类型。每次后端 schema 变化必须重跑：
+
+```bash
+cd ../hk-ipo-cornerstone-ui
+pnpm generate-api-types                                 # 拉 http://localhost:8000/openapi.json → src/lib/api/generated/schema.ts
+pnpm dev                                                # Next.js @ :3000，Turbopack 热重载
+```
+
+打开 [http://localhost:3000](http://localhost:3000) 即可使用。
+
+### 7. 验证骨架（CI 等价）
+
+```bash
+make lint                                               # ruff check
+make typecheck                                          # mypy strict
+make test                                               # pytest tests/unit
+```
+
+Windows / 中文路径等价命令：
 
 ```bash
 uv run python scripts/dev.py lint
 uv run python scripts/dev.py typecheck
 uv run python scripts/dev.py test
-uv run python scripts/dev.py migrate
-uv run python scripts/dev.py help     # 列出全部 target
+uv run python scripts/dev.py help                       # 列出全部 target
 ```
 
-`scripts/dev.py` 镜像了 Makefile 的全部常用 target，且自动注入 `PYTHONUTF8=1`
-（中文路径下 alembic.ini 解析需要）。
+`scripts/dev.py` 镜像 Makefile 的所有常用 target，且自动注入 `PYTHONUTF8=1`。
+
+### 收尾
+
+```bash
+# 终端 A、B 各 Ctrl+C
+make db-down                                            # 或 docker compose -p hkipo down
+```
+
+### 常见问题
+
+| 症状 | 原因 / 解决 |
+|---|---|
+| `docker compose up` 报 `project name must not be empty` | 中文目录路径导致。用 `docker compose -p hkipo` 或 `make db-up` |
+| `alembic upgrade head` 报 `Can't locate revision ...` | 本地分支与 DB 中记录的 alembic 版本不匹配。先 `git pull` 把缺失的 migration 文件取下来，再重跑；切勿手工改 `alembic_version` 表 |
+| 前端 `pnpm generate-api-types` 连接失败 | 后端 (`make serve`) 必须先起，且监听 :8000 |
+| 后端 `IFIND_USERNAME` / `LLAMA_CLOUD_API_KEY` 警告 | dev 可留空，仅在使用数据采集 / 招股书解析时必填 |
 
 ---
 
