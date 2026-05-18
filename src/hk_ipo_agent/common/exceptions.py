@@ -315,3 +315,28 @@ class CostGuardError(ApiError):
     default_message = "Cost guard exceeded"
     http_status = 429
     problem_type = "https://api.example.com/errors/cost-guard"
+
+
+# ============================================================================
+# R4-7 — agent-layer contract failures
+# ============================================================================
+
+
+class MissingInheritedInputError(HkIpoAgentException):
+    """An agent's frontmatter declared an ``inherited_inputs`` key that
+    was not populated when the agent ran.
+
+    Raised by ``BaseAgent._verify_inherited_inputs`` when one or more
+    keys listed in the agent's prompt frontmatter resolve to ``None`` /
+    empty on both ``ctx.extras`` and ``ctx.kb_tool``. The contract is:
+    if a prompt declares ``inherited_inputs: [regime_score, ...]``,
+    those values MUST be in the agent's runtime context before the LLM
+    call. CLAUDE.md «inherited_inputs frontmatter 必须落地为实际工具
+    调用» — pre-R4-7 the frontmatter was parsed but never validated, so
+    a missing upstream tool dispatch would silently produce a low-quality
+    LLM call.
+
+    See docs/PLAN_post_v1.0.md §6 R4-7.
+    """
+
+    default_message = "agent prompt inherited_inputs not populated"

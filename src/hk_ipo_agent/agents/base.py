@@ -184,6 +184,77 @@ class BaseAgent(ABC):
         """Load this agent's prompt body + frontmatter."""
         return load_prompt(self.prompt_path)
 
+    # R4-7 — inherited_inputs aliasing for fields whose declared name differs
+    # from the WorkflowExtras attribute. Without this we'd false-fail on
+    # "sponsor_track_record" (extras has plural ".sponsor_track_records")
+    # or "ai_gilding_signal" (extras has ".ai_gilding_flag").
+    _INHERITED_INPUT_ALIASES: ClassVar[dict[str, str]] = {
+        "sponsor_track_record": "sponsor_track_records",
+        "ai_gilding_signal": "ai_gilding_flag",
+    }
+
+    @classmethod
+    def _verify_inherited_inputs(
+        cls,
+        frontmatter: dict[str, Any],
+        ctx: AgentContext,
+    ) -> None:
+        """R4-7 — fail-loud if any declared ``inherited_inputs`` is missing.
+
+        Pre-R4-7 the frontmatter's ``inherited_inputs`` list was parsed
+        but never validated — an agent could declare it depends on
+        ``regime_score`` while the upstream tool never populated it, and
+        the LLM would silently receive a sentinel placeholder. R4-7 turns
+        this into a startup contract failure.
+
+        Resolution order for each declared key:
+        1. ``ctx.extras.get(<key>)`` (typed field on WorkflowExtras)
+        2. ``ctx.extras.misc[<key>]`` (untyped fallback)
+        3. ``ctx.extras.get(<aliased_key>)`` (per _INHERITED_INPUT_ALIASES)
+        4. Attribute named ``<key>`` on ``ctx.kb_tool`` (if any)
+
+        Empty lists / empty dicts / ``None`` all count as "missing".
+
+        Raises:
+            MissingInheritedInputError: if any declared key resolves to
+                None / empty. Lists every offending key in the message.
+        """
+        from ..common.exceptions import MissingInheritedInputError
+
+        declared = frontmatter.get("inherited_inputs") or []
+        if not declared:
+            return  # no contract → no-op
+
+        def _is_missing(v: Any) -> bool:
+            """Treat None / empty list / empty dict as 'not populated'."""
+            return v is None or v in ([], {})
+
+        missing: list[str] = []
+        for key_raw in declared:
+            # Frontmatter list items may carry trailing comments stripped
+            # already by load_prompt, but trim whitespace defensively.
+            key = str(key_raw).strip()
+            if not key:
+                continue
+            aliased = cls._INHERITED_INPUT_ALIASES.get(key, key)
+            # 1 + 2 + 3: try extras (typed + misc + alias)
+            val = ctx.extras.get(key)
+            if _is_missing(val):
+                val = ctx.extras.get(aliased)
+            # 4: try kb_tool attribute
+            if _is_missing(val) and ctx.kb_tool is not None:
+                val = getattr(ctx.kb_tool, key, None) or getattr(ctx.kb_tool, aliased, None)
+            if _is_missing(val):
+                missing.append(key)
+
+        if missing:
+            raise MissingInheritedInputError(
+                f"agent {cls.__name__} declares inherited_inputs but the "
+                f"following are not populated in ctx.extras / ctx.kb_tool: "
+                f"{missing}. Wire the upstream tool dispatch before "
+                f"BaseAgent.run() — see PLAN R4-7."
+            )
+
     async def _call_llm(
         self,
         ctx: AgentContext,
