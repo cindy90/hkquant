@@ -133,6 +133,41 @@ class BenchmarkPriceService:
         self._ifind = ifind
         self._peer_limit = peer_limit
 
+    @staticmethod
+    def get_trading_day_offset(start: date, n: int) -> date:
+        """R8-7: return the date ``n`` trading days after ``start``.
+
+        Pre-R8-7 the outcome tracker computed checkpoint dates as
+        ``start + timedelta(days=n)`` (calendar days). The spec's
+        ``CHECKPOINT_DAYS`` (1, 5, 10, 22, 30, 60, 90, 126, 180, 252,
+        360) are documented as trading-day offsets, so a T+5 starting
+        on Friday landed on Wednesday under the old code instead of
+        the correct next Friday.
+
+        This implementation skips weekends. HK-specific holidays
+        (Lunar New Year, Easter, etc.) are NOT subtracted — that
+        requires an HKEX calendar wire-up which is Phase 9+ territory.
+        The 5/7 weekend share is the load-bearing accuracy gain.
+
+        Args:
+            start: anchor date. If it falls on a weekend, the offset
+                is computed from the next Monday.
+            n: number of trading days to advance. ``n=0`` returns
+                ``start`` unchanged (no weekend normalisation).
+
+        Returns:
+            ``start`` advanced by ``n`` trading days, weekends skipped.
+        """
+        if n == 0:
+            return start
+        cur = start
+        remaining = n
+        while remaining > 0:
+            cur = cur + timedelta(days=1)
+            if cur.weekday() < 5:  # 0-4 = Mon-Fri
+                remaining -= 1
+        return cur
+
     async def compute(
         self,
         *,

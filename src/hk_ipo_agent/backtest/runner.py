@@ -363,10 +363,18 @@ async def load_backtest_inputs_from_pg(
     - Either ``ipo_postmarket.returns_by_day`` OR the denormalized
       day1/5/22/126/252 scalars present (we fall back to scalars when
       the JSONB column wasn't backfilled)
+
+    R8-2: ``cornerstone_count`` is now filled from the
+    ``cornerstone_investments`` table (one bulk ``GROUP BY ipo_id``
+    aggregation, not per-IPO N+1). Pre-R8-2 this was hard-coded to 0,
+    which silently zeroed out the ADR 0005 §2 Cluster Bonus signal
+    across all backtest samples — defeating the load-bearing empirical
+    edge (cluster≥2 IPOs: 60d mean +22% vs +14%).
     """
+    from sqlalchemy import func
     from sqlalchemy import select as sa_select
 
-    from ..data.models import IPOEvent, IPOPostMarket
+    from ..data.models import CornerstoneInvestment, IPOEvent, IPOPostMarket
 
     inputs: list[BacktestInput] = []
     async with session_factory() as s:
@@ -374,6 +382,15 @@ async def load_backtest_inputs_from_pg(
         if min_pricing_date is not None:
             stmt = stmt.where(IPOEvent.pricing_date >= min_pricing_date)
         events = list((await s.execute(stmt)).scalars().all())
+
+        # R8-2: bulk-load cornerstone counts per IPO in one round-trip.
+        cs_count_stmt = sa_select(
+            CornerstoneInvestment.ipo_id,
+            func.count(CornerstoneInvestment.id),
+        ).group_by(CornerstoneInvestment.ipo_id)
+        cs_rows = list((await s.execute(cs_count_stmt)).all())
+        cs_count_by_ipo: dict[Any, int] = {row[0]: int(row[1]) for row in cs_rows}
+
         for ev in events:
             pm = (
                 await s.execute(sa_select(IPOPostMarket).where(IPOPostMarket.ipo_id == ev.id))
@@ -389,7 +406,7 @@ async def load_backtest_inputs_from_pg(
                     stock_code=ev.stock_code,
                     listing_type=listing_type,
                     realized_returns=realized,
-                    cornerstone_count=0,  # filled by caller if needed
+                    cornerstone_count=cs_count_by_ipo.get(ev.id, 0),
                 )
             )
     return inputs

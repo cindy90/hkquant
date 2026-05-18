@@ -89,13 +89,28 @@ class EventDrivenScheduler(BaseScheduler):
         state_machine: StateMachine,
         snapshot_resolver: _SnapshotResolver,
         alert_router: Any | None = None,
+        registry: Any | None = None,
     ) -> None:
+        """R8-6: ``registry`` is injected (not pulled from a global).
+
+        Pre-R8-6 ``_handle_earnings`` called the process-wide
+        ``get_registry()``, which returns whichever registry was last
+        ``set_registry``-d. That made the event-driven scheduler
+        dependent on global mutation order — running it alongside a
+        FastAPI app whose lifespan installs PGPredictionRegistry would
+        make the scheduler silently read from PG even when the
+        scheduler was started with an in-memory test registry.
+
+        When ``registry=None`` the handler falls back to
+        ``get_registry()`` for back-compat with old call sites.
+        """
         super().__init__(session_factory=session_factory)
         self._queue = queue
         self._earnings = earnings_comparator
         self._sm = state_machine
         self._snapshots = snapshot_resolver
         self._alerts = alert_router
+        self._registry = registry
 
     async def do_work(self, stats: RunStats) -> None:
         events = await self._queue.pull()
@@ -122,16 +137,27 @@ class EventDrivenScheduler(BaseScheduler):
         return False
 
     async def _handle_earnings(self, event: EventPayload, stats: RunStats) -> bool:
-        """Translate webhook payload → FilingNumbers → comparator."""
+        """Translate webhook payload → FilingNumbers → comparator.
+
+        R8-6: registry comes from ``self._registry`` (injected at
+        construction). Falls back to ``get_registry()`` for back-compat
+        when constructed without an explicit registry.
+        """
         snapshot_id = await self._snapshots.get_latest_snapshot_id(event.ipo_id)
         if snapshot_id is None:
             logger.warning("earnings_no_snapshot", ipo_id=str(event.ipo_id))
             return False
-        # Resolve full snapshot for the comparator.
-        from ..registry import get_registry
+
+        # R8-6: prefer the injected registry; only fall back to global if absent.
+        if self._registry is not None:
+            registry = self._registry
+        else:
+            from ..registry import get_registry as _gr
+
+            registry = _gr()
 
         try:
-            snap = await get_registry().get_snapshot(snapshot_id)
+            snap = await registry.get_snapshot(snapshot_id)
         except KeyError:
             return False
         filing = FilingNumbers(

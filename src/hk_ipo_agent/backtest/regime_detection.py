@@ -98,14 +98,29 @@ class MarketEnvironment:
 
 @functools.lru_cache(maxsize=1)
 def _load_market_env_cache() -> tuple[MarketEnvironment, ...]:
-    """Read ``data/fixtures/market_environment_cache.json`` once per process."""
+    """Read ``data/fixtures/market_environment_cache.json`` once per process.
+
+    R8-1: missing fixture is now a HARD failure, not a silent ``return ()``.
+    The regime score is the SKIP-gate threshold (ADR 0005 §2: regime≥0
+    → keep, regime<0 → SKIP). Pre-fix, a missing fixture silently
+    short-circuited every regime-detection call to ``0.0`` (which IS at
+    the gate threshold) — the backtest / policy_agent then flipped into
+    "all-pass" mode without any operator-visible signal. Now we raise
+    so the operator sees the missing data immediately and runs the
+    exporter script.
+    """
     if not _FIXTURE_PATH.exists():
-        logger.warning(
+        logger.error(
             "market_env_cache_missing",
             path=str(_FIXTURE_PATH),
             hint="run scripts/export_market_env_cache.py",
         )
-        return ()
+        raise RuntimeError(
+            f"market_environment_cache fixture missing at {_FIXTURE_PATH}. "
+            f"Run ``scripts/export_market_env_cache.py`` to regenerate it. "
+            f"Pre-R8-1 this returned 0.0 silently and flipped the regime "
+            f"SKIP gate into all-pass — see ADR 0005 §2 and PLAN R8-1."
+        )
     payload = json.loads(_FIXTURE_PATH.read_text(encoding="utf-8"))
     rows = payload.get("rows", [])
     parsed: list[MarketEnvironment] = []
@@ -177,9 +192,21 @@ def regime_score_from_cache(anchor: date) -> float:
     """Convenience: returns the ``hk_ipo_30d_avg_d30`` of the closest
     prior monthly snapshot — proxies the regime score when live IPO
     returns aren't available (e.g. test fixtures).
+
+    R8-1: raises ``RuntimeError`` when no snapshot precedes ``anchor``
+    (was silently 0.0). The SKIP gate threshold is ALSO 0.0, so a missing
+    snapshot used to flip the gate into "all-pass" mode. Failing here
+    surfaces the data gap before downstream decisions consume it.
     """
     env = market_env_for(anchor)
-    return env.hk_ipo_30d_avg_d30 if env is not None else 0.0
+    if env is None:
+        raise RuntimeError(
+            f"no market environment snapshot precedes anchor={anchor.isoformat()}. "
+            f"Either the fixture predates ``anchor`` (regenerate via "
+            f"``scripts/export_market_env_cache.py``) or the anchor is older "
+            f"than the earliest snapshot in the cache."
+        )
+    return env.hk_ipo_30d_avg_d30
 
 
 # ---------------------------------------------------------------------------

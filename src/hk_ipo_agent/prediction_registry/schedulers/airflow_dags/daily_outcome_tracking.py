@@ -45,24 +45,17 @@ _CONFIG_PATH = Path(__file__).resolve().parents[5] / "config" / "schedulers.yaml
 
 
 def _run_daily_scheduler(**context: Any) -> dict[str, Any]:
-    """Airflow task entry point. Constructs + runs DailyScheduler once."""
-    from ....data.database import async_session_factory
-    from ...registry import PGPredictionRegistry
+    """R8-9: Airflow task entry point — delegates to ``_dag_runners.run_daily_sync``.
 
-    # Production dependencies: each is wired up against the same
-    # session_factory so the run runs in one transactional domain.
-    sf = async_session_factory()
-    registry = PGPredictionRegistry(session_factory=sf)  # placeholder — R8-9 wires real run
-    _ = registry  # silence F841 — see R8-9 in docs/PLAN_post_v1.0.md
-    # NOTE: production swaps in real iFind + LLM clients via
-    # api/main.py lifespan; the DAG fetches them from a service-locator
-    # registered there. The stubs below illustrate the wiring shape.
-    raise NotImplementedError(
-        "Production DAG body must wire real benchmarks / iFind / LLMClient. "
-        "See api/main.py lifespan for the canonical service-locator pattern. "
-        "This stub is intentional — keeps the DAG module importable in "
-        "dev / test while making the production-only dependency explicit."
-    )
+    The shared runner module owns the wiring contract (session factory +
+    dependency builders); this function just adapts Airflow's kwargs.
+    Pre-R8-9 this raised ``NotImplementedError`` unconditionally; now
+    only the production-only deps (iFind / LLMClient) raise inside the
+    runner until Phase 9 wires them.
+    """
+    from ._dag_runners import run_daily_sync
+
+    return run_daily_sync(**context)
 
 
 def _emit_sla_metrics(**context: Any) -> None:

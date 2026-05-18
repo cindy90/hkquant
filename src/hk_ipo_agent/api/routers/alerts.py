@@ -63,13 +63,116 @@ class AlertStore:
         self._ids.clear()
 
 
-_default_store: list[AlertStore] = []
+class PGAlertStore:
+    """R8-8: PG-backed alert reader for the API surface.
+
+    Reads from the ``alerts`` table populated by
+    ``prediction_registry.alerts.AlertRouter`` (scheduler-side). The
+    API doesn't write alerts (those come FROM the scheduler), so this
+    store only implements ``list`` + ``acknowledge``. Calling ``add``
+    raises ``NotImplementedError``.
+
+    Pre-R8-8 the API used in-memory ``AlertStore`` exclusively, so
+    real PG alerts (from the daily/event/high-freq schedulers) were
+    invisible to ``GET /api/alerts/``.
+    """
+
+    def __init__(self, *, session_factory: Any) -> None:
+        self._sf = session_factory
+
+    async def add(self, alert: Alert) -> UUID:
+        """API doesn't add alerts — they come from the scheduler. Raises."""
+        raise NotImplementedError(
+            "PGAlertStore is read-only on the API side. Alerts originate "
+            "from prediction_registry.alerts.AlertRouter (scheduler). "
+            "See R8-8."
+        )
+
+    async def list(self, *, limit: int, offset: int) -> tuple[list[tuple[UUID, Alert]], int]:
+        from sqlalchemy import func as sa_func
+        from sqlalchemy import select
+
+        from ...common.enums import AlertLevel
+        from ...data.models import AlertRow
+
+        async with self._sf() as s:
+            total = int(
+                (await s.execute(select(sa_func.count()).select_from(AlertRow))).scalar_one() or 0
+            )
+            stmt = (
+                select(AlertRow).order_by(AlertRow.detected_at.desc()).limit(limit).offset(offset)
+            )
+            rows = list((await s.execute(stmt)).scalars().all())
+
+        items: list[tuple[UUID, Alert]] = []
+        for r in rows:
+            items.append(
+                (
+                    r.id,
+                    Alert(
+                        level=AlertLevel(r.level),
+                        category=r.category,
+                        message=r.message,
+                        actionable_info=r.actionable_info,
+                        related_ipo_id=r.related_ipo_id,
+                        related_snapshot_id=r.related_snapshot_id,
+                        detected_at=r.detected_at,
+                        acknowledged_at=r.acknowledged_at,
+                        acknowledged_by=r.acknowledged_by,
+                    ),
+                )
+            )
+        return items, total
+
+    async def acknowledge(self, alert_id: UUID, by: str) -> Alert:
+        from sqlalchemy import select
+
+        from ...common.enums import AlertLevel
+        from ...data.models import AlertRow
+
+        async with self._sf() as s:
+            row = (
+                await s.execute(select(AlertRow).where(AlertRow.id == alert_id))
+            ).scalar_one_or_none()
+            if row is None:
+                raise KeyError(alert_id)
+            row.acknowledged_at = datetime.now(UTC)
+            row.acknowledged_by = by
+            await s.commit()
+            await s.refresh(row)
+        return Alert(
+            level=AlertLevel(row.level),
+            category=row.category,
+            message=row.message,
+            actionable_info=row.actionable_info,
+            related_ipo_id=row.related_ipo_id,
+            related_snapshot_id=row.related_snapshot_id,
+            detected_at=row.detected_at,
+            acknowledged_at=row.acknowledged_at,
+            acknowledged_by=row.acknowledged_by,
+        )
 
 
-def get_alert_store() -> AlertStore:
+# R8-8: AlertStore | PGAlertStore — the API endpoint code is identical
+# either way (both implement list/acknowledge via the same surface).
+_default_store: list[Any] = []
+
+
+def get_alert_store() -> Any:
     if not _default_store:
         _default_store.append(AlertStore())
     return _default_store[0]
+
+
+def set_alert_store(store: Any) -> None:
+    """R8-8: install a custom alert store (typically ``PGAlertStore``).
+
+    The FastAPI lifespan should call this with a PG-backed store on
+    production startup so ``GET /api/alerts/`` shows the same alerts
+    the scheduler emitted. Tests keep using the default in-memory.
+    """
+    _default_store.clear()
+    _default_store.append(store)
 
 
 def reset_alert_store_for_test() -> None:
@@ -117,9 +220,11 @@ async def acknowledge_alert(
 
 __all__ = (
     "AlertStore",
+    "PGAlertStore",
     "get_alert_store",
     "reset_alert_store_for_test",
     "router",
+    "set_alert_store",
 )
 
 

@@ -30,13 +30,17 @@ except ImportError:  # pragma: no cover
 
 
 def _run_high_freq_scheduler(**context: Any) -> dict[str, Any]:
-    """Run HighFrequencyScheduler once. Production lifespan wires real
-    iFind / HKEX / code_mapper / event_detector deps."""
-    raise NotImplementedError(
-        "Production DAG body must wire real state_detectors / code_mapper / "
-        "event_detector against the iFind + HKEX clients. See api/main.py "
-        "lifespan for the canonical service-locator pattern."
-    )
+    """R8-9: delegate to the shared HighFrequencyScheduler runner.
+
+    Pre-R8-9 this body raised ``NotImplementedError`` unconditionally,
+    so every Airflow run would fail. Now it calls the canonical
+    builder + ``asyncio.run(scheduler.run())`` via ``_dag_runners``.
+    Production-only deps (iFind / HKEX / code_mapper) still raise
+    inside the builder until Phase 9 wires them.
+    """
+    from ._dag_runners import run_high_freq_sync
+
+    return run_high_freq_sync(**context)
 
 
 if AIRFLOW_AVAILABLE:

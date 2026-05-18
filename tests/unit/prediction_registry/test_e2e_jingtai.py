@@ -249,9 +249,13 @@ class _JingtaiRepo:
 
 
 @pytest.mark.asyncio
-async def test_jingtai_2228_full_lifecycle_e2e(e2e_sf) -> None:
+async def test_jingtai_2228_full_lifecycle_e2e(e2e_sf) -> None:  # noqa: PLR0915
     """晶泰 2228.HK full lifecycle: snapshot → state machine → all 11 checkpoints
-    → review_drafts at major points → audit trail intact."""
+    → review_drafts at major points → audit trail intact.
+
+    R8-3 update: the daily scheduler no longer auto-transitions to TERMINATED
+    at T+360; the test now exercises the operator-manual transition path.
+    """
     _truncate_e2e_tables()
 
     # 1. Build + persist the snapshot (the analyst-time output).
@@ -319,6 +323,14 @@ async def test_jingtai_2228_full_lifecycle_e2e(e2e_sf) -> None:
             attribution=AttributionEngine(llm=llm),
             session_factory=e2e_sf,
         )
+        # R8-4: provide mock actual_price for every checkpoint so review
+        # drafts are NOT short-circuited. Pre-R8-4 the daily scheduler
+        # fell through to ``_fallback_price`` (returned Decimal(0)) when
+        # the cache was empty; now it returns None and skips review
+        # generation, so this e2e test needs real prices in the cache.
+        _mock_prices = {
+            day: Decimal("5.50") for day in (1, 5, 10, 22, 30, 60, 90, 126, 180, 252, 360)
+        }
         repo = _JingtaiRepo(
             {
                 snap.ipo_id: IPOMetadata(
@@ -326,7 +338,7 @@ async def test_jingtai_2228_full_lifecycle_e2e(e2e_sf) -> None:
                     stock_code=JINGTAI_STOCK_CODE,
                     listing_date=JINGTAI_LISTING_DATE,
                     industry_peers=["6160.HK", "9988.HK"],
-                    actual_price_at_checkpoint={},
+                    actual_price_at_checkpoint=_mock_prices,
                 ),
             }
         )
@@ -423,11 +435,29 @@ async def test_jingtai_2228_full_lifecycle_e2e(e2e_sf) -> None:
     # At least the major checkpoints + auto-drafts are present.
     assert review_days & {30, 90, 180}, f"Expected reviews at major checkpoints, got {review_days}"
 
-    # 6. State should now be TERMINATED.
+    # 6. R8-3: at T+360 the daily scheduler emits a CRITICAL alert and
+    #    keeps the IPO in LISTED state — no auto-TERMINATE. The operator
+    #    must manually transition after reviewing the alert. CLAUDE.md
+    #    §自动化与状态机约束: "超时不等于失败 — stale_detector 触发的
+    #    是警报而非自动 WITHDRAWN".
+    state = await sm.get_state(snap.ipo_id)
+    assert state is not None
+    assert state[0] is IPOLifecycleStateType.LISTED, (
+        f"R8-3: T+360 keeps IPO in LISTED (operator does manual transition); got {state[0].value}"
+    )
+    assert state[1].is_terminal is False
+
+    # Now simulate the operator's manual transition after reviewing the alert.
+    await sm.transition_to(
+        snap.ipo_id,
+        IPOLifecycleStateType.TERMINATED,
+        triggered_by=TransitionTrigger.MANUAL_REVIEWER,
+        evidence={"reason": "reviewed_t360_alert", "reviewer": "test-operator"},
+    )
     state = await sm.get_state(snap.ipo_id)
     assert state is not None
     assert state[0] is IPOLifecycleStateType.TERMINATED, (
-        f"Expected TERMINATED, got {state[0].value}"
+        f"Manual transition expected TERMINATED, got {state[0].value}"
     )
     assert state[1].is_terminal is True
 

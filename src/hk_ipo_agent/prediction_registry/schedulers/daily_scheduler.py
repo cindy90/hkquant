@@ -127,9 +127,37 @@ class DailyScheduler(BaseScheduler):
         today = datetime.now(UTC).date()
         days_listed = (today - meta.listing_date).days
 
-        # Auto-terminate at T+360.
+        # R8-3: at T+360, emit a CRITICAL alert and STOP — do NOT auto-terminate.
+        # CLAUDE.md §自动化与状态机约束 forbids unattended terminal transitions
+        # (e.g. "超时不等于失败"). Pre-R8-3 the scheduler unilaterally called
+        # state_machine.transition_to(TERMINATED, ...); now the operator
+        # reviews the alert + manually runs the transition. The IPO stays
+        # LISTED until that happens.
         if days_listed >= TERMINAL_DAY_THRESHOLD:
-            await self._transition_terminate(ipo_id)
+            if self._alerts is not None:
+                await self._alerts.emit(
+                    level="critical",
+                    category="t_plus_360_terminate_proposed",
+                    message=(
+                        f"IPO {ipo_id} reached T+{days_listed} days post-listing — "
+                        f"proposed for TERMINATED transition. Pre-R8-3 this would "
+                        f"have auto-transitioned without review."
+                    ),
+                    actionable_info=(
+                        "Review the IPO's final-day outcome + cornerstone activity, "
+                        "then either manually transition to TERMINATED via the state "
+                        "machine UI OR extend tracking by adjusting the IPO's "
+                        "listing_date checkpoint. Do NOT let the daily scheduler "
+                        "make this decision unattended."
+                    ),
+                    related_ipo_id=ipo_id,
+                )
+            else:
+                logger.warning(
+                    "t360_alert_skipped_no_router",
+                    ipo_id=str(ipo_id),
+                    days_listed=days_listed,
+                )
             stats.snapshots_processed += 1
             return
 
@@ -149,9 +177,24 @@ class DailyScheduler(BaseScheduler):
             )
             if not result.skipped:
                 stats.snapshots_processed += 1
+                # R8-4: resolve actual_price once; short-circuit ALL review
+                # draft generation when the price is None (no cached price
+                # AND _fallback_price now returns None instead of fake $0).
+                actual_price = self._actual_price_for(meta, day) or self._fallback_price(meta)
+                if actual_price is None:
+                    logger.info(
+                        "review_draft_skipped_no_price",
+                        ipo_id=str(ipo_id),
+                        snapshot_id=str(snapshot_id),
+                        checkpoint_day=day,
+                        hint=(
+                            "actual_price unavailable; backfill the price cache "
+                            "(BenchmarkPriceService) then re-run the daily scheduler"
+                        ),
+                    )
+                    continue
                 # Major checkpoint → generate review draft
                 if day in MAJOR_CHECKPOINTS:
-                    actual_price = self._actual_price_for(meta, day) or self._fallback_price(meta)
                     await self._reviews.generate_draft(
                         snapshot_id=snapshot_id,
                         checkpoint_day=day,
@@ -161,7 +204,7 @@ class DailyScheduler(BaseScheduler):
                 await self._reviews.generate_critical_draft_if_needed(
                     snapshot_id=snapshot_id,
                     checkpoint_day=day,
-                    actual_price=self._actual_price_for(meta, day) or self._fallback_price(meta),
+                    actual_price=actual_price,
                 )
 
     async def _transition_terminate(self, ipo_id: UUID) -> None:
@@ -235,15 +278,21 @@ class DailyScheduler(BaseScheduler):
         return meta.actual_price_at_checkpoint.get(day)
 
     @staticmethod
-    def _fallback_price(meta: IPOMetadata) -> Any:
-        """Crude fallback when checkpoint price isn't cached upstream.
+    def _fallback_price(meta: IPOMetadata) -> Any | None:
+        """R8-4: no fake-zero sentinel — return None when no real price.
 
-        Returns Decimal('0') as a sentinel; review_workflow can still
-        attribute and the price-in-range check just becomes False.
+        Pre-R8-4 this returned ``Decimal("0")`` so callers always got
+        a "valid" price. That violated CLAUDE.md §自动化与状态机约束:
+        "数据源失败有序降级... 禁止用估算值代替真实数据。" Every
+        downstream review treated $0 as the actual closing price (i.e.
+        the IPO crashed 100%) and flagged a critical loss spuriously.
+
+        Now the helper returns None and callers (``_process_listed_snapshot``)
+        short-circuit the review-draft generation for that checkpoint —
+        a missed-price condition is surfaced, not papered over.
         """
-        from decimal import Decimal
-
-        return Decimal("0")
+        del meta  # unused; the signal is purely "we have no price"
+        return None
 
 
 # Suppress unused-import warning.

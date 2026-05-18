@@ -25,15 +25,16 @@ except ImportError:  # pragma: no cover
 
 
 def _run_learning_cycle(**context: Any) -> dict[str, Any]:
-    """Run learning_loop: drift_detector + attribution_aggregator +
-    counterfactual + adjustment_proposer → write proposed adjustments
-    to prediction_reviews. CLAUDE.md: NEVER auto-apply."""
-    raise NotImplementedError(
-        "learning_loop modules land in Phase 10. This DAG file reserves "
-        "the cron slot + registration so production Airflow recognises it. "
-        "Phase 10 fills in: drift_detector → attribution_aggregator → "
-        "counterfactual → adjustment_proposer → prediction_reviews."
-    )
+    """R8-9: delegate to the shared monthly-learning runner.
+
+    Phase 10 already shipped drift_detector + adjustment_proposer; the
+    runner imports + smoke-checks them, then raises with a clear hint
+    that operator wiring of the full propose → review → apply flow is
+    Phase 10 commissioning (CLAUDE.md: NEVER auto-apply).
+    """
+    from ._dag_runners import run_monthly_learning_sync
+
+    return run_monthly_learning_sync(**context)
 
 
 if AIRFLOW_AVAILABLE:

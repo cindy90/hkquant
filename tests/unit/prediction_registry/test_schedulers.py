@@ -490,7 +490,13 @@ async def test_daily_scheduler_back_fills_missed_checkpoints(fresh_sf) -> None:
 
 @pytest.mark.asyncio
 async def test_daily_scheduler_terminates_at_360_days(fresh_sf) -> None:
-    """Listed 365 days → transitions LISTED → TERMINATED."""
+    """R8-3: at T+360 the scheduler stays in LISTED + emits CRITICAL alert.
+
+    Pre-R8-3 this auto-transitioned to TERMINATED. Now CLAUDE.md
+    §自动化与状态机约束 requires manual operator gate — the scheduler
+    emits a CRITICAL alert and leaves the IPO in LISTED until the
+    operator transitions manually.
+    """
     _truncate_scheduler_tables()
     snap = _build_snapshot()
     listing_d = datetime.now(UTC).date() - timedelta(days=365)
@@ -537,8 +543,10 @@ async def test_daily_scheduler_terminates_at_360_days(fresh_sf) -> None:
     await sched.run()
     state = await sm.get_state(snap.ipo_id)
     assert state is not None
-    assert state[0] is IPOLifecycleStateType.TERMINATED
-    assert state[1].is_terminal is True
+    # R8-3: NOT auto-terminated; still LISTED. Operator must manually transition
+    # after reviewing the CRITICAL alert.
+    assert state[0] is IPOLifecycleStateType.LISTED
+    assert state[1].is_terminal is False
 
 
 # ===========================================================================
