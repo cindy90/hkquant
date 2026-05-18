@@ -125,9 +125,13 @@ async def sf():
     await engine.dispose()
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_full_pipeline_smoke_with_mocked_graph(sf, monkeypatch):
     """Mocked build_main_graph returns a graph stub that yields a decision.
+
+    R9-8: marked ``slow`` so default ``pytest -m 'not slow'`` skips it.
+    Run explicitly with ``pytest -m slow tests/e2e``.
 
     Validates the harness path: FullPipelineScorer → build_main_graph →
     graph.ainvoke → state["decision"] → projected score.

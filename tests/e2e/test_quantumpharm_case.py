@@ -158,10 +158,15 @@ async def test_provider_returns_pricing_on_pricing_date(sf) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pg_required
 @pytest.mark.asyncio
 async def test_quantumpharm_walk_forward_with_v8lite(sf) -> None:
-    """Run V8LiteScorer on 晶泰; verify deterministic output + persistence."""
+    """Run V8LiteScorer on 晶泰; verify deterministic output + persistence.
+
+    R9-8: marked ``slow`` (walk-forward over real PG data + persistence
+    round-trip is one of the heaviest e2e tests).
+    """
     row = _fetch_quantumpharm_row()
     assert row is not None
     ipo_id, pricing_date, _ = row

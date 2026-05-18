@@ -52,19 +52,30 @@ def _ipo_event_count() -> int:
         return 0
 
 
-@pytest.fixture(scope="function", autouse=True)
-def _ensure_etl_data() -> Iterator[None]:
-    """Re-run ETL if the e2e tests find ipo_events empty.
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_etl_data(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """R9-10: re-run ETL ONCE per session (was function-scoped).
 
-    Function-scoped: another test in the same module may have TRUNCATEd
-    (e.g. test_learning_cycle wipes everything between cases). The
-    check is cheap (sync psycopg count); the ETL itself only re-runs
-    when truly needed.
+    Pre-R9-10 the fixture was function-scoped + autouse, so the sync
+    psycopg ``SELECT count(*)`` ran before every single e2e test (12 calls
+    minimum per ``pytest tests/e2e``). With session scope the check runs
+    once and the ETL — even if needed — runs at most once.
+
+    A sentinel file under ``pytest_cache`` is also written after a
+    successful (or no-op) check, so re-runs in the same shell
+    (``pytest tests/e2e`` followed by ``pytest tests/e2e::test_x``)
+    skip the check entirely.
     """
     if not _pg_available():
         # PG-required tests will skip themselves; nothing to do.
         yield
         return
+
+    sentinel = tmp_path_factory.mktemp("e2e_etl", numbered=False) / ".etl_verified"
+    if sentinel.exists():
+        yield
+        return
+
     if _ipo_event_count() == 0:
         print(
             "[e2e/conftest] ipo_events empty; re-running NACS ETL "
@@ -84,4 +95,8 @@ def _ensure_etl_data() -> Iterator[None]:
                 f"[e2e/conftest] ETL failed: {result.stderr[-500:]}",
                 file=sys.stderr,
             )
+
+    # Sentinel touch — even if ETL "failed", we don't want to retry within
+    # this session; the test will fail loudly on missing data instead.
+    sentinel.touch()
     yield
