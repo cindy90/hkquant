@@ -378,7 +378,7 @@ R0 ──> R1 ──> R2 ──> R3 ──┐
 | R1 | ✅ 完成 | 2026-05-17 | 2026-05-17 | `v1.0.1-r1` | commit `442e1fc`；5 任务全 red-green-refactor；736 unit tests 全过（+9 新 R1 测试，0 regression）。**BREAKING**: R1-1 DCF 终值公式校正，历史 snapshot 会有 ~5% 差异 |
 | R2 | ✅ 完成 | 2026-05-17 | 2026-05-17 | `v1.0.2-r2` | 7 任务全 red-green-refactor；753 unit tests 全过（+17 新 R2 测试，0 regression）。R2-1 + R2-7 prod guards / R2-6 audit user_id / R2-3 snapshot 应用层拒绝 / R2-5 tracking_unreliable + alembic / R2-2 hitl pending → END / R2-4 record_correction. CLAUDE.md 7 条硬约束全部落地 |
 | R3 | ✅ 完成 (8/8) | 2026-05-17 | 2026-05-18 | `v1.0.3-r3` | R3-1..R3-8 全部完成。**787 unit tests passed** (R2: 753 → R3 complete: +34, 0 regression). R3-1 iFind stub raise + ADR 0018 / R3-2 learning_cycle 4 extractors / R3-3 calibration is_placebo / R3-4 monotonicity regime_pass baseline / R3-5 applier rollback sentinel + 删除 suppress(KeyError) / R3-6 version_manager pg_advisory_xact_lock / R3-7 proposed_value=None 显式 reject / R3-8 review_proposals.py apply 子命令 |
-| R4 | 🔄 5/7 | 2026-05-18 | - | `v1.0.4-r4-partial` | R4-1/R4-2/R4-3/R4-5/R4-6 完成（resolve_agent_model 单一入口 + 13 处 hardcode 替换 + extraction prompts version bump 0.1→1.0 + ADR 0017 KIMI/Moonshot + ADR 0002 Superseded）. **792 unit tests passed (+5)**. R4-4 (Jinja2) / R4-7 (inherited_inputs) 待做 |
+| R4 | 🔄 6/7 | 2026-05-18 | - | `v1.0.4-r4-remainder-partial` | R4-1/R4-2/R4-3/R4-5/R4-6 + R4-4 完成（resolve_agent_model 单一入口 + 13 处 hardcode 替换 + extraction prompts version bump 0.1→1.0 + ADR 0017/0002 治理 + Jinja2 prompt_renderer + StrictUndefined + schema auto-inject）. **799 unit tests passed (+12)**. R4-7 (inherited_inputs → tool calls) 待做 |
 | R5 | ⏸ 等待 | - | - | - | async + 类型 |
 | R6 | ⏸ 等待 | - | - | - | RBAC + Auth |
 | R7 | ⏸ 等待 | - | - | - | 数据层 |
