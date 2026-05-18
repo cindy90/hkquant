@@ -5,12 +5,20 @@ Qdrant collection so re-indexing one prospectus doesn't disturb others
 and so retrieval scope is naturally bounded.
 
 Metadata stored alongside each vector:
-- prospectus_id, chunk_id (sha256), page, section, char_offset, text
+- prospectus_id, chunk_id (UUID5 string per R5-3), page, section,
+  char_offset, text
 - type (text | table), pages (for multi-page chunks)
 
 Phase 3 lands the create / upsert / search APIs. Phase 3.1 adds
 hybrid search (BM25 sparse vectors) once Qdrant cluster is in production
 mode (sparse vectors need >=v1.10 + collection config flag).
+
+R5-3 migration note: pre-R5-3 collections stored points keyed by
+``int(chunk_id[:16], 16)``. After this change the chunk_id is a UUID5
+string and Qdrant point ids match it 1:1. Any collection populated
+before R5-3 must be dropped (``await store.delete_collection()``) and
+re-upserted with the current chunker output; mixing keying schemes in
+one collection is a hard error in Qdrant.
 """
 
 from __future__ import annotations
@@ -110,7 +118,10 @@ class ProspectusVectorStore:
         vectors = await self.provider.embed(texts)
         points = [
             qm.PointStruct(
-                id=_chunk_id_to_point_id(c.chunk_id),
+                # R5-3: chunk_id is now a deterministic UUID5 string
+                # (see chunker._make_chunk_id). Qdrant accepts it as a
+                # point id directly — no truncation / int coercion.
+                id=c.chunk_id,
                 vector=vec,
                 payload={
                     "chunk_id": c.chunk_id,
@@ -184,11 +195,6 @@ class ProspectusVectorStore:
     async def count(self) -> int:
         info = await self._client.count(collection_name=self.collection_name, exact=True)
         return int(info.count)
-
-
-def _chunk_id_to_point_id(chunk_id: str) -> int:
-    """Map sha256-prefix hex to a deterministic uint64 point id Qdrant accepts."""
-    return int(chunk_id[:16], 16)
 
 
 __all__ = ("ProspectusVectorStore", "SearchHit")
