@@ -34,8 +34,10 @@ from typing import Any
 def sync_dsn() -> str:
     """Resolve a sync psycopg DSN from the async Settings.database.url.
 
-    Async URL: ``postgresql+asyncpg://user:pw@host:port/db``
-    Sync DSN:  ``postgresql://user:pw@host:port/db``
+    Strips the ``+asyncpg`` driver suffix so the resulting DSN is consumable
+    by sync psycopg / psql. (Examples are intentionally omitted here to
+    avoid tripping the detect-secrets ``Basic Auth Credentials`` rule on
+    ``user:pw@host`` strings.)
     """
     from hk_ipo_agent.common.settings import get_settings
 
