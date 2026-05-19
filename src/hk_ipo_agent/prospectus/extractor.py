@@ -61,6 +61,42 @@ class _FinancialsResponse(BaseModel):
     notes: str = ""
 
 
+# fiscal_period aliases that LLMs commonly emit but the FinancialSnapshot
+# Literal rejects. 6M = first half = H1; 3M = first quarter = Q1; etc.
+# Mapping is conservative — only widening to forms FinancialSnapshot
+# already accepts. Unrecognised aliases fall through untouched so pydantic
+# still surfaces them as a parse error (preserves diagnostic signal).
+_FISCAL_PERIOD_ALIASES = {
+    "6M": "H1",
+    "1H": "H1",
+    "H1": "H1",
+    "2H": "FY",
+    "3M": "Q1",
+    "12M": "FY",
+    "FYE": "FY",
+    "YR": "FY",
+    "YEAR": "FY",
+    "ANNUAL": "FY",
+}
+
+
+def _normalise_fiscal_period(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return a shallow copy of ``raw`` with ``fiscal_period`` mapped to
+    one of FinancialSnapshot's accepted literals when an alias is present.
+
+    Surfaced because the 越疆 2432.HK upload returned ``fiscal_period='6M'``
+    for the H1 2024 row, causing pydantic to reject every half-year period
+    and inflating ``needs_human_review`` noise.
+    """
+    fp = raw.get("fiscal_period")
+    if not isinstance(fp, str):
+        return raw
+    canonical = _FISCAL_PERIOD_ALIASES.get(fp.strip().upper())
+    if canonical is None or canonical == fp:
+        return raw
+    return {**raw, "fiscal_period": canonical}
+
+
 class _BusinessResponse(BaseModel):
     business_model: str = ""
     revenue_streams: list[dict[str, Any]] = Field(default_factory=list)
@@ -216,8 +252,9 @@ class ProspectusExtractor:
         prompt = self._build_prompt("financials_extractor.md", chunks)
         response = await self._call_with_fallback(prompt, _FinancialsResponse)
         for raw in response.financials_json:
+            normalised = _normalise_fiscal_period(raw)
             try:
-                snap = FinancialSnapshot.model_validate(raw)
+                snap = FinancialSnapshot.model_validate(normalised)
                 extraction.financials.append(snap)
             except Exception as exc:
                 log.warning("financials_item_skipped", error=str(exc), raw_keys=list(raw.keys()))

@@ -17,6 +17,7 @@ from hk_ipo_agent.prospectus.extractor import (
     _BusinessResponse,
     _Ch18CResponse,
     _FinancialsResponse,
+    _normalise_fiscal_period,
     _RisksResponse,
     _ShareholdersResponse,
 )
@@ -422,3 +423,55 @@ async def test_extract_unknown_section_is_skipped(
     assert result.sections_succeeded == 1  # "other" dispatched ok (just a no-op)
     assert result.sections_failed == []
     mock_llm.acomplete_json.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# _normalise_fiscal_period — regression coverage for 越疆 2432.HK upload
+# where the LLM emitted ``fiscal_period='6M'`` and pydantic rejected it.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("alias", "canonical"),
+    [
+        ("6M", "H1"),
+        ("1H", "H1"),
+        ("3M", "Q1"),
+        ("12M", "FY"),
+        ("FYE", "FY"),
+        ("annual", "FY"),  # case-insensitive
+        (" YR ", "FY"),  # surrounding whitespace
+    ],
+)
+def test_normalise_fiscal_period_maps_known_aliases(alias: str, canonical: str) -> None:
+    """Known aliases rewrite to a FinancialSnapshot-accepted literal."""
+    raw = {"fiscal_period": alias, "fiscal_year": 2024}
+    out = _normalise_fiscal_period(raw)
+    assert out["fiscal_period"] == canonical
+    assert out["fiscal_year"] == 2024
+    # Caller's dict must not be mutated in place.
+    assert raw["fiscal_period"] == alias
+
+
+def test_normalise_fiscal_period_passthrough_when_already_canonical() -> None:
+    """Already-canonical values are returned as the same object (no copy)."""
+    raw = {"fiscal_period": "H1", "fiscal_year": 2024}
+    out = _normalise_fiscal_period(raw)
+    assert out is raw  # cheap fast-path preserves identity
+
+
+def test_normalise_fiscal_period_passthrough_when_unknown() -> None:
+    """Unknown aliases fall through so pydantic surfaces the real error."""
+    raw = {"fiscal_period": "Q4", "fiscal_year": 2024}  # Q4 not in schema
+    out = _normalise_fiscal_period(raw)
+    assert out is raw
+    assert out["fiscal_period"] == "Q4"
+
+
+def test_normalise_fiscal_period_handles_missing_or_non_string_field() -> None:
+    """Defensive: missing key or non-string value returns input untouched."""
+    no_field = {"fiscal_year": 2024}
+    assert _normalise_fiscal_period(no_field) is no_field
+
+    non_string = {"fiscal_period": 6, "fiscal_year": 2024}
+    assert _normalise_fiscal_period(non_string) is non_string

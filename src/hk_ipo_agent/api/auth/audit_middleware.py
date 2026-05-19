@@ -14,6 +14,7 @@ in-memory so unit tests Just Work; the FastAPI lifespan calls
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
@@ -145,6 +146,24 @@ class AuditStore:
         self._records.clear()
 
 
+def _coerce_inet(value: str | None) -> str | None:
+    """Return ``value`` only if it is a parseable IPv4/IPv6 address.
+
+    The ``audit_logs.ip_address`` column is PG ``INET``, which rejects
+    placeholder strings like ``'testclient'`` that Starlette's TestClient
+    injects, or proxy-forwarded values like ``'unknown'``. Coerce
+    non-addresses to NULL so audit persistence never fails on a cosmetic
+    header.
+    """
+    if value is None:
+        return None
+    try:
+        ipaddress.ip_address(value)
+    except (ValueError, TypeError):
+        return None
+    return value
+
+
 class PGAuditStore:
     """PostgreSQL-backed audit log honouring DB-trigger immutability.
 
@@ -170,7 +189,7 @@ class PGAuditStore:
             before_state=record.before_state,
             after_state=record.after_state,
             diff=record.diff,
-            ip_address=record.ip_address,
+            ip_address=_coerce_inet(record.ip_address),
             user_agent=record.user_agent,
             request_id=record.request_id,
             api_endpoint=record.api_endpoint,
