@@ -1,6 +1,6 @@
 # Learning loop monthly report — 2026-05
 
-- Generated: `2026-05-17T03:33:47.142920+00:00`
+- Generated: `2026-05-18T10:18:59.348009+00:00`
 - Period: **2026-05**
 
 ## Calibration state
@@ -28,7 +28,7 @@ _no systemic patterns_
 
 | review_id | snapshot | proposals | primary | created |
 |---|---|---:|---|---|
-| `214d41aa...` | `749242e8...` | 1 | learning_loop_proposal | 2026-05-17 |
+| `da18ff3a...` | `1c1ff9c9...` | 2 | valuation_model_underestimate | 2026-05-18 |
 
 ## Applied adjustments
 
@@ -36,6 +36,6 @@ _none applied in this period_
 
 ## Notes
 
-- window=365 days
+- window=90 days
 - no proposals persisted
 - next step: review proposals via scripts/review_proposals.py
